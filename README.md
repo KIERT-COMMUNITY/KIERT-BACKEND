@@ -21,7 +21,7 @@ mvn spring-boot:run
 ```
 
 Por defecto corre con el perfil `dev`: base de datos H2 en memoria, con datos
-de ejemplo precargados (`data.sql`) para que el feed y el chat no salgan
+de ejemplo precargados (`data.sql.txt`) para que el feed y el chat no salgan
 vacíos. Queda escuchando en `http://localhost:8080`.
 
 - Consola H2 (ver las tablas): `http://localhost:8080/h2-console`

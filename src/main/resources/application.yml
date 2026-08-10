@@ -1,14 +1,12 @@
 # ==========================================================================
-# Configuración por defecto: perfil "dev" con H2 en memoria, para poder
-# levantar el backend YA sin instalar MySQL. Cuando tengas MySQL listo,
-# corre con --spring.profiles.active=mysql (ver application-mysql.yml).
+# Configuración por defecto: usa MySQL directamente
 # ==========================================================================
 spring:
   application:
     name: kiert-backend
 
   profiles:
-    active: dev
+    active: mysql  # Activa MySQL por defecto
 
   jackson:
     default-property-inclusion: non_null
@@ -24,23 +22,94 @@ server:
     include-message: always
 
 # --------------------------------------------------------------------------
-# Configuración propia de la app (se lee desde @ConfigurationProperties)
+# Configuración propia de la app
 # --------------------------------------------------------------------------
 kiert:
   jwt:
-    # ¡Cambia esta clave en producción! Debe tener al menos 32 caracteres.
-    secret: "cambia-esta-clave-super-secreta-de-al-menos-32-caracteres-kiert"
-    expiration-ms: 86400000 # 24 horas
+    secret: "name"
+    expiration-ms: 86400000
   cors:
-    allowed-origins: "http://localhost:4200"
+    allowed-origins: "name"
   frontend:
-    reset-password-url: "http://localhost:4200/restablecer-contrasena"
+    reset-password-url: "name"
+
+  # ✅ CONFIGURACIÓN DE CLOUDINARY (NUEVO)
+  cloudinary:
+    cloud-name: "name"  # ← REEMPLAZA CON TU CLOUD NAME
+    api-key: "name"   # ← REEMPLAZA CON TU API KEY
+    api-secret: "name"  # ← REEMPLAZA CON TU API SECRET
+
+  # ⚠️ SUPABASE (Ya no se usa para imágenes, pero mantenemos por si acaso)
   supabase:
-    url: "https://TU-PROYECTO.supabase.co"
+    url: "name"
     bucket: "kiert-files"
-    service-role-key: "TU_SERVICE_ROLE_KEY" # se usa solo en el backend, NUNCA en el frontend
+    service-role-key: "name"
 
 ---
+# ============================================================
+# PERFIL: mysql (Base de datos MySQL)
+# ============================================================
+spring:
+  config:
+    activate:
+      on-profile: mysql
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
+    username: root
+    password: contraseña
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: name
+    password: name
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: update
+      show-sql: true
+      format-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  sql:
+    init:
+      mode: never
+
+  logging:
+    level:
+      org.hibernate.SQL: DEBUG
+      org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+      com.kiert.backend: DEBUG
+      org.springframework.boot.autoconfigure: INFO
+
+---
+# ============================================================
+# PERFIL: dev (H2 - solo para pruebas)
+# ============================================================
 spring:
   config:
     activate:
@@ -52,14 +121,11 @@ spring:
     username: sa
     password: ""
 
-  # ============================================================
-  # CONFIGURACIÓN DE CORREO PARA DESARROLLO (MAILTRAP)
-  # ============================================================
   mail:
     host: smtp.mailtrap.io
     port: 2525
-    username: TU_USUARIO_MAILTRAP    # <--- CAMBIA ESTO
-    password: TU_PASSWORD_MAILTRAP   # <--- CAMBIA ESTO
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -70,50 +136,15 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     show-sql: true
-    # Permite que data.sql se ejecute DESPUÉS de que Hibernate cree las tablas
-    # (si no, Spring intenta correr el script antes de que existan)
     defer-datasource-initialization: true
 
   sql:
     init:
-      mode: always
+      mode: never
 
   h2:
     console:
       enabled: true
       path: /h2-console
-
----
-spring:
-  config:
-    activate:
-      on-profile: mysql
-
-  datasource:
-    url: jdbc:mysql://localhost:3306/kiert?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true
-    username: root
-    password: adrian.200503
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  # ============================================================
-  # CONFIGURACIÓN DE CORREO PARA PRODUCCIÓN
-  # ============================================================
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: adriandelaguila.2005@gmail.com   # <--- CAMBIA ESTO
-    password:    # <--- CAMBIA ESTO (Contraseña de aplicación)
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-
-  jpa:
-    database-platform: org.hibernate.dialect.MySQLDialect
-    hibernate:
-      ddl-auto: update
-    show-sql: false

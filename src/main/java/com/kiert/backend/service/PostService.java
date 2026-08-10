@@ -7,14 +7,14 @@ import com.kiert.backend.repository.ComentarioRepository;
 import com.kiert.backend.repository.PostRepository;
 import com.kiert.backend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-// Espejo del backend que necesita post.service.ts: listar, obtener, crear
-// publicaciones y su hilo de comentarios.
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PostService {
@@ -41,6 +41,10 @@ public class PostService {
 
     @Transactional
     public PostDTO crear(Long autorId, CrearPostDTO datos, List<MultipartFile> archivos) {
+        log.info("📝 Creando post para usuario: {}", autorId);
+        log.info("📄 Título: {}", datos.titulo());
+        log.info("📎 Archivos recibidos: {}", archivos != null ? archivos.size() : 0);
+
         Usuario autor = usuarioRepository.findById(autorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado."));
 
@@ -51,33 +55,62 @@ public class PostService {
                 .descripcion(datos.descripcion())
                 .build();
 
+        // ✅ Guardar link si existe
         if (datos.link() != null && !datos.link().isBlank()) {
+            log.info("🔗 Agregando link: {}", datos.link());
             post.getAdjuntos().add(Adjunto.builder()
                     .post(post)
                     .tipo(Adjunto.TipoAdjunto.LINK)
-                    .nombre(datos.link())
+                    .nombre("Enlace externo")
                     .url(datos.link())
                     .build());
         }
 
-        if (archivos != null) {
-            for (MultipartFile archivo : archivos) {
-                if (archivo.isEmpty()) continue;
-                // Límite de 10MB por archivo, igual que valida create-post.component.ts en el frontend
-                if (archivo.getSize() > 10 * 1024 * 1024) continue;
+        // ✅ Guardar el post primero
+        post = postRepository.save(post);
+        log.info("✅ Post guardado con ID: {}", post.getId());
 
-                String url = storageService.subirArchivo(archivo);
-                post.getAdjuntos().add(Adjunto.builder()
-                        .post(post)
-                        .tipo(Adjunto.TipoAdjunto.ARCHIVO)
-                        .nombre(archivo.getOriginalFilename())
-                        .url(url)
-                        .pesoKb((int) (archivo.getSize() / 1024))
-                        .build());
+        // ✅ Subir archivos a Cloudinary desde el backend
+        if (archivos != null && !archivos.isEmpty()) {
+            log.info("📎 Procesando {} archivo(s)", archivos.size());
+
+            for (MultipartFile archivo : archivos) {
+                if (archivo.isEmpty()) {
+                    log.warn("⚠️ Archivo vacío, saltando...");
+                    continue;
+                }
+
+                if (archivo.getSize() > 10 * 1024 * 1024) {
+                    log.warn("⚠️ Archivo {} excede 10MB, saltando...", archivo.getOriginalFilename());
+                    continue;
+                }
+
+                try {
+                    log.info("📤 Subiendo archivo a Cloudinary: {}", archivo.getOriginalFilename());
+                    String url = storageService.subirArchivo(archivo);
+
+                    Adjunto adjunto = Adjunto.builder()
+                            .post(post)
+                            .tipo(Adjunto.TipoAdjunto.ARCHIVO)
+                            .nombre(archivo.getOriginalFilename())
+                            .url(url)
+                            .pesoKb((int) (archivo.getSize() / 1024))
+                            .build();
+
+                    post.getAdjuntos().add(adjunto);
+                    log.info("✅ Archivo subido exitosamente: {}", url);
+
+                } catch (Exception e) {
+                    log.error("❌ Error al subir archivo {}: {}", archivo.getOriginalFilename(), e.getMessage());
+                    // Continuamos con el siguiente archivo
+                }
             }
+
+            post = postRepository.save(post);
+            log.info("✅ Post actualizado con {} adjunto(s)", post.getAdjuntos().size());
         }
 
-        post = postRepository.save(post);
+        log.info("✅ Post completado exitosamente con ID: {}", post.getId());
         return postMapper.aDTO(post);
     }
 

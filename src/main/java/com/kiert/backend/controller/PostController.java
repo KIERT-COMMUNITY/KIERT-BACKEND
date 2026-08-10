@@ -5,6 +5,7 @@ import com.kiert.backend.security.UsuarioActual;
 import com.kiert.backend.service.PostService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,8 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-// Espejo exacto de las rutas que llama post.service.ts en el frontend
-// (base: environment.apiUrl + "/publicaciones").
+@Slf4j
 @RestController
 @RequestMapping("/api/publicaciones")
 @RequiredArgsConstructor
@@ -32,8 +32,6 @@ public class PostController {
         return ResponseEntity.ok(postService.obtenerPorId(id));
     }
 
-    // Recibe multipart/form-data: create-post.component.ts arma un FormData con
-    // titulo, categoria, descripcion, link (opcional) y archivos[] (opcional).
     @PostMapping(consumes = "multipart/form-data")
     public ResponseEntity<PostDTO> crear(
             @RequestParam String titulo,
@@ -42,9 +40,21 @@ public class PostController {
             @RequestParam(required = false) String link,
             @RequestParam(value = "archivos", required = false) List<MultipartFile> archivos
     ) {
-        CrearPostDTO datos = new CrearPostDTO(titulo, categoria, descripcion, link);
-        PostDTO creado = postService.crear(usuarioActual.id(), datos, archivos);
-        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
+        log.info("📝 Recibiendo solicitud para crear post");
+        log.info("   Título: {}", titulo);
+        log.info("   Categoría: {}", categoria);
+        log.info("   Archivos: {}", archivos != null ? archivos.size() : 0);
+        log.info("   Usuario ID: {}", usuarioActual.id());
+
+        try {
+            CrearPostDTO datos = new CrearPostDTO(titulo, categoria, descripcion, link);
+            PostDTO creado = postService.crear(usuarioActual.id(), datos, archivos);
+            log.info("✅ Post creado exitosamente con ID: {}", creado.id());
+            return ResponseEntity.status(HttpStatus.CREATED).body(creado);
+        } catch (Exception e) {
+            log.error("❌ Error al crear post: ", e);
+            throw e;
+        }
     }
 
     @GetMapping("/{postId}/comentarios")
@@ -53,8 +63,9 @@ public class PostController {
     }
 
     @PostMapping("/{postId}/comentarios")
-    public ResponseEntity<ComentarioDTO> comentar(@PathVariable Long postId,
-                                                    @Valid @RequestBody CrearComentarioDTO datos) {
+    public ResponseEntity<ComentarioDTO> comentar(
+            @PathVariable Long postId,
+            @Valid @RequestBody CrearComentarioDTO datos) {
         ComentarioDTO comentario = postService.comentar(postId, usuarioActual.id(), datos.contenido());
         return ResponseEntity.status(HttpStatus.CREATED).body(comentario);
     }
