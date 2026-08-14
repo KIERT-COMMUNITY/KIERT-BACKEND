@@ -24,7 +24,15 @@ public class PostController {
 
     @GetMapping
     public ResponseEntity<List<PostDTO>> listar() {
-        return ResponseEntity.ok(postService.listar());
+        log.info("📋 Recibiendo solicitud para listar posts");
+        try {
+            List<PostDTO> posts = postService.listar();
+            log.info("✅ Devolviendo {} posts", posts.size());
+            return ResponseEntity.ok(posts);
+        } catch (Exception e) {
+            log.error("❌ Error al listar posts: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     @GetMapping("/{id}")
@@ -38,23 +46,13 @@ public class PostController {
             @RequestParam String categoria,
             @RequestParam String descripcion,
             @RequestParam(required = false) String link,
-            @RequestParam(value = "archivos", required = false) List<MultipartFile> archivos
-    ) {
-        log.info("📝 Recibiendo solicitud para crear post");
-        log.info("   Título: {}", titulo);
-        log.info("   Categoría: {}", categoria);
-        log.info("   Archivos: {}", archivos != null ? archivos.size() : 0);
-        log.info("   Usuario ID: {}", usuarioActual.id());
+            @RequestParam(value = "archivos", required = false) List<MultipartFile> archivos) {
 
-        try {
-            CrearPostDTO datos = new CrearPostDTO(titulo, categoria, descripcion, link);
-            PostDTO creado = postService.crear(usuarioActual.id(), datos, archivos);
-            log.info("✅ Post creado exitosamente con ID: {}", creado.id());
-            return ResponseEntity.status(HttpStatus.CREATED).body(creado);
-        } catch (Exception e) {
-            log.error("❌ Error al crear post: ", e);
-            throw e;
-        }
+        log.info("📝 Creando post para usuario: {}", usuarioActual.id());
+
+        CrearPostDTO datos = new CrearPostDTO(titulo, categoria, descripcion, link);
+        PostDTO creado = postService.crear(usuarioActual.id(), datos, archivos);
+        return ResponseEntity.status(HttpStatus.CREATED).body(creado);
     }
 
     @GetMapping("/{postId}/comentarios")
@@ -68,5 +66,24 @@ public class PostController {
             @Valid @RequestBody CrearComentarioDTO datos) {
         ComentarioDTO comentario = postService.comentar(postId, usuarioActual.id(), datos.contenido());
         return ResponseEntity.status(HttpStatus.CREATED).body(comentario);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> eliminarPost(@PathVariable Long id) {
+        postService.eliminarPost(id, usuarioActual.id());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<PostDTO> actualizarPost(
+            @PathVariable Long id,
+            @Valid @RequestBody ActualizarPostDTO datos) {
+        return ResponseEntity.ok(postService.actualizarPost(id, usuarioActual.id(), datos));
+    }
+
+    @DeleteMapping("/cache")
+    public ResponseEntity<Void> limpiarCachePosts() {
+        postService.limpiarCachePosts();
+        return ResponseEntity.ok().build();
     }
 }

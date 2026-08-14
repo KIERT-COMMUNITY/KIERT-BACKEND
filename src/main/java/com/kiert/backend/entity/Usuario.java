@@ -4,13 +4,11 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
-// Espejo de "User" en user.model.ts del frontend.
 @Entity
-@Table(name = "usuarios", uniqueConstraints = {
-        @UniqueConstraint(columnNames = "email"),
-        @UniqueConstraint(columnNames = "nombre_usuario")
-})
+@Table(name = "usuarios")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,13 +20,12 @@ public class Usuario {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "nombre_usuario", nullable = false, length = 20)
+    @Column(unique = true, nullable = false, length = 20)
     private String nombreUsuario;
 
-    @Column(nullable = false)
+    @Column(unique = true, nullable = false, length = 100)
     private String email;
 
-    // Hash BCrypt, nunca se expone al frontend
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
@@ -38,4 +35,32 @@ public class Usuario {
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     @Builder.Default
     private Instant fechaCreacion = Instant.now();
+
+    @OneToMany(mappedBy = "autor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Post> posts = new ArrayList<>();
+
+    @OneToMany(mappedBy = "autor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Comentario> comentarios = new ArrayList<>();
+
+    @OneToMany(mappedBy = "emisor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Mensaje> mensajesEnviados = new ArrayList<>();
+
+    @OneToMany(mappedBy = "receptor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Mensaje> mensajesRecibidos = new ArrayList<>();
+
+    @OneToMany(mappedBy = "emisor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<SolicitudContacto> solicitudesEnviadas = new ArrayList<>();
+
+    @OneToMany(mappedBy = "receptor", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<SolicitudContacto> solicitudesRecibidas = new ArrayList<>();
+
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<PasswordResetToken> resetTokens = new ArrayList<>();
 }

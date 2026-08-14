@@ -3,11 +3,16 @@ package com.kiert.backend.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-// Campos de texto que llegan como multipart/form-data junto a los archivos
-// (ver create-post.component.ts: FormData con titulo/categoria/descripcion/link/archivos)
 public record CrearPostDTO(
-        @NotBlank @Size(min = 6, max = 120) String titulo,
-        @NotBlank String categoria,
-        @NotBlank @Size(min = 20) String descripcion,
+        @NotBlank(message = "El título es obligatorio")
+        @Size(max = 120, message = "El título no puede tener más de 120 caracteres")
+        String titulo,
+
+        @NotBlank(message = "La categoría es obligatoria")
+        String categoria,
+
+        @NotBlank(message = "La descripción es obligatoria")
+        String descripcion,
+
         String link
 ) {}

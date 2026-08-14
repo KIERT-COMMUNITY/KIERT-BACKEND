@@ -5,9 +5,6 @@ import com.kiert.backend.dto.UrlFirmadaResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-// Espejo del backend que necesita upload.service.ts (frontend):
-// entrega una URL firmada de Supabase para que el navegador suba el archivo directo
-// (paso 1 del flujo descrito en el comentario de upload.service.ts).
 @Service
 @RequiredArgsConstructor
 public class UploadService {

@@ -15,9 +15,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-// Equivalente en el backend del auth.interceptor.ts del frontend:
-// lee el header "Authorization: Bearer <token>", valida el JWT y autentica
-// la petición para que los controllers sepan "quién soy ahora mismo".
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
@@ -29,8 +26,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
-                                     @NonNull HttpServletResponse response,
-                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
 
@@ -55,7 +52,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception ex) {
-            // Token inválido/expirado -> seguimos sin autenticar; Security responderá 401/403 si la ruta lo exige
             SecurityContextHolder.clearContext();
         }
 

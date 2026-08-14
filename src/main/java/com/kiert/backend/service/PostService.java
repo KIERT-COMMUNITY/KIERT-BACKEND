@@ -8,6 +8,8 @@ import com.kiert.backend.repository.PostRepository;
 import com.kiert.backend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -25,20 +27,32 @@ public class PostService {
     private final PostMapper postMapper;
     private final StorageService storageService;
 
+    // ========== LISTAR POSTS ==========
     @Transactional(readOnly = true)
     public List<PostDTO> listar() {
-        return postRepository.findAllByOrderByFechaCreacionDesc().stream()
-                .map(postMapper::aDTO)
-                .toList();
+        log.info("📋 Listando posts desde BD");
+        try {
+            List<PostDTO> posts = postRepository.findAllByOrderByFechaCreacionDesc().stream()
+                    .map(postMapper::aDTO)
+                    .toList();
+            log.info("✅ Se encontraron {} posts", posts.size());
+            return posts;
+        } catch (Exception e) {
+            log.error("❌ Error al listar posts: {}", e.getMessage(), e);
+            throw new RuntimeException("Error al listar publicaciones: " + e.getMessage());
+        }
     }
 
+    // ========== OBTENER POST POR ID ==========
     @Transactional(readOnly = true)
     public PostDTO obtenerPorId(Long id) {
+        log.info("🔍 Obteniendo post {} desde BD", id);
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
         return postMapper.aDTO(post);
     }
 
+    // ========== CREAR POST ==========
     @Transactional
     public PostDTO crear(Long autorId, CrearPostDTO datos, List<MultipartFile> archivos) {
         log.info("📝 Creando post para usuario: {}", autorId);
@@ -102,7 +116,6 @@ public class PostService {
 
                 } catch (Exception e) {
                     log.error("❌ Error al subir archivo {}: {}", archivo.getOriginalFilename(), e.getMessage());
-                    // Continuamos con el siguiente archivo
                 }
             }
 
@@ -114,8 +127,10 @@ public class PostService {
         return postMapper.aDTO(post);
     }
 
+    // ========== LISTAR COMENTARIOS ==========
     @Transactional(readOnly = true)
     public List<ComentarioDTO> listarComentarios(Long postId) {
+        log.info("💬 Listando comentarios del post {} desde BD", postId);
         if (!postRepository.existsById(postId)) {
             throw new RecursoNoEncontradoException("No se encontró la publicación.");
         }
@@ -124,8 +139,11 @@ public class PostService {
                 .toList();
     }
 
+    // ========== COMENTAR ==========
     @Transactional
     public ComentarioDTO comentar(Long postId, Long autorId, String contenido) {
+        log.info("💬 Comentando en post {} por usuario {}", postId, autorId);
+
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
         Usuario autor = usuarioRepository.findById(autorId)
@@ -139,5 +157,56 @@ public class PostService {
 
         comentario = comentarioRepository.save(comentario);
         return postMapper.aDTO(comentario);
+    }
+
+    // ========== ELIMINAR POST ==========
+    @Transactional
+    public void eliminarPost(Long postId, Long autorId) {
+        log.info("🗑️ Eliminando post {} por usuario {}", postId, autorId);
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
+
+        // Verificar que el usuario sea el autor
+        if (!post.getAutor().getId().equals(autorId)) {
+            throw new SecurityException("No tienes permiso para eliminar esta publicación.");
+        }
+
+        postRepository.delete(post);
+        log.info("✅ Post {} eliminado exitosamente", postId);
+    }
+
+    // ========== ACTUALIZAR POST ==========
+    @Transactional
+    public PostDTO actualizarPost(Long postId, Long autorId, ActualizarPostDTO datos) {
+        log.info("✏️ Actualizando post {} por usuario {}", postId, autorId);
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
+
+        // Verificar que el usuario sea el autor
+        if (!post.getAutor().getId().equals(autorId)) {
+            throw new SecurityException("No tienes permiso para actualizar esta publicación.");
+        }
+
+        // Actualizar campos
+        if (datos.titulo() != null && !datos.titulo().isBlank()) {
+            post.setTitulo(datos.titulo());
+        }
+        if (datos.descripcion() != null && !datos.descripcion().isBlank()) {
+            post.setDescripcion(datos.descripcion());
+        }
+        if (datos.categoria() != null && !datos.categoria().isBlank()) {
+            post.setCategoria(CategoriaPost.desdeValor(datos.categoria()));
+        }
+
+        post = postRepository.save(post);
+        return postMapper.aDTO(post);
+    }
+
+    // ========== LIMPIAR CACHÉ DE POSTS ==========
+    public void limpiarCachePosts() {
+        log.info("🧹 Limpiando caché de posts");
+        // No hace nada porque Redis está desactivado
     }
 }

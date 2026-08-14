@@ -46,6 +46,10 @@ public class PostMapper {
     }
 
     private AutorResumenDTO aAutorResumen(Usuario usuario) {
-        return new AutorResumenDTO(usuario.getId(), usuario.getNombreUsuario(), usuario.getFotoPerfilUrl());
+        return new AutorResumenDTO(
+                usuario.getId(),
+                usuario.getNombreUsuario(),
+                usuario.getFotoPerfilUrl()
+        );
     }
 }

@@ -8,7 +8,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
 
-// Adapta nuestra entidad Usuario al contrato UserDetails que exige Spring Security.
 @Getter
 public class UsuarioPrincipal implements UserDetails {
 
@@ -24,7 +23,7 @@ public class UsuarioPrincipal implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(); // no manejamos roles/permisos por ahora, todo usuario autenticado tiene el mismo nivel
+        return List.of();
     }
 
     @Override

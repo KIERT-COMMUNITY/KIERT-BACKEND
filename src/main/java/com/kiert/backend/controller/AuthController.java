@@ -1,14 +1,18 @@
 package com.kiert.backend.controller;
 
-import com.kiert.backend.dto.*;
+import com.kiert.backend.dto.AuthResponseDTO;
+import com.kiert.backend.dto.LoginRequestDTO;
+import com.kiert.backend.dto.RegisterRequestDTO;
+import com.kiert.backend.dto.SolicitarRecuperacionDTO;
+import com.kiert.backend.dto.RestablecerContrasenaDTO;
 import com.kiert.backend.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-// Espejo exacto de las rutas que llama auth.service.ts en el frontend.
+@Slf4j
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -17,22 +21,34 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/registro")
-    public ResponseEntity<AuthResponseDTO> registro(@Valid @RequestBody RegisterRequestDTO datos) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.registrar(datos));
+    public ResponseEntity<AuthResponseDTO> registrar(@Valid @RequestBody RegisterRequestDTO datos) {
+        log.info("📝 Registrando usuario: {}", datos.email());
+        return ResponseEntity.ok(authService.registrar(datos));
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponseDTO> login(@Valid @RequestBody LoginRequestDTO datos) {
+        log.info("🔑 Login para usuario: {}", datos.email());
         return ResponseEntity.ok(authService.login(datos));
     }
 
-    @PostMapping("/recuperar-contrasena")
-    public ResponseEntity<MensajeSimpleDTO> recuperarContrasena(@Valid @RequestBody SolicitarRecuperacionDTO datos) {
-        return ResponseEntity.ok(authService.solicitarRecuperacion(datos.email()));
+    @PostMapping("/recuperar")
+    public ResponseEntity<Void> solicitarRecuperacion(@Valid @RequestBody SolicitarRecuperacionDTO datos) {
+        log.info("📧 Solicitud de recuperación para: {}", datos.email());
+        authService.solicitarRecuperacion(datos.email());
+        return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/restablecer-contrasena")
-    public ResponseEntity<MensajeSimpleDTO> restablecerContrasena(@Valid @RequestBody RestablecerContrasenaDTO datos) {
-        return ResponseEntity.ok(authService.restablecerContrasena(datos.token(), datos.nuevaContrasena()));
+    @PostMapping("/restablecer")
+    public ResponseEntity<Void> restablecerContrasena(@Valid @RequestBody RestablecerContrasenaDTO datos) {
+        log.info("🔑 Restableciendo contraseña");
+        authService.restablecerContrasena(datos.token(), datos.nuevaContrasena());
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/validar-token")
+    public ResponseEntity<Boolean> validarToken(@RequestParam String token) {
+        log.info("🔍 Validando token");
+        return ResponseEntity.ok(authService.validarToken(token));
     }
 }

@@ -1,8 +1,7 @@
 package com.kiert.backend.dto;
 
-public record UsuarioDTO(
+public record UsuarioDisponibleDTO(
         Long id,
         String nombreUsuario,
-        String email,
         String fotoPerfilUrl
 ) {}

@@ -1,90 +1,120 @@
 package com.kiert.backend.service;
 
-import com.kiert.backend.dto.*;
+import com.kiert.backend.dto.AuthResponseDTO;
+import com.kiert.backend.dto.LoginRequestDTO;
+import com.kiert.backend.dto.RegisterRequestDTO;
+import com.kiert.backend.dto.UsuarioDTO;
 import com.kiert.backend.entity.PasswordResetToken;
 import com.kiert.backend.entity.Usuario;
-import com.kiert.backend.exception.CredencialesInvalidasException;
-import com.kiert.backend.exception.RecursoDuplicadoException;
-import com.kiert.backend.exception.TokenInvalidoException;
+import com.kiert.backend.exception.BadRequestException;
+import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.PasswordResetTokenRepository;
 import com.kiert.backend.repository.UsuarioRepository;
 import com.kiert.backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 
-// Espejo del backend que necesita auth.service.ts: login, registro,
-// recuperar/restablecer contraseña.
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final int HORAS_VIGENCIA_TOKEN_RESET = 2;
-
     private final UsuarioRepository usuarioRepository;
-    private final PasswordResetTokenRepository tokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
-    private final EmailService emailService;
 
+    // ========== REGISTRO ==========
     @Transactional
     public AuthResponseDTO registrar(RegisterRequestDTO datos) {
+        log.info("📝 Registrando usuario: {}", datos.email());
+
         if (usuarioRepository.existsByEmail(datos.email())) {
-            throw new RecursoDuplicadoException("Ese correo ya está registrado.");
+            throw new BadRequestException("El email ya está registrado");
         }
+
         if (usuarioRepository.existsByNombreUsuario(datos.nombreUsuario())) {
-            throw new RecursoDuplicadoException("Ese nombre de usuario ya está en uso.");
+            throw new BadRequestException("El nombre de usuario ya está en uso");
         }
 
         Usuario usuario = Usuario.builder()
                 .nombreUsuario(datos.nombreUsuario())
                 .email(datos.email())
                 .passwordHash(passwordEncoder.encode(datos.password()))
+                .fechaCreacion(Instant.now())
                 .build();
 
         usuario = usuarioRepository.save(usuario);
-        return construirRespuestaAuth(usuario);
+        log.info("✅ Usuario registrado con ID: {}", usuario.getId());
+
+        String token = jwtService.generarToken(usuario.getId(), usuario.getEmail());
+        return new AuthResponseDTO(token, aDTO(usuario));
     }
 
-    @Transactional(readOnly = true)
+    // ========== LOGIN ==========
     public AuthResponseDTO login(LoginRequestDTO datos) {
-        Usuario usuario = usuarioRepository.findByEmail(datos.email())
-                .orElseThrow(() -> new CredencialesInvalidasException("Correo o contraseña incorrectos."));
+        log.info("🔑 Login para usuario: {}", datos.email());
 
-        if (!passwordEncoder.matches(datos.password(), usuario.getPasswordHash())) {
-            throw new CredencialesInvalidasException("Correo o contraseña incorrectos.");
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(datos.email(), datos.password())
+        );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        Usuario usuario = usuarioRepository.findByEmail(datos.email())
+                .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
+
+        String token = jwtService.generarToken(usuario.getId(), usuario.getEmail());
+        return new AuthResponseDTO(token, aDTO(usuario));
+    }
+
+    // ========== SOLICITAR RECUPERACIÓN DE CONTRASEÑA ==========
+    @Transactional
+    public void solicitarRecuperacion(String email) {
+        log.info("📧 Solicitando recuperación para: {}", email);
+
+        Usuario usuario = usuarioRepository.findByEmail(email)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No existe un usuario con ese email"));
+
+        String token = UUID.randomUUID().toString();
+        Instant fechaExpiracion = Instant.now().plusSeconds(3600);
+
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+                .token(token)
+                .usuario(usuario)
+                .fechaExpiracion(fechaExpiracion)
+                .usado(false)
+                .build();
+
+        passwordResetTokenRepository.save(resetToken);
+        log.info("✅ Token de recuperación generado para: {}", email);
+    }
+
+    // ========== RESTABLECER CONTRASEÑA ==========
+    @Transactional
+    public void restablecerContrasena(String token, String nuevaContrasena) {
+        log.info("🔑 Restableciendo contraseña");
+
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new BadRequestException("Token inválido"));
+
+        if (resetToken.isExpirado()) {
+            throw new BadRequestException("El token ha expirado");
         }
 
-        return construirRespuestaAuth(usuario);
-    }
-
-    @Transactional
-    public MensajeSimpleDTO solicitarRecuperacion(String email) {
-        // Por seguridad, SIEMPRE devolvemos el mismo mensaje exista o no el correo
-        // (igual que indica el comentario en forgot-password.component.ts)
-        usuarioRepository.findByEmail(email).ifPresent(usuario -> {
-            PasswordResetToken token = PasswordResetToken.builder()
-                    .usuario(usuario)
-                    .fechaExpiracion(Instant.now().plus(HORAS_VIGENCIA_TOKEN_RESET, ChronoUnit.HOURS))
-                    .build();
-            tokenRepository.save(token);
-            emailService.enviarCorreoRecuperacion(usuario.getEmail(), token.getToken());
-        });
-
-        return new MensajeSimpleDTO("Si el correo existe, te enviamos un enlace para restablecer tu contraseña.");
-    }
-
-    @Transactional
-    public MensajeSimpleDTO restablecerContrasena(String token, String nuevaContrasena) {
-        PasswordResetToken resetToken = tokenRepository.findByToken(token)
-                .orElseThrow(() -> new TokenInvalidoException("El enlace expiró o ya fue usado."));
-
-        if (!resetToken.estaVigente()) {
-            throw new TokenInvalidoException("El enlace expiró o ya fue usado.");
+        if (resetToken.isUsado()) {
+            throw new BadRequestException("El token ya ha sido usado");
         }
 
         Usuario usuario = resetToken.getUsuario();
@@ -92,15 +122,26 @@ public class AuthService {
         usuarioRepository.save(usuario);
 
         resetToken.setUsado(true);
-        tokenRepository.save(resetToken);
+        passwordResetTokenRepository.save(resetToken);
 
-        return new MensajeSimpleDTO("Contraseña actualizada correctamente.");
+        log.info("✅ Contraseña restablecida para usuario: {}", usuario.getEmail());
     }
 
-    private AuthResponseDTO construirRespuestaAuth(Usuario usuario) {
-        String token = jwtService.generarToken(usuario.getId(), usuario.getEmail());
-        UsuarioDTO usuarioDTO = new UsuarioDTO(
-                usuario.getId(), usuario.getNombreUsuario(), usuario.getEmail(), usuario.getFotoPerfilUrl());
-        return new AuthResponseDTO(token, usuarioDTO);
+    // ========== VALIDAR TOKEN ==========
+    public boolean validarToken(String token) {
+        log.info("🔍 Validando token");
+        return passwordResetTokenRepository.findByToken(token)
+                .map(resetToken -> !resetToken.isExpirado() && !resetToken.isUsado())
+                .orElse(false);
+    }
+
+    // ========== DTO HELPER ==========
+    private UsuarioDTO aDTO(Usuario usuario) {
+        return new UsuarioDTO(
+                usuario.getId(),
+                usuario.getNombreUsuario(),
+                usuario.getEmail(),
+                usuario.getFotoPerfilUrl()
+        );
     }
 }

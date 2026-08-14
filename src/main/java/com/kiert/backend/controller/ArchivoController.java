@@ -25,7 +25,6 @@ public class ArchivoController {
         return ResponseEntity.ok(uploadService.generarUrlFirmada(datos));
     }
 
-    // ✅ ENDPOINT DE PRUEBA
     @GetMapping("/test")
     public ResponseEntity<String> testConexion() {
         try {

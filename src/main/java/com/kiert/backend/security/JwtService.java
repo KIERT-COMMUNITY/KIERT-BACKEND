@@ -10,8 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.function.Function;
 
-// Genera y valida los JWT que consume auth.interceptor.ts en el frontend
-// (header "Authorization: Bearer <token>").
 @Service
 public class JwtService {
 

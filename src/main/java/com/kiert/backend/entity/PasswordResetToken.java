@@ -4,9 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
-import java.util.UUID;
 
-// Token temporal para el flujo "olvidé mi contraseña" (forgot/reset-password.component.ts)
 @Entity
 @Table(name = "password_reset_tokens")
 @Getter
@@ -21,8 +19,7 @@ public class PasswordResetToken {
     private Long id;
 
     @Column(nullable = false, unique = true)
-    @Builder.Default
-    private String token = UUID.randomUUID().toString();
+    private String token;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "usuario_id", nullable = false)
@@ -31,11 +28,15 @@ public class PasswordResetToken {
     @Column(name = "fecha_expiracion", nullable = false)
     private Instant fechaExpiracion;
 
-    @Column(nullable = false)
+    @Column(name = "fecha_creacion", nullable = false, updatable = false)
+    @Builder.Default
+    private Instant fechaCreacion = Instant.now();
+
     @Builder.Default
     private boolean usado = false;
 
-    public boolean estaVigente() {
-        return !usado && Instant.now().isBefore(fechaExpiracion);
+    // ✅ MÉTODO PARA VERIFICAR SI EL TOKEN HA EXPIRADO
+    public boolean isExpirado() {
+        return Instant.now().isAfter(fechaExpiracion);
     }
 }

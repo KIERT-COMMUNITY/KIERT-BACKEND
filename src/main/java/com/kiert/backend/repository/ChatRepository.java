@@ -7,7 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
+public interface ChatRepository extends JpaRepository<Mensaje, Long> {
 
     @Query("""
             select m from Mensaje m

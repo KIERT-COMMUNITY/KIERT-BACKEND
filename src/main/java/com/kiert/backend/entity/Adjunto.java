@@ -3,7 +3,6 @@ package com.kiert.backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-// Espejo de Adjunto en post.model.ts: un post puede llevar archivos (Supabase) o links.
 @Entity
 @Table(name = "adjuntos")
 @Getter
@@ -23,16 +22,16 @@ public class Adjunto {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
-    private TipoAdjunto tipo; // ARCHIVO | LINK
+    private TipoAdjunto tipo;
 
     @Column(nullable = false)
     private String nombre;
 
-    @Column(nullable = false, length = 1000)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String url;
 
     @Column(name = "peso_kb")
-    private Integer pesoKb; // solo aplica si tipo == ARCHIVO
+    private Integer pesoKb;
 
     public enum TipoAdjunto {
         ARCHIVO("archivo"),
@@ -46,6 +45,15 @@ public class Adjunto {
 
         public String getValor() {
             return valor;
+        }
+
+        public static TipoAdjunto desdeValor(String valor) {
+            for (TipoAdjunto tipo : values()) {
+                if (tipo.valor.equals(valor)) {
+                    return tipo;
+                }
+            }
+            throw new IllegalArgumentException("Tipo de adjunto no válido: " + valor);
         }
     }
 }

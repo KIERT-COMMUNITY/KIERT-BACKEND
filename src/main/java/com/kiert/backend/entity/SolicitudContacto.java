@@ -6,13 +6,13 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "mensajes")
+@Table(name = "solicitudes_contacto")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Mensaje {
+public class SolicitudContacto {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,14 +26,18 @@ public class Mensaje {
     @JoinColumn(name = "receptor_id", nullable = false)
     private Usuario receptor;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String contenido;
-
-    @Column(name = "fecha_envio", nullable = false, updatable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
     @Builder.Default
-    private Instant fechaEnvio = Instant.now();
+    private EstadoSolicitud estado = EstadoSolicitud.PENDIENTE;
 
-    @Column(nullable = false)
+    @Column(name = "fecha_solicitud", nullable = false, updatable = false)
     @Builder.Default
-    private boolean leido = false;
+    private Instant fechaSolicitud = Instant.now();
+
+    public enum EstadoSolicitud {
+        PENDIENTE,
+        ACEPTADA,
+        RECHAZADA
+    }
 }
