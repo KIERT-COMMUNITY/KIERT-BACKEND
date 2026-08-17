@@ -99,6 +99,23 @@ public class PostController {
         return ResponseEntity.status(HttpStatus.CREATED).body(comentario);
     }
 
+    @PutMapping(value = "/{id}", consumes = "multipart/form-data")
+    @Operation(summary = "Actualizar publicación", description = "Actualiza los campos de una publicación y gestiona sus adjuntos (solo el autor)")
+    public ResponseEntity<PostDTO> actualizarPost(
+            @Parameter(description = "ID de la publicación", required = true)
+            @PathVariable Long id,
+            @RequestParam(required = false) String titulo,
+            @RequestParam(required = false) String categoria,
+            @RequestParam(required = false) String descripcion,
+            @RequestParam(required = false) String link,
+            @RequestParam(value = "adjuntosEliminar", required = false) List<Long> adjuntosEliminar,
+            @RequestParam(value = "archivos", required = false) List<MultipartFile> archivos) {
+
+        ActualizarPostDTO datos = new ActualizarPostDTO(titulo, descripcion, categoria, link);
+        PostDTO actualizado = postService.actualizarPost(id, usuarioActual.id(), datos, adjuntosEliminar, archivos);
+        return ResponseEntity.ok(actualizado);
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar publicación", description = "Elimina una publicación (solo el autor)")
     public ResponseEntity<Void> eliminarPost(

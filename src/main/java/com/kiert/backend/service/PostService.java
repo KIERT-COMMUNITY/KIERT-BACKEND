@@ -172,13 +172,22 @@ public class PostService {
             throw new SecurityException("No tienes permiso para eliminar esta publicación.");
         }
 
+        // Eliminar archivos de Cloudinary antes de borrar el post
+        for (Adjunto adjunto : post.getAdjuntos()) {
+            if (adjunto.getTipo() == Adjunto.TipoAdjunto.ARCHIVO && adjunto.getUrl() != null) {
+                log.info("🗑️ Eliminando adjunto de Cloudinary: {}", adjunto.getUrl());
+                storageService.eliminarArchivo(adjunto.getUrl());
+            }
+        }
+
         postRepository.delete(post);
         log.info("✅ Post {} eliminado exitosamente", postId);
     }
 
     // ========== ACTUALIZAR POST ==========
     @Transactional
-    public PostDTO actualizarPost(Long postId, Long autorId, ActualizarPostDTO datos) {
+    public PostDTO actualizarPost(Long postId, Long autorId, ActualizarPostDTO datos,
+                                  List<Long> adjuntosEliminar, List<MultipartFile> archivos) {
         log.info("✏️ Actualizando post {} por usuario {}", postId, autorId);
 
         Post post = postRepository.findById(postId)
@@ -198,6 +207,81 @@ public class PostService {
         }
         if (datos.categoria() != null && !datos.categoria().isBlank()) {
             post.setCategoria(CategoriaPost.desdeValor(datos.categoria()));
+        }
+
+        // Actualizar link: null = no tocar, vacio = quitar, con valor = reemplazar/crear
+        if (datos.link() != null) {
+            Adjunto linkExistente = post.getAdjuntos().stream()
+                    .filter(a -> a.getTipo() == Adjunto.TipoAdjunto.LINK)
+                    .findFirst()
+                    .orElse(null);
+
+            if (datos.link().isBlank()) {
+                if (linkExistente != null) {
+                    log.info("🔗 Quitando link del post {}", postId);
+                    post.getAdjuntos().remove(linkExistente);
+                }
+            } else {
+                if (linkExistente != null) {
+                    log.info("🔗 Actualizando link del post {}: {}", postId, datos.link());
+                    linkExistente.setUrl(datos.link());
+                } else {
+                    log.info("🔗 Agregando link al post {}: {}", postId, datos.link());
+                    post.getAdjuntos().add(Adjunto.builder()
+                            .post(post)
+                            .tipo(Adjunto.TipoAdjunto.LINK)
+                            .nombre("Enlace externo")
+                            .url(datos.link())
+                            .build());
+                }
+            }
+        }
+
+        // Eliminar adjuntos indicados (solo si pertenecen al post)
+        if (adjuntosEliminar != null && !adjuntosEliminar.isEmpty()) {
+            List<Adjunto> adjuntos = post.getAdjuntos();
+            for (Long adjuntoId : adjuntosEliminar) {
+                adjuntos.stream()
+                        .filter(a -> a.getId().equals(adjuntoId))
+                        .findFirst()
+                        .ifPresent(adjunto -> {
+                            if (adjunto.getTipo() == Adjunto.TipoAdjunto.ARCHIVO && adjunto.getUrl() != null) {
+                                log.info("🗑️ Quitando adjunto {} de Cloudinary", adjunto.getUrl());
+                                storageService.eliminarArchivo(adjunto.getUrl());
+                            }
+                            log.info("🗑️ Eliminando adjunto {} del post {}", adjuntoId, postId);
+                            adjuntos.remove(adjunto);
+                        });
+            }
+        }
+
+        // Agregar nuevos archivos
+        if (archivos != null && !archivos.isEmpty()) {
+            log.info("📎 Procesando {} archivo(s) nuevos", archivos.size());
+            for (MultipartFile archivo : archivos) {
+                if (archivo.isEmpty()) {
+                    log.warn("⚠️ Archivo vacío, saltando...");
+                    continue;
+                }
+                if (archivo.getSize() > 10 * 1024 * 1024) {
+                    log.warn("⚠️ Archivo {} excede 10MB, saltando...", archivo.getOriginalFilename());
+                    continue;
+                }
+                try {
+                    log.info("📤 Subiendo archivo a Cloudinary: {}", archivo.getOriginalFilename());
+                    String url = storageService.subirArchivo(archivo);
+                    post.getAdjuntos().add(Adjunto.builder()
+                            .post(post)
+                            .tipo(Adjunto.TipoAdjunto.ARCHIVO)
+                            .nombre(archivo.getOriginalFilename())
+                            .url(url)
+                            .pesoKb((int) (archivo.getSize() / 1024))
+                            .build());
+                    log.info("✅ Archivo subido exitosamente: {}", url);
+                } catch (Exception e) {
+                    log.error("❌ Error al subir archivo {}: {}", archivo.getOriginalFilename(), e.getMessage());
+                }
+            }
         }
 
         post = postRepository.save(post);

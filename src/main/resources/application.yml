@@ -73,9 +73,9 @@ kiert:
     reset-password-url: "http://localhost:4200/restablecer-contrasena"
 
   cloudinary:
-    cloud-name: "nombre"
-    api-key: "api key"
-    api-secret: "api key secret"
+    cloud-name: "mlg68j4q"
+    api-key: "211297651585938"
+    api-secret: "Ha4BGIzY4FuDPiRltpdlKHiKbpY"
 
   supabase:
     url: "name"
@@ -94,7 +94,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
     username: root
-    password: contraseña
+    password: admin
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10

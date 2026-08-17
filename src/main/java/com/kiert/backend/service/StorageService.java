@@ -30,6 +30,17 @@ public class StorageService {
         return cloudinaryService.urlPublica(nombreArchivo);
     }
 
+    // ========== ELIMINAR ARCHIVO ==========
+    public void eliminarArchivo(String url) {
+        log.info("🗑️ StorageService - Eliminando archivo de Cloudinary: {}", url);
+        String publicId = cloudinaryService.publicIdDesdeUrl(url);
+        if (publicId != null) {
+            cloudinaryService.eliminarArchivo(publicId);
+        } else {
+            log.warn("⚠️ No se pudo extraer public_id de la URL: {}", url);
+        }
+    }
+
     // ========== SANITIZAR NOMBRE ==========
     public String sanitizar(String nombre) {
         return cloudinaryService.sanitizar(nombre);
