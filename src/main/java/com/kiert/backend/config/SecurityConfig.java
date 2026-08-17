@@ -17,6 +17,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -34,7 +35,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        //PERMITIR SWAGGER (TODAS LAS RUTAS DE SWAGGER)
+                        // PERMITIR SWAGGER
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
@@ -48,9 +49,9 @@ public class SecurityConfig {
                                 "/configuration/ui",
                                 "/configuration/security"
                         ).permitAll()
-                        // ✅ PERMITIR AUTH Y ARCHIVOS
-                        .requestMatchers("/api/auth/**", "/api/archivos/**", "/ws/**").permitAll()
-                        // ✅ TODO LO DEMÁS REQUIERE AUTENTICACIÓN
+                        // PERMITIR AUTH, ARCHIVOS, CHAT y WEBSOCKET
+                        .requestMatchers("/api/auth/**", "/api/archivos/**", "/api/chat/**", "/ws/**").permitAll()
+                        // TODO LO DEMÁS REQUIERE AUTENTICACIÓN
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
@@ -61,12 +62,18 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-                corsProperties.allowedOrigins().split(",")
-        ));
+        // ✅ USAR allowedOriginPatterns en lugar de allowedOrigins
+        configuration.setAllowedOriginPatterns(List.of("http://localhost:4200"));
+        // ✅ PERMITIR TODOS LOS MÉTODOS
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        // ✅ PERMITIR TODOS LOS HEADERS
         configuration.setAllowedHeaders(List.of("*"));
+        // ✅ EXPONER HEADERS PARA AUTENTICACIÓN
+        configuration.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        // ✅ PERMITIR CREDENCIALES
         configuration.setAllowCredentials(true);
+        // ✅ TIEMPO DE CACHE DE CORS (1 hora)
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

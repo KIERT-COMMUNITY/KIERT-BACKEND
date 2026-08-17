@@ -34,6 +34,22 @@ spring:
       time-to-live: 1800000
       cache-null-values: false
 
+  # ===== CONFIGURACIÓN DE CORREO (GMAIL) =====
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: correo # ← REEMPLAZA CON TU GMAIL
+    password: secret       # ← REEMPLAZA CON CONTRASEÑA DE APLICACIÓN
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
 server:
   port: 8080
   error:
@@ -73,9 +89,9 @@ kiert:
     reset-password-url: "http://localhost:4200/restablecer-contrasena"
 
   cloudinary:
-    cloud-name: "nombre"
-    api-key: "api key"
-    api-secret: "api key secret"
+    cloud-name: "name"
+    api-key: "key"
+    api-secret: "key secret"
 
   supabase:
     url: "name"
@@ -102,21 +118,6 @@ spring:
       connection-timeout: 30000
       idle-timeout: 600000
       max-lifetime: 1800000
-
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: name
-    password: name
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-          connectiontimeout: 5000
-          timeout: 5000
-          writetimeout: 5000
 
   jpa:
     database-platform: org.hibernate.dialect.MySQLDialect

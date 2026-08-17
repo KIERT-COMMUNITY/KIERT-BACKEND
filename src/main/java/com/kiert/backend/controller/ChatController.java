@@ -68,6 +68,12 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
+    // ========== VERIFICAR CONTACTO ==========
+    @GetMapping("/contactos/{usuarioId}")
+    public ResponseEntity<Boolean> sonContactos(@PathVariable Long usuarioId) {
+        return ResponseEntity.ok(chatService.sonContactos(usuarioActual.id(), usuarioId));
+    }
+
     // ========== USUARIOS DISPONIBLES ==========
     @GetMapping("/usuarios/disponibles")
     public ResponseEntity<List<UsuarioDisponibleDTO>> listarUsuariosDisponibles() {
@@ -75,7 +81,6 @@ public class ChatController {
         return ResponseEntity.ok(chatService.listarUsuariosDisponibles(usuarioActual.id()));
     }
 
-    // ========== ELIMINAR CONTACTO ==========
     @DeleteMapping("/contactos/{usuarioId}")
     public ResponseEntity<Void> eliminarContacto(@PathVariable Long usuarioId) {
         log.info("🗑️ Eliminando contacto: {}", usuarioId);

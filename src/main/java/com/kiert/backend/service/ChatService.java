@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -26,10 +27,8 @@ public class ChatService {
     public List<ConversacionDTO> listarConversaciones(Long usuarioId) {
         log.info("📋 Listando conversaciones para usuario: {}", usuarioId);
 
-        // Obtener todos los mensajes del usuario
         List<Mensaje> mensajes = mensajeRepository.findTodosLosMensajesDeUsuario(usuarioId);
 
-        // Agrupar por interlocutor y obtener último mensaje
         return mensajes.stream()
                 .collect(Collectors.groupingBy(
                         m -> m.getEmisor().getId().equals(usuarioId) ? m.getReceptor().getId() : m.getEmisor().getId()
@@ -39,17 +38,14 @@ public class ChatService {
                     Long otroUsuarioId = entry.getKey();
                     List<Mensaje> mensajesConUsuario = entry.getValue();
 
-                    // Obtener el último mensaje
                     Mensaje ultimo = mensajesConUsuario.stream()
                             .max((m1, m2) -> m1.getFechaEnvio().compareTo(m2.getFechaEnvio()))
                             .orElse(null);
 
-                    // Contar no leídos
                     long noLeidos = mensajesConUsuario.stream()
                             .filter(m -> m.getReceptor().getId().equals(usuarioId) && !m.isLeido())
                             .count();
 
-                    // Obtener información del otro usuario
                     Usuario otroUsuario = usuarioRepository.findById(otroUsuarioId)
                             .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
@@ -75,10 +71,8 @@ public class ChatService {
     public List<MensajeChatDTO> obtenerMensajes(Long usuarioId, Long otroUsuarioId) {
         log.info("💬 Obteniendo mensajes entre {} y {}", usuarioId, otroUsuarioId);
 
-        // Marcar como leídos los mensajes del otro usuario
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, otroUsuarioId);
 
-        // Marcar como leídos
         mensajes.stream()
                 .filter(m -> m.getReceptor().getId().equals(usuarioId) && !m.isLeido())
                 .forEach(m -> m.setLeido(true));
@@ -104,9 +98,6 @@ public class ChatService {
         Usuario receptor = usuarioRepository.findById(receptorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
 
-        // Verificar que son contactos (opcional)
-        // Aquí podrías verificar si hay una solicitud aceptada entre ellos
-
         Mensaje mensaje = Mensaje.builder()
                 .emisor(emisor)
                 .receptor(receptor)
@@ -125,7 +116,7 @@ public class ChatService {
         );
     }
 
-    // ========== SOLICITUDES ==========
+    // ========== SOLICITUDES DE CONTACTO ==========
     @Transactional(readOnly = true)
     public List<SolicitudContactoDTO> listarSolicitudes(Long usuarioId) {
         log.info("📋 Listando solicitudes para usuario: {}", usuarioId);
@@ -158,10 +149,13 @@ public class ChatService {
         Usuario receptor = usuarioRepository.findById(receptorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
 
-        // Verificar si ya existe una solicitud pendiente
         if (solicitudRepository.existsByEmisorIdAndReceptorIdAndEstado(
                 emisorId, receptorId, SolicitudContacto.EstadoSolicitud.PENDIENTE)) {
             throw new IllegalStateException("Ya existe una solicitud pendiente");
+        }
+
+        if (solicitudRepository.sonContactos(emisorId, receptorId)) {
+            throw new IllegalStateException("Ya son contactos");
         }
 
         SolicitudContacto solicitud = SolicitudContacto.builder()
@@ -194,7 +188,34 @@ public class ChatService {
         }
 
         solicitud.setEstado(SolicitudContacto.EstadoSolicitud.ACEPTADA);
+        solicitud.setFechaRespuesta(Instant.now());
         solicitudRepository.save(solicitud);
+
+        // ✅ CREAR MENSAJE DE BIENVENIDA AUTOMÁTICO
+        Usuario emisor = solicitud.getEmisor();
+        Usuario receptor = solicitud.getReceptor();
+
+        String mensajeBienvenida = "¡Hola! Ahora somos contactos. ¡Bienvenido al chat!";
+
+        // Enviar mensaje de bienvenida del emisor al receptor
+        Mensaje mensaje1 = Mensaje.builder()
+                .emisor(emisor)
+                .receptor(receptor)
+                .contenido(mensajeBienvenida)
+                .leido(false)
+                .build();
+        mensajeRepository.save(mensaje1);
+
+        // Enviar mensaje de bienvenida del receptor al emisor
+        Mensaje mensaje2 = Mensaje.builder()
+                .emisor(receptor)
+                .receptor(emisor)
+                .contenido("¡Hola! Ahora somos contactos. ¡Gracias por aceptar mi solicitud!")
+                .leido(false)
+                .build();
+        mensajeRepository.save(mensaje2);
+
+        log.info("✅ Mensajes de bienvenida enviados entre {} y {}", emisor.getNombreUsuario(), receptor.getNombreUsuario());
     }
 
     @Transactional
@@ -209,7 +230,13 @@ public class ChatService {
         }
 
         solicitud.setEstado(SolicitudContacto.EstadoSolicitud.RECHAZADA);
+        solicitud.setFechaRespuesta(Instant.now());
         solicitudRepository.save(solicitud);
+    }
+
+    // ========== VERIFICAR CONTACTOS ==========
+    public boolean sonContactos(Long usuario1, Long usuario2) {
+        return solicitudRepository.sonContactos(usuario1, usuario2);
     }
 
     // ========== USUARIOS DISPONIBLES ==========
@@ -217,16 +244,13 @@ public class ChatService {
     public List<UsuarioDisponibleDTO> listarUsuariosDisponibles(Long usuarioId) {
         log.info("📋 Listando usuarios disponibles para {}", usuarioId);
 
-        // Obtener IDs de usuarios con los que ya tiene conversación
         List<Long> contactosIds = mensajeRepository.findContactosId(usuarioId);
 
-        // Obtener solicitudes pendientes
         List<Long> solicitudesIds = solicitudRepository.findByEmisorIdAndEstado(usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE)
                 .stream()
                 .map(s -> s.getReceptor().getId())
                 .collect(Collectors.toList());
 
-        // Obtener todos los usuarios excepto el actual, los contactos y los que tienen solicitud pendiente
         return usuarioRepository.findAll().stream()
                 .filter(u -> !u.getId().equals(usuarioId))
                 .filter(u -> !contactosIds.contains(u.getId()))
@@ -239,12 +263,10 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
-    // ========== ELIMINAR CONTACTO ==========
     @Transactional
     public void eliminarContacto(Long usuarioId, Long contactoId) {
         log.info("🗑️ Eliminando contacto {} para usuario {}", contactoId, usuarioId);
 
-        // Eliminar todos los mensajes entre ambos
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, contactoId);
         mensajeRepository.deleteAll(mensajes);
     }

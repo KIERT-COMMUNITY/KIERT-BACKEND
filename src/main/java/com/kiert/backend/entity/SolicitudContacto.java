@@ -35,6 +35,9 @@ public class SolicitudContacto {
     @Builder.Default
     private Instant fechaSolicitud = Instant.now();
 
+    @Column(name = "fecha_respuesta")
+    private Instant fechaRespuesta;
+
     public enum EstadoSolicitud {
         PENDIENTE,
         ACEPTADA,

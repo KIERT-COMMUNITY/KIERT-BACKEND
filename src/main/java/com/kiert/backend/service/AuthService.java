@@ -34,6 +34,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final EmailService emailService; // ✅ INYECTAR EmailService
 
     // ========== REGISTRO ==========
     @Transactional
@@ -57,6 +58,13 @@ public class AuthService {
 
         usuario = usuarioRepository.save(usuario);
         log.info("✅ Usuario registrado con ID: {}", usuario.getId());
+
+        // ✅ Enviar correo de bienvenida
+        try {
+            emailService.enviarCorreoBienvenida(usuario.getEmail(), usuario.getNombreUsuario());
+        } catch (Exception e) {
+            log.warn("⚠️ No se pudo enviar correo de bienvenida: {}", e.getMessage());
+        }
 
         String token = jwtService.generarToken(usuario.getId(), usuario.getEmail());
         return new AuthResponseDTO(token, aDTO(usuario));
@@ -87,8 +95,13 @@ public class AuthService {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No existe un usuario con ese email"));
 
+        // ✅ Eliminar tokens anteriores del mismo usuario
+        passwordResetTokenRepository.deleteAll(
+                passwordResetTokenRepository.findByUsuarioId(usuario.getId())
+        );
+
         String token = UUID.randomUUID().toString();
-        Instant fechaExpiracion = Instant.now().plusSeconds(3600);
+        Instant fechaExpiracion = Instant.now().plusSeconds(3600); // 1 hora
 
         PasswordResetToken resetToken = PasswordResetToken.builder()
                 .token(token)
@@ -99,6 +112,15 @@ public class AuthService {
 
         passwordResetTokenRepository.save(resetToken);
         log.info("✅ Token de recuperación generado para: {}", email);
+
+        // ✅ Enviar correo con el token
+        try {
+            emailService.enviarCorreoRecuperacion(email, token);
+            log.info("✅ Correo de recuperación enviado a: {}", email);
+        } catch (Exception e) {
+            log.error("❌ Error al enviar correo de recuperación: {}", e.getMessage());
+            throw new BadRequestException("Error al enviar el correo de recuperación. Intenta nuevamente.");
+        }
     }
 
     // ========== RESTABLECER CONTRASEÑA ==========
@@ -107,10 +129,10 @@ public class AuthService {
         log.info("🔑 Restableciendo contraseña");
 
         PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
-                .orElseThrow(() -> new BadRequestException("Token inválido"));
+                .orElseThrow(() -> new BadRequestException("Token inválido o expirado"));
 
         if (resetToken.isExpirado()) {
-            throw new BadRequestException("El token ha expirado");
+            throw new BadRequestException("El token ha expirado. Solicita uno nuevo.");
         }
 
         if (resetToken.isUsado()) {
