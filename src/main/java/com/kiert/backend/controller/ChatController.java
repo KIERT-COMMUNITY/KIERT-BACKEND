@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -19,32 +20,71 @@ public class ChatController {
     private final ChatService chatService;
     private final UsuarioActual usuarioActual;
 
-    // ========== CONVERSACIONES ==========
     @GetMapping("/conversaciones")
     public ResponseEntity<List<ConversacionDTO>> listarConversaciones() {
-        log.info("📋 Listando conversaciones del usuario: {}", usuarioActual.id());
-        return ResponseEntity.ok(chatService.listarConversaciones(usuarioActual.id()));
+        try {
+            log.info("📋 Listando conversaciones para usuario: {}", usuarioActual.id());
+            return ResponseEntity.ok(chatService.listarConversaciones(usuarioActual.id()));
+        } catch (Exception e) {
+            log.error("❌ Error en listarConversaciones: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
-    // ========== MENSAJES ==========
     @GetMapping("/{usuarioId}")
     public ResponseEntity<List<MensajeChatDTO>> obtenerMensajes(@PathVariable Long usuarioId) {
-        log.info("💬 Obteniendo mensajes con usuario: {}", usuarioId);
-        return ResponseEntity.ok(chatService.obtenerMensajes(usuarioActual.id(), usuarioId));
+        try {
+            log.info("💬 Obteniendo mensajes con usuario: {}", usuarioId);
+            return ResponseEntity.ok(chatService.obtenerMensajes(usuarioActual.id(), usuarioId));
+        } catch (Exception e) {
+            log.error("❌ Error en obtenerMensajes: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
+    // ✅ ENDPOINT CORREGIDO PARA ENVIAR MENSAJE
     @PostMapping("/{usuarioId}")
     public ResponseEntity<MensajeChatDTO> enviarMensaje(
             @PathVariable Long usuarioId,
             @RequestBody EnviarMensajeDTO datos) {
-        log.info("📤 Enviando mensaje a usuario: {}", usuarioId);
-        return ResponseEntity.ok(chatService.enviarMensaje(usuarioActual.id(), usuarioId, datos.contenido()));
+
+        log.info("📤 Enviando mensaje de {} a {}", usuarioActual.id(), usuarioId);
+        log.info("📝 Contenido: {}", datos.contenido());
+
+        MensajeChatDTO resultado = chatService.enviarMensaje(
+                usuarioActual.id(),
+                usuarioId,
+                datos.contenido()
+        );
+
+        log.info("✅ Mensaje enviado con ID: {}", resultado.id());
+        return ResponseEntity.ok(resultado);
     }
 
-    // ========== SOLICITUDES ==========
+    // ✅ ENDPOINT CORREGIDO PARA ENVIAR ARCHIVOS
+    @PostMapping(value = "/{usuarioId}/archivos", consumes = {"multipart/form-data"})
+    public ResponseEntity<MensajeChatDTO> enviarMensajeConArchivos(
+            @PathVariable Long usuarioId,
+            @RequestParam(value = "contenido", required = false) String contenido,
+            @RequestParam(value = "archivos", required = false) List<MultipartFile> archivos) {
+
+        log.info("📤 Enviando mensaje con archivos de {} a {}", usuarioActual.id(), usuarioId);
+        log.info("📝 Contenido: {}", contenido != null ? contenido : "(vacío)");
+        log.info("📎 Archivos: {}", archivos != null ? archivos.size() : 0);
+
+        MensajeChatDTO resultado = chatService.enviarMensajeConArchivos(
+                usuarioActual.id(),
+                usuarioId,
+                contenido != null ? contenido : "",
+                archivos
+        );
+
+        log.info("✅ Mensaje con archivos enviado con ID: {}", resultado.id());
+        return ResponseEntity.ok(resultado);
+    }
+
     @GetMapping("/solicitudes")
     public ResponseEntity<List<SolicitudContactoDTO>> listarSolicitudes() {
-        log.info("📋 Listando solicitudes del usuario: {}", usuarioActual.id());
         return ResponseEntity.ok(chatService.listarSolicitudes(usuarioActual.id()));
     }
 
@@ -68,23 +108,23 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
-    // ========== VERIFICAR CONTACTO ==========
     @GetMapping("/contactos/{usuarioId}")
     public ResponseEntity<Boolean> sonContactos(@PathVariable Long usuarioId) {
         return ResponseEntity.ok(chatService.sonContactos(usuarioActual.id(), usuarioId));
     }
 
-    // ========== USUARIOS DISPONIBLES ==========
     @GetMapping("/usuarios/disponibles")
     public ResponseEntity<List<UsuarioDisponibleDTO>> listarUsuariosDisponibles() {
-        log.info("📋 Listando usuarios disponibles");
         return ResponseEntity.ok(chatService.listarUsuariosDisponibles(usuarioActual.id()));
     }
 
     @DeleteMapping("/contactos/{usuarioId}")
     public ResponseEntity<Void> eliminarContacto(@PathVariable Long usuarioId) {
-        log.info("🗑️ Eliminando contacto: {}", usuarioId);
         chatService.eliminarContacto(usuarioActual.id(), usuarioId);
         return ResponseEntity.ok().build();
+    }
+    @GetMapping("/test")
+    public ResponseEntity<String> test() {
+        return ResponseEntity.ok("Chat funcionando");
     }
 }

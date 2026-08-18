@@ -36,4 +36,14 @@ public class Mensaje {
     @Column(nullable = false)
     @Builder.Default
     private boolean leido = false;
+
+    @Column(name = "tipo_mensaje", length = 20)
+    @Builder.Default
+    private String tipoMensaje = "TEXTO";
+
+    @Column(name = "url_archivo", length = 1000)
+    private String urlArchivo;
+
+    @Column(name = "nombre_archivo", length = 255)
+    private String nombreArchivo;
 }

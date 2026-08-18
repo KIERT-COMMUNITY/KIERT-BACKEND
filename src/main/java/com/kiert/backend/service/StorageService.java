@@ -12,10 +12,16 @@ public class StorageService {
 
     private final CloudinaryService cloudinaryService;
 
-    // ========== SUBIR ARCHIVO ==========
+    // ========== SUBIR ARCHIVO (PARA CHAT) ==========
     public String subirArchivo(MultipartFile archivo) {
         log.info("📤 StorageService - Subiendo archivo a Cloudinary");
         return cloudinaryService.subirArchivo(archivo);
+    }
+
+    // ========== SUBIR ARCHIVO CON CARPETA ==========
+    public String subirArchivo(MultipartFile archivo, String carpeta) {
+        log.info("📤 StorageService - Subiendo archivo a Cloudinary en carpeta: {}", carpeta);
+        return cloudinaryService.subirArchivo(archivo, carpeta);
     }
 
     // ========== GENERAR URL FIRMADA ==========

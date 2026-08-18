@@ -13,6 +13,7 @@ spring:
 
   servlet:
     multipart:
+      enabled: true
       max-file-size: 15MB
       max-request-size: 60MB
 
@@ -38,8 +39,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: correo # ← REEMPLAZA CON TU GMAIL
-    password: secret       # ← REEMPLAZA CON CONTRASEÑA DE APLICACIÓN
+    username:  # ← REEMPLAZA CON TU GMAIL
+    password:       # ← REEMPLAZA CON CONTRASEÑA DE APLICACIÓN
     properties:
       mail:
         smtp:
@@ -91,7 +92,7 @@ kiert:
   cloudinary:
     cloud-name: "name"
     api-key: "key"
-    api-secret: "key secret"
+    api-secret: "key"
 
   supabase:
     url: "name"

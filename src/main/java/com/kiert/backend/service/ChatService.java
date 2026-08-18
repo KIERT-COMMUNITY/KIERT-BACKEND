@@ -8,8 +8,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,6 +23,7 @@ public class ChatService {
     private final UsuarioRepository usuarioRepository;
     private final MensajeRepository mensajeRepository;
     private final SolicitudContactoRepository solicitudRepository;
+    private final StorageService storageService;
 
     // ========== CONVERSACIONES ==========
     @Transactional(readOnly = true)
@@ -79,16 +82,33 @@ public class ChatService {
         mensajeRepository.saveAll(mensajes);
 
         return mensajes.stream()
-                .map(m -> new MensajeChatDTO(
-                        m.getId(),
-                        m.getEmisor().getId(),
-                        m.getContenido(),
-                        m.getFechaEnvio(),
-                        m.getEmisor().getId().equals(usuarioId)
-                ))
+                .map(m -> {
+                    // ✅ Crear lista de archivos (si el mensaje tiene archivo)
+                    List<MensajeArchivoDTO> archivos = new ArrayList<>();
+                    if (m.getUrlArchivo() != null) {
+                        archivos.add(new MensajeArchivoDTO(
+                                null,
+                                m.getNombreArchivo(),
+                                m.getUrlArchivo(),
+                                "imagen",
+                                null,
+                                false
+                        ));
+                    }
+
+                    return new MensajeChatDTO(
+                            m.getId(),
+                            m.getEmisor().getId(),
+                            m.getContenido(),
+                            m.getFechaEnvio(),
+                            m.getEmisor().getId().equals(usuarioId),
+                            archivos
+                    );
+                })
                 .collect(Collectors.toList());
     }
 
+    // ========== ENVIAR MENSAJE (SOLO TEXTO) ==========
     @Transactional
     public MensajeChatDTO enviarMensaje(Long emisorId, Long receptorId, String contenido) {
         log.info("📤 Enviando mensaje de {} a {}", emisorId, receptorId);
@@ -112,11 +132,89 @@ public class ChatService {
                 mensaje.getEmisor().getId(),
                 mensaje.getContenido(),
                 mensaje.getFechaEnvio(),
-                true
+                true,
+                null
         );
     }
 
-    // ========== SOLICITUDES DE CONTACTO ==========
+    // ========== ENVIAR MENSAJE CON ARCHIVOS ==========
+    @Transactional
+    public MensajeChatDTO enviarMensajeConArchivos(
+            Long emisorId,
+            Long receptorId,
+            String contenido,
+            List<MultipartFile> archivos) {
+
+        log.info("📤 Enviando mensaje de {} a {} con {} archivos", emisorId, receptorId,
+                archivos != null ? archivos.size() : 0);
+
+        Usuario emisor = usuarioRepository.findById(emisorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Emisor no encontrado"));
+        Usuario receptor = usuarioRepository.findById(receptorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
+
+        // Guardar mensaje primero
+        Mensaje mensaje = Mensaje.builder()
+                .emisor(emisor)
+                .receptor(receptor)
+                .contenido(contenido != null ? contenido : "")
+                .leido(false)
+                .build();
+
+        mensaje = mensajeRepository.save(mensaje);
+        log.info("✅ Mensaje guardado con ID: {}", mensaje.getId());
+
+        // ✅ Variables para almacenar la URL del archivo
+        String urlArchivo = null;
+        String nombreArchivo = null;
+
+        // Subir archivos a Cloudinary y actualizar mensaje
+        if (archivos != null && !archivos.isEmpty()) {
+            for (MultipartFile archivo : archivos) {
+                try {
+                    String url = storageService.subirArchivo(archivo);
+                    log.info("✅ Archivo subido a Cloudinary: {}", url);
+
+                    // ✅ Guardar la URL y nombre en el mensaje
+                    urlArchivo = url;
+                    nombreArchivo = archivo.getOriginalFilename();
+
+                    // ✅ Actualizar el mensaje con la información del archivo
+                    mensaje.setUrlArchivo(url);
+                    mensaje.setNombreArchivo(archivo.getOriginalFilename());
+                    mensaje.setTipoMensaje("IMAGEN");
+                    mensaje = mensajeRepository.save(mensaje);
+
+                } catch (Exception e) {
+                    log.error("❌ Error al subir archivo: {}", e.getMessage());
+                }
+            }
+        }
+
+        // ✅ Crear la lista de archivos para el DTO
+        List<MensajeArchivoDTO> archivosDTO = new ArrayList<>();
+        if (urlArchivo != null) {
+            archivosDTO.add(new MensajeArchivoDTO(
+                    null,
+                    nombreArchivo,
+                    urlArchivo,
+                    "imagen",
+                    null,
+                    false
+            ));
+        }
+
+        return new MensajeChatDTO(
+                mensaje.getId(),
+                mensaje.getEmisor().getId(),
+                mensaje.getContenido(),
+                mensaje.getFechaEnvio(),
+                true,
+                archivosDTO
+        );
+    }
+
+    // ========== SOLICITUDES ==========
     @Transactional(readOnly = true)
     public List<SolicitudContactoDTO> listarSolicitudes(Long usuarioId) {
         log.info("📋 Listando solicitudes para usuario: {}", usuarioId);
@@ -154,10 +252,6 @@ public class ChatService {
             throw new IllegalStateException("Ya existe una solicitud pendiente");
         }
 
-        if (solicitudRepository.sonContactos(emisorId, receptorId)) {
-            throw new IllegalStateException("Ya son contactos");
-        }
-
         SolicitudContacto solicitud = SolicitudContacto.builder()
                 .emisor(emisor)
                 .receptor(receptor)
@@ -191,22 +285,17 @@ public class ChatService {
         solicitud.setFechaRespuesta(Instant.now());
         solicitudRepository.save(solicitud);
 
-        // ✅ CREAR MENSAJE DE BIENVENIDA AUTOMÁTICO
         Usuario emisor = solicitud.getEmisor();
         Usuario receptor = solicitud.getReceptor();
 
-        String mensajeBienvenida = "¡Hola! Ahora somos contactos. ¡Bienvenido al chat!";
-
-        // Enviar mensaje de bienvenida del emisor al receptor
         Mensaje mensaje1 = Mensaje.builder()
                 .emisor(emisor)
                 .receptor(receptor)
-                .contenido(mensajeBienvenida)
+                .contenido("¡Hola! Ahora somos contactos. ¡Bienvenido al chat!")
                 .leido(false)
                 .build();
         mensajeRepository.save(mensaje1);
 
-        // Enviar mensaje de bienvenida del receptor al emisor
         Mensaje mensaje2 = Mensaje.builder()
                 .emisor(receptor)
                 .receptor(emisor)
@@ -214,8 +303,6 @@ public class ChatService {
                 .leido(false)
                 .build();
         mensajeRepository.save(mensaje2);
-
-        log.info("✅ Mensajes de bienvenida enviados entre {} y {}", emisor.getNombreUsuario(), receptor.getNombreUsuario());
     }
 
     @Transactional
@@ -234,12 +321,10 @@ public class ChatService {
         solicitudRepository.save(solicitud);
     }
 
-    // ========== VERIFICAR CONTACTOS ==========
     public boolean sonContactos(Long usuario1, Long usuario2) {
         return solicitudRepository.sonContactos(usuario1, usuario2);
     }
 
-    // ========== USUARIOS DISPONIBLES ==========
     @Transactional(readOnly = true)
     public List<UsuarioDisponibleDTO> listarUsuariosDisponibles(Long usuarioId) {
         log.info("📋 Listando usuarios disponibles para {}", usuarioId);
@@ -269,5 +354,12 @@ public class ChatService {
 
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, contactoId);
         mensajeRepository.deleteAll(mensajes);
+
+        solicitudRepository.findByEmisorIdAndReceptorIdAndEstado(
+                        usuarioId, contactoId, SolicitudContacto.EstadoSolicitud.ACEPTADA)
+                .ifPresent(solicitud -> {
+                    solicitud.setEstado(SolicitudContacto.EstadoSolicitud.RECHAZADA);
+                    solicitudRepository.save(solicitud);
+                });
     }
 }
