@@ -26,17 +26,13 @@ public class PersonalizacionController {
     public ResponseEntity<PersonalizacionDTO> obtenerPersonalizacion() {
         Long userId = usuarioActual.id();
         log.info("GET /api/personalizacion - Usuario: {}", userId);
-        PersonalizacionDTO result = personalizacionService.obtenerPersonalizacion(userId);
-        log.info("Personalizacion obtenida: tema={}, marco={}, fondo={}",
-                result.temaId(), result.marcoId(), result.fondoId());
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(personalizacionService.obtenerPersonalizacion(userId));
     }
 
     @PutMapping
     public ResponseEntity<PersonalizacionDTO> guardarPersonalizacion(@RequestBody PersonalizacionDTO datos) {
         Long userId = usuarioActual.id();
-        log.info("PUT /api/personalizacion - Usuario: {}, tema={}, marco={}, fondo={}",
-                userId, datos.temaId(), datos.marcoId(), datos.fondoId());
+        log.info("PUT /api/personalizacion - Usuario: {}", userId);
         return ResponseEntity.ok(personalizacionService.guardarPersonalizacion(userId, datos));
     }
 
@@ -52,15 +48,6 @@ public class PersonalizacionController {
         return ResponseEntity.ok(personalizacionService.subirFotoPortada(usuarioActual.id(), archivo));
     }
 
-    @PostMapping("/marco")
-    public ResponseEntity<MarcoDTO> subirMarco(
-            @RequestParam("archivo") MultipartFile archivo,
-            @RequestParam("nombre") String nombre,
-            @RequestParam(value = "precio", defaultValue = "0") Double precio) {
-        log.info("POST /api/personalizacion/marco - Usuario: {}", usuarioActual.id());
-        return ResponseEntity.ok(personalizacionService.subirMarco(usuarioActual.id(), archivo, nombre, precio));
-    }
-
     @GetMapping("/marcos")
     public ResponseEntity<List<MarcoDTO>> obtenerMarcos() {
         log.info("GET /api/personalizacion/marcos - Usuario: {}", usuarioActual.id());
@@ -73,17 +60,5 @@ public class PersonalizacionController {
         return ResponseEntity.ok(personalizacionService.obtenerFondos(usuarioActual.id()));
     }
 
-    @PostMapping("/comprar/marco/{marcoId}")
-    public ResponseEntity<Void> comprarMarco(@PathVariable String marcoId) {
-        log.info("POST /api/personalizacion/comprar/marco/{} - Usuario: {}", marcoId, usuarioActual.id());
-        personalizacionService.comprarMarco(usuarioActual.id(), marcoId);
-        return ResponseEntity.ok().build();
-    }
-
-    @PostMapping("/comprar/fondo/{fondoId}")
-    public ResponseEntity<Void> comprarFondo(@PathVariable String fondoId) {
-        log.info("POST /api/personalizacion/comprar/fondo/{} - Usuario: {}", fondoId, usuarioActual.id());
-        personalizacionService.comprarFondo(usuarioActual.id(), fondoId);
-        return ResponseEntity.ok().build();
-    }
+    // ❌ ELIMINADOS: /comprar/marco, /comprar/fondo
 }

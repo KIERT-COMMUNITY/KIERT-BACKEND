@@ -2,7 +2,7 @@ package com.kiert.backend.dto;
 
 import java.time.Instant;
 
-public record ComentarioDTO(
+public record RespuestaDTO(
         Long id,
         AutorResumenDTO autor,
         String contenido,

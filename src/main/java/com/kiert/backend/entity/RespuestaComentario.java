@@ -8,43 +8,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "posts")
+@Table(name = "respuestas_comentarios")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Post {
+public class RespuestaComentario {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "comentario_id", nullable = false)
+    private Comentario comentario;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "autor_id", nullable = false)
     private Usuario autor;
 
-    @Column(nullable = false, length = 120)
-    private String titulo;
-
     @Column(nullable = false, columnDefinition = "TEXT")
-    private String descripcion;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private CategoriaPost categoria;
-
-    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<Adjunto> adjuntos = new ArrayList<>();
-
-    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<Comentario> comentarios = new ArrayList<>();
-
-    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
-    private List<Reaccion> reacciones = new ArrayList<>();
+    private String contenido;
 
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     @Builder.Default
@@ -59,4 +44,11 @@ public class Post {
     @Column(nullable = false)
     @Builder.Default
     private boolean eliminado = false;
+
+    @Column(name = "url_imagen", length = 500)
+    private String urlImagen;
+
+    @OneToMany(mappedBy = "respuesta", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<ReaccionRespuesta> reacciones = new ArrayList<>();
 }

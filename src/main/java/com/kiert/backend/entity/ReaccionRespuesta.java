@@ -6,13 +6,13 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "reacciones")
+@Table(name = "reacciones_respuestas")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Reaccion {
+public class ReaccionRespuesta {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,13 +22,9 @@ public class Reaccion {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "post_id")
-    private Post post;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "comentario_id")
-    private Comentario comentario;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "respuesta_id", nullable = false)
+    private RespuestaComentario respuesta;
 
     @Column(nullable = false, length = 10)
     private String tipo;

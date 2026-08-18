@@ -19,7 +19,8 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PerfilService {
+public class
+PerfilService {
 
     private static final long MAX_FOTO_PERFIL_BYTES = 5L * 1024 * 1024;
     private static final String CACHE_KEY_USER = "perfil:";

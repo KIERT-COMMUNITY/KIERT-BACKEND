@@ -3,18 +3,19 @@ package com.kiert.backend.service;
 import com.kiert.backend.dto.*;
 import com.kiert.backend.entity.*;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
+import com.kiert.backend.mapper.PostMapper;
 import com.kiert.backend.repository.ComentarioRepository;
 import com.kiert.backend.repository.PostRepository;
 import com.kiert.backend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -25,29 +26,29 @@ public class PostService {
     private final ComentarioRepository comentarioRepository;
     private final UsuarioRepository usuarioRepository;
     private final PostMapper postMapper;
-    private final StorageService storageService;
+    private final CloudinaryService cloudinaryService;
 
-    // ========== LISTAR POSTS ==========
+    // ========== LISTAR POSTS (SOLO ACTIVOS) ==========
     @Transactional(readOnly = true)
     public List<PostDTO> listar() {
         log.info("📋 Listando posts desde BD");
         try {
-            List<PostDTO> posts = postRepository.findAllByOrderByFechaCreacionDesc().stream()
+            List<Post> posts = postRepository.findAllActiveOrderByFechaCreacionDesc();
+            log.info("✅ Se encontraron {} posts", posts.size());
+            return posts.stream()
                     .map(postMapper::aDTO)
                     .toList();
-            log.info("✅ Se encontraron {} posts", posts.size());
-            return posts;
         } catch (Exception e) {
             log.error("❌ Error al listar posts: {}", e.getMessage(), e);
             throw new RuntimeException("Error al listar publicaciones: " + e.getMessage());
         }
     }
 
-    // ========== OBTENER POST POR ID ==========
+    // ========== OBTENER POST POR ID (SOLO ACTIVOS) ==========
     @Transactional(readOnly = true)
     public PostDTO obtenerPorId(Long id) {
         log.info("🔍 Obteniendo post {} desde BD", id);
-        Post post = postRepository.findById(id)
+        Post post = postRepository.findActiveById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
         return postMapper.aDTO(post);
     }
@@ -67,24 +68,27 @@ public class PostService {
                 .titulo(datos.titulo())
                 .categoria(CategoriaPost.desdeValor(datos.categoria()))
                 .descripcion(datos.descripcion())
+                .eliminado(false)
+                .fechaCreacion(Instant.now())
                 .build();
 
-        // ✅ Guardar link si existe
+        // Guardar link si existe
         if (datos.link() != null && !datos.link().isBlank()) {
             log.info("🔗 Agregando link: {}", datos.link());
-            post.getAdjuntos().add(Adjunto.builder()
+            Adjunto adjunto = Adjunto.builder()
                     .post(post)
-                    .tipo(Adjunto.TipoAdjunto.LINK)
+                    .tipo("link")
                     .nombre("Enlace externo")
                     .url(datos.link())
-                    .build());
+                    .build();
+            post.getAdjuntos().add(adjunto);
         }
 
-        // ✅ Guardar el post primero
+        // Guardar el post primero
         post = postRepository.save(post);
         log.info("✅ Post guardado con ID: {}", post.getId());
 
-        // ✅ Subir archivos a Cloudinary desde el backend
+        // Subir archivos a Cloudinary
         if (archivos != null && !archivos.isEmpty()) {
             log.info("📎 Procesando {} archivo(s)", archivos.size());
 
@@ -94,25 +98,47 @@ public class PostService {
                     continue;
                 }
 
-                if (archivo.getSize() > 10 * 1024 * 1024) {
-                    log.warn("⚠️ Archivo {} excede 10MB, saltando...", archivo.getOriginalFilename());
-                    continue;
-                }
-
                 try {
-                    log.info("📤 Subiendo archivo a Cloudinary: {}", archivo.getOriginalFilename());
-                    String url = storageService.subirArchivo(archivo);
+                    String url;
+                    String tipo;
+                    String carpeta = "posts";
+                    Integer duracionSegundos = null;
+                    String formato = cloudinaryService.getFormato(archivo.getContentType());
+
+                    if (cloudinaryService.esVideo(archivo)) {
+                        log.info("🎥 Subiendo video: {}", archivo.getOriginalFilename());
+                        Map<String, Object> result = cloudinaryService.subirVideo(archivo, carpeta + "/videos");
+                        url = result.get("secure_url").toString();
+                        tipo = "video";
+                        if (result.containsKey("duration")) {
+                            duracionSegundos = ((Number) result.get("duration")).intValue();
+                        }
+                    } else if (cloudinaryService.esGif(archivo)) {
+                        log.info("🎬 Subiendo GIF: {}", archivo.getOriginalFilename());
+                        url = cloudinaryService.subirGif(archivo, carpeta + "/gifs");
+                        tipo = "gif";
+                    } else if (cloudinaryService.esImagen(archivo)) {
+                        log.info("🖼️ Subiendo imagen: {}", archivo.getOriginalFilename());
+                        url = cloudinaryService.subirImagen(archivo, carpeta + "/imagenes");
+                        tipo = "imagen";
+                    } else {
+                        log.info("📎 Subiendo archivo: {}", archivo.getOriginalFilename());
+                        url = cloudinaryService.subirArchivo(archivo, carpeta + "/archivos");
+                        tipo = "archivo";
+                    }
 
                     Adjunto adjunto = Adjunto.builder()
                             .post(post)
-                            .tipo(Adjunto.TipoAdjunto.ARCHIVO)
+                            .tipo(tipo)
                             .nombre(archivo.getOriginalFilename())
                             .url(url)
                             .pesoKb((int) (archivo.getSize() / 1024))
+                            .formato(formato)
+                            .duracionSegundos(duracionSegundos)
                             .build();
 
                     post.getAdjuntos().add(adjunto);
-                    log.info("✅ Archivo subido exitosamente: {}", url);
+                    log.info("✅ {} subido exitosamente", tipo);
 
                 } catch (Exception e) {
                     log.error("❌ Error al subir archivo {}: {}", archivo.getOriginalFilename(), e.getMessage());
@@ -159,7 +185,7 @@ public class PostService {
         return postMapper.aDTO(comentario);
     }
 
-    // ========== ELIMINAR POST ==========
+    // ========== ELIMINAR POST (SOFT DELETE) ==========
     @Transactional
     public void eliminarPost(Long postId, Long autorId) {
         log.info("🗑️ Eliminando post {} por usuario {}", postId, autorId);
@@ -172,7 +198,10 @@ public class PostService {
             throw new SecurityException("No tienes permiso para eliminar esta publicación.");
         }
 
-        postRepository.delete(post);
+        // Soft delete
+        post.setEliminado(true);
+        post.setFechaEliminacion(Instant.now());
+        postRepository.save(post);
         log.info("✅ Post {} eliminado exitosamente", postId);
     }
 
@@ -184,12 +213,10 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
 
-        // Verificar que el usuario sea el autor
         if (!post.getAutor().getId().equals(autorId)) {
             throw new SecurityException("No tienes permiso para actualizar esta publicación.");
         }
 
-        // Actualizar campos
         if (datos.titulo() != null && !datos.titulo().isBlank()) {
             post.setTitulo(datos.titulo());
         }
@@ -200,6 +227,7 @@ public class PostService {
             post.setCategoria(CategoriaPost.desdeValor(datos.categoria()));
         }
 
+        post.setFechaActualizacion(Instant.now());
         post = postRepository.save(post);
         return postMapper.aDTO(post);
     }
@@ -207,6 +235,5 @@ public class PostService {
     // ========== LIMPIAR CACHÉ DE POSTS ==========
     public void limpiarCachePosts() {
         log.info("🧹 Limpiando caché de posts");
-        // No hace nada porque Redis está desactivado
     }
 }

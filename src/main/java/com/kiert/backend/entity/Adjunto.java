@@ -3,6 +3,8 @@ package com.kiert.backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "adjuntos")
 @Getter
@@ -20,40 +22,38 @@ public class Adjunto {
     @JoinColumn(name = "post_id", nullable = false)
     private Post post;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
-    private TipoAdjunto tipo;
+    @Column(name = "tipo", nullable = false, length = 20)
+    private String tipo;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String nombre;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(nullable = false, length = 1000)
     private String url;
 
     @Column(name = "peso_kb")
     private Integer pesoKb;
 
-    public enum TipoAdjunto {
-        ARCHIVO("archivo"),
-        LINK("link");
+    @Column(name = "fecha_creacion", nullable = false, updatable = false)
+    @Builder.Default
+    private Instant fechaCreacion = Instant.now();
 
-        private final String valor;
+    @Column(name = "duracion_segundos")
+    private Integer duracionSegundos;
 
-        TipoAdjunto(String valor) {
-            this.valor = valor;
-        }
+    @Column(name = "ancho")
+    private Integer ancho;
 
-        public String getValor() {
-            return valor;
-        }
+    @Column(name = "alto")
+    private Integer alto;
 
-        public static TipoAdjunto desdeValor(String valor) {
-            for (TipoAdjunto tipo : values()) {
-                if (tipo.valor.equals(valor)) {
-                    return tipo;
-                }
-            }
-            throw new IllegalArgumentException("Tipo de adjunto no válido: " + valor);
+    @Column(name = "formato", length = 20)
+    private String formato;
+
+    @PrePersist
+    protected void onCreate() {
+        if (fechaCreacion == null) {
+            fechaCreacion = Instant.now();
         }
     }
 }

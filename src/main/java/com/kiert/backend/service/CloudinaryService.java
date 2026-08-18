@@ -19,16 +19,19 @@ public class CloudinaryService {
 
     private final Cloudinary cloudinary;
 
+    // ========== CONSTANTES DE TAMAÑO ==========
+    private static final long MAX_IMAGE_SIZE = 15 * 1024 * 1024; // 15MB
+    private static final long MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
+    private static final long MAX_GIF_SIZE = 15 * 1024 * 1024; // 15MB
+
     // ========== SUBIR ARCHIVO (PARA CHAT) ==========
     public String subirArchivo(MultipartFile archivo) {
         try {
             log.info("📤 Subiendo archivo a Cloudinary: {}", archivo.getOriginalFilename());
 
-            // Determinar la carpeta según el tipo de archivo
             String folder = "chat";
             String resourceType = "auto";
 
-            // Si es imagen, usar carpeta específica
             if (archivo.getContentType() != null && archivo.getContentType().startsWith("image/")) {
                 folder = "chat/imagenes";
                 resourceType = "image";
@@ -42,9 +45,7 @@ public class CloudinaryService {
                     )
             );
 
-            String url = uploadResult.get("secure_url").toString();
-            log.info("✅ Archivo subido exitosamente: {}", url);
-            return url;
+            return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
             log.error("❌ Error al subir archivo a Cloudinary: {}", e.getMessage());
@@ -65,9 +66,7 @@ public class CloudinaryService {
                     )
             );
 
-            String url = uploadResult.get("secure_url").toString();
-            log.info("✅ Archivo subido exitosamente: {}", url);
-            return url;
+            return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
             log.error("❌ Error al subir archivo: {}", e.getMessage());
@@ -75,10 +74,159 @@ public class CloudinaryService {
         }
     }
 
+    // ========== SUBIR IMAGEN (CORREGIDO) ==========
+    public String subirImagen(MultipartFile imagen, String carpeta) {
+        try {
+            log.info("🖼️ Subiendo imagen a Cloudinary: {}", imagen.getOriginalFilename());
+
+            if (imagen.getSize() > MAX_IMAGE_SIZE) {
+                throw new BadRequestException("La imagen no puede exceder los 15MB");
+            }
+
+            String contentType = imagen.getContentType();
+            if (contentType == null || !contentType.startsWith("image/") || contentType.equals("image/gif")) {
+                throw new BadRequestException("El archivo debe ser una imagen (no GIF)");
+            }
+
+            // ✅ CORREGIDO: Sin transformaciones inválidas
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(
+                    imagen.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", carpeta != null ? carpeta : "imagenes",
+                            "resource_type", "image",
+                            "use_filename", true,
+                            "unique_filename", true
+                    )
+            );
+
+            return uploadResult.get("secure_url").toString();
+
+        } catch (IOException e) {
+            log.error("❌ Error al subir imagen: {}", e.getMessage(), e);
+            throw new BadRequestException("Error al subir la imagen: " + e.getMessage());
+        }
+    }
+
+    // ========== SUBIR VIDEO ==========
+    public Map<String, Object> subirVideo(MultipartFile video, String carpeta) {
+        try {
+            log.info("🎥 Subiendo video a Cloudinary: {}", video.getOriginalFilename());
+
+            if (video.getSize() > MAX_VIDEO_SIZE) {
+                throw new BadRequestException("El video no puede exceder los 50MB");
+            }
+
+            String contentType = video.getContentType();
+            if (contentType == null || !contentType.startsWith("video/")) {
+                throw new BadRequestException("El archivo debe ser un video");
+            }
+
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(
+                    video.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", carpeta != null ? carpeta : "videos",
+                            "resource_type", "video",
+                            "chunk_size", 6000000,
+                            "use_filename", true,
+                            "unique_filename", true
+                    )
+            );
+
+            log.info("✅ Video subido exitosamente");
+            return uploadResult;
+
+        } catch (IOException e) {
+            log.error("❌ Error al subir video: {}", e.getMessage(), e);
+            throw new BadRequestException("Error al subir el video: " + e.getMessage());
+        }
+    }
+
+    // ========== SUBIR GIF ==========
+    public String subirGif(MultipartFile gif, String carpeta) {
+        try {
+            log.info("🎬 Subiendo GIF a Cloudinary: {}", gif.getOriginalFilename());
+
+            if (gif.getSize() > MAX_GIF_SIZE) {
+                throw new BadRequestException("El GIF no puede exceder los 15MB");
+            }
+
+            String contentType = gif.getContentType();
+            if (contentType == null || !contentType.equals("image/gif")) {
+                throw new BadRequestException("El archivo debe ser un GIF");
+            }
+
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(
+                    gif.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", carpeta != null ? carpeta : "gifs",
+                            "resource_type", "image",
+                            "use_filename", true,
+                            "unique_filename", true
+                    )
+            );
+
+            return uploadResult.get("secure_url").toString();
+
+        } catch (IOException e) {
+            log.error("❌ Error al subir GIF: {}", e.getMessage(), e);
+            throw new BadRequestException("Error al subir el GIF: " + e.getMessage());
+        }
+    }
+
+    // ========== SUBIR MARCO ==========
+    public String subirMarco(MultipartFile archivo, String nombre) {
+        try {
+            log.info("📤 Subiendo marco a Cloudinary: {}", nombre);
+
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(
+                    archivo.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", "marcos",
+                            "resource_type", "image",
+                            "use_filename", true,
+                            "unique_filename", true
+                    )
+            );
+
+            return uploadResult.get("secure_url").toString();
+
+        } catch (IOException e) {
+            log.error("❌ Error al subir marco: {}", e.getMessage());
+            throw new BadRequestException("Error al subir el marco: " + e.getMessage());
+        }
+    }
+
+    // ========== UTILIDADES ==========
+
+    public boolean esVideo(MultipartFile archivo) {
+        String contentType = archivo.getContentType();
+        return contentType != null && contentType.startsWith("video/");
+    }
+
+    public boolean esGif(MultipartFile archivo) {
+        String contentType = archivo.getContentType();
+        return contentType != null && contentType.equals("image/gif");
+    }
+
+    public boolean esImagen(MultipartFile archivo) {
+        String contentType = archivo.getContentType();
+        return contentType != null && contentType.startsWith("image/") && !contentType.equals("image/gif");
+    }
+
+    public String getFormato(String contentType) {
+        if (contentType == null) return null;
+        if (contentType.startsWith("video/")) {
+            return contentType.replace("video/", "").toUpperCase();
+        }
+        if (contentType.startsWith("image/")) {
+            return contentType.replace("image/", "").toUpperCase();
+        }
+        return null;
+    }
+
     // ========== GENERAR URL FIRMADA ==========
     public String generarUrlFirmadaSubida(String nombreArchivo) {
         log.info("🔑 Generando URL firmada para: {}", nombreArchivo);
-        // Implementación para URLs firmadas si es necesario
         return null;
     }
 
@@ -92,28 +240,5 @@ public class CloudinaryService {
     public String sanitizar(String nombre) {
         if (nombre == null) return null;
         return nombre.replaceAll("[^a-zA-Z0-9._-]", "_");
-    }
-    public String subirMarco(MultipartFile archivo, String nombre) {
-        try {
-            log.info("📤 Subiendo marco a Cloudinary: {}", nombre);
-
-            Map<String, Object> uploadResult = cloudinary.uploader().upload(
-                    archivo.getBytes(),
-                    ObjectUtils.asMap(
-                            "folder", "marcos",
-                            "resource_type", "image",
-                            "transformation", ObjectUtils.asMap(
-                                    "width", 200,
-                                    "height", 200,
-                                    "crop", "fill"
-                            )
-                    )
-            );
-
-            return uploadResult.get("secure_url").toString();
-        } catch (IOException e) {
-            log.error("❌ Error al subir marco: {}", e.getMessage());
-            throw new BadRequestException("Error al subir el marco: " + e.getMessage());
-        }
     }
 }

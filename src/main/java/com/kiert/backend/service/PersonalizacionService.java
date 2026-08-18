@@ -22,7 +22,6 @@ public class PersonalizacionService {
     private final UsuarioRepository usuarioRepository;
     private final CloudinaryService cloudinaryService;
 
-    // ⚠️ QUITAMOS readOnly PARA PERMITIR INSERT SI NO EXISTE
     @Transactional
     public PersonalizacionDTO obtenerPersonalizacion(Long usuarioId) {
         log.info("Obteniendo personalizacion para usuario: {}", usuarioId);
@@ -93,36 +92,33 @@ public class PersonalizacionService {
         return toDTO(personalizacion);
     }
 
-    @Transactional
-    public MarcoDTO subirMarco(Long usuarioId, MultipartFile archivo, String nombre, Double precio) {
-        log.info("Subiendo marco personalizado: {} para usuario: {}", nombre, usuarioId);
-
-        String url = cloudinaryService.subirMarco(archivo, nombre);
-
-        return new MarcoDTO(
-                "custom_" + System.currentTimeMillis(),
-                nombre,
-                url,
-                "circulo",
-                precio != null ? precio : 0.0,
-                precio == null || precio == 0
-        );
-    }
-
     @Transactional(readOnly = true)
     public List<MarcoDTO> obtenerMarcos(Long usuarioId) {
         log.info("Obteniendo marcos para usuario: {}", usuarioId);
 
         List<MarcoDTO> marcos = new ArrayList<>();
 
+        // ✅ TODOS GRATIS - 20 marcos con colores bonitos
         marcos.add(new MarcoDTO("none", "Sin marco", null, "circulo", 0.0, true));
-        marcos.add(new MarcoDTO("classic", "Clasico", null, "circulo", 0.0, true));
-        marcos.add(new MarcoDTO("gold", "Dorado", null, "circulo", 2.0, false));
-        marcos.add(new MarcoDTO("silver", "Plateado", null, "circulo", 2.0, false));
-        marcos.add(new MarcoDTO("rainbow", "Arcoiris", null, "circulo", 3.0, false));
-        marcos.add(new MarcoDTO("neon", "Neon", null, "circulo", 3.0, false));
-        marcos.add(new MarcoDTO("square", "Cuadrado", null, "cuadrado", 2.0, false));
-        marcos.add(new MarcoDTO("hexagon", "Hexagonal", null, "hexagonal", 4.0, false));
+        marcos.add(new MarcoDTO("classic", "Clásico", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("gold", "✨ Dorado", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("silver", "🔘 Plateado", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("rainbow", "🌈 Arcoíris", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("pastel", "🌸 Pastel", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("neon", "💜 Neón", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("ocean", "🌊 Océano", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("sunset", "🌅 Atardecer", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("galaxy", "🌌 Galaxia", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("fire", "🔥 Fuego", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("ice", "❄️ Hielo", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("rose", "🌹 Rosa", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("cyber", "💠 Cyber", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("crystal", "💎 Cristal", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("double", "✨ Doble Oro", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("star", "⭐ Estrella", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("moon", "🌙 Luna", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("sun", "☀️ Sol", null, "circulo", 0.0, true));
+        marcos.add(new MarcoDTO("elite", "👑 Elite", null, "circulo", 0.0, true));
 
         return marcos;
     }
@@ -133,26 +129,42 @@ public class PersonalizacionService {
 
         List<FondoDTO> fondos = new ArrayList<>();
 
-        fondos.add(new FondoDTO("default", "Default", null, "gradiente", "linear-gradient(135deg, #0d1117, #161b22)", 0.0, true));
-        fondos.add(new FondoDTO("dark", "Oscuro", null, "gradiente", "linear-gradient(135deg, #1a1a2e, #0d1117)", 0.0, true));
-        fondos.add(new FondoDTO("light", "Claro", null, "gradiente", "linear-gradient(135deg, #ffffff, #f0f0f0)", 0.0, true));
-        fondos.add(new FondoDTO("sunset", "Atardecer", null, "gradiente", "linear-gradient(135deg, #ff6b6b, #feca57, #ff9ff3)", 2.0, false));
-        fondos.add(new FondoDTO("ocean", "Oceano", null, "gradiente", "linear-gradient(135deg, #00b894, #00cec9, #0984e3)", 2.0, false));
-        fondos.add(new FondoDTO("aurora", "Aurora", null, "gradiente", "linear-gradient(135deg, #6c5ce7, #00b894, #fdcb6e)", 2.0, false));
-        fondos.add(new FondoDTO("galaxy", "Galaxia", null, "gradiente", "linear-gradient(135deg, #2d3436, #6c5ce7, #fd79a8)", 3.0, false));
+        // ✅ TODOS GRATIS - 14 fondos con gradientes bonitos
+        fondos.add(new FondoDTO("default", "Default", null, "gradiente",
+                "linear-gradient(135deg, #0d1117, #161b22)", 0.0, true));
+        fondos.add(new FondoDTO("dark", "Oscuro", null, "gradiente",
+                "linear-gradient(135deg, #1a1a2e, #0d1117)", 0.0, true));
+        fondos.add(new FondoDTO("light", "Claro", null, "gradiente",
+                "linear-gradient(135deg, #ffffff, #f0f0f0)", 0.0, true));
+        fondos.add(new FondoDTO("sunset", "🌅 Atardecer", null, "gradiente",
+                "linear-gradient(135deg, #ff6b6b, #feca57, #fd79a8)", 0.0, true));
+        fondos.add(new FondoDTO("ocean", "🌊 Océano", null, "gradiente",
+                "linear-gradient(135deg, #00b894, #00cec9, #0984e3)", 0.0, true));
+        fondos.add(new FondoDTO("aurora", "🌌 Aurora", null, "gradiente",
+                "linear-gradient(135deg, #6c5ce7, #00b894, #fdcb6e)", 0.0, true));
+        fondos.add(new FondoDTO("galaxy", "🌠 Galaxia", null, "gradiente",
+                "linear-gradient(135deg, #2d3436, #6c5ce7, #fd79a8)", 0.0, true));
+        fondos.add(new FondoDTO("lava", "🔥 Lava", null, "gradiente",
+                "linear-gradient(135deg, #ff6b6b, #e17055, #d63031)", 0.0, true));
+        fondos.add(new FondoDTO("forest", "🌿 Bosque", null, "gradiente",
+                "linear-gradient(135deg, #00b894, #55efc4, #00cec9)", 0.0, true));
+        fondos.add(new FondoDTO("candy", "🍬 Candy", null, "gradiente",
+                "linear-gradient(135deg, #fd79a8, #fdcb6e, #a29bfe)", 0.0, true));
+        fondos.add(new FondoDTO("cyber", "💠 Cyber", null, "gradiente",
+                "linear-gradient(135deg, #00d4ff, #6c5ce7, #fd79a8)", 0.0, true));
+        fondos.add(new FondoDTO("blood", "❤️ Sangre", null, "gradiente",
+                "linear-gradient(135deg, #ff0044, #d63031, #ff6b6b)", 0.0, true));
+        fondos.add(new FondoDTO("royal", "👑 Royal", null, "gradiente",
+                "linear-gradient(135deg, #6c5ce7, #a29bfe, #fd79a8)", 0.0, true));
+        fondos.add(new FondoDTO("gold", "✨ Oro", null, "gradiente",
+                "linear-gradient(135deg, #f9ca24, #fdcb6e, #feca57)", 0.0, true));
+        fondos.add(new FondoDTO("pastel", "🌸 Pastel", null, "gradiente",
+                "linear-gradient(135deg, #fd79a8, #a29bfe, #55efc4)", 0.0, true));
 
         return fondos;
     }
 
-    @Transactional
-    public void comprarMarco(Long usuarioId, String marcoId) {
-        log.info("Comprando marco {} para usuario {}", marcoId, usuarioId);
-    }
-
-    @Transactional
-    public void comprarFondo(Long usuarioId, String fondoId) {
-        log.info("Comprando fondo {} para usuario {}", fondoId, usuarioId);
-    }
+    // ❌ ELIMINADOS: comprarMarco, comprarFondo (todo gratis)
 
     private PersonalizacionUsuario crearPersonalizacionDefault(Long usuarioId) {
         Usuario usuario = usuarioRepository.findById(usuarioId)

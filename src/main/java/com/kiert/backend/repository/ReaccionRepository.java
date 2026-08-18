@@ -4,10 +4,12 @@ import com.kiert.backend.entity.Reaccion;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
 
     Optional<Reaccion> findByUsuarioIdAndPostId(Long usuarioId, Long postId);
