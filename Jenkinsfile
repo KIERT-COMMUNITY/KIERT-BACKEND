@@ -37,7 +37,7 @@ pipeline {
             }
         }
 
-        stage('Setup JDK 21') {
+        stage('Setup JDK 21 & Maven') {
             steps {
                 bat '''
                     echo "Verificando Java..."
@@ -68,8 +68,26 @@ pipeline {
                 '''
             }
             post {
-                always {
-                    junit '**/target/surefire-reports/*.xml'
+                // ✅ SOLO ejecutar junit si existen tests
+                success {
+                    script {
+                        def testResults = findFiles(glob: '**/target/surefire-reports/*.xml')
+                        if (testResults.size() > 0) {
+                            junit '**/target/surefire-reports/*.xml'
+                        } else {
+                            echo "No se encontraron resultados de pruebas"
+                        }
+                    }
+                }
+                failure {
+                    script {
+                        def testResults = findFiles(glob: '**/target/surefire-reports/*.xml')
+                        if (testResults.size() > 0) {
+                            junit '**/target/surefire-reports/*.xml'
+                        } else {
+                            echo "No se encontraron resultados de pruebas"
+                        }
+                    }
                 }
             }
         }
@@ -96,10 +114,8 @@ pipeline {
                 bat """
                     echo "Desplegando a ${params.ENVIRONMENT}..."
                     echo "Build #${BUILD_NUMBER} - ${params.BRANCH}"
-                    
                     echo "JAR generado en target/"
                     dir target {
-                        echo "Archivos JAR:"
                         dir /b *.jar || echo "No hay JAR"
                     }
                 """
