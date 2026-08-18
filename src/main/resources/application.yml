@@ -39,8 +39,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: correo # ← REEMPLAZA CON TU GMAIL
-    password: contraseña       # ← REEMPLAZA CON CONTRASEÑA DE APLICACIÓN
+    username: gringoelmatador30@gmail.com # ← REEMPLAZA CON TU GMAIL
+    password: qxii xkra gsbf jszj       # ← REEMPLAZA CON CONTRASEÑA DE APLICACIÓN
     properties:
       mail:
         smtp:
@@ -90,9 +90,9 @@ kiert:
     reset-password-url: "http://localhost:4200/restablecer-contrasena"
 
   cloudinary:
-    cloud-name: "name"
-    api-key: "key"
-    api-secret: "key secret"
+    cloud-name: "zopnporu"
+    api-key: "271319861416221"
+    api-secret: "CyeOaPpO-eABboZou_R35PEKYs0"
 
   supabase:
     url: "name"
@@ -111,7 +111,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
     username: root
-    password: password
+    password: adrian.200503
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
