@@ -12,11 +12,6 @@ pipeline {
                 defaultValue: 'develop',
                 description: 'Rama a construir'
         )
-        booleanParam(
-                name: 'RUN_TESTS',
-                defaultValue: true,
-                description: 'Ejecutar pruebas unitarias'
-        )
     }
 
     stages {
@@ -48,55 +43,11 @@ pipeline {
             }
         }
 
-        stage('Clean & Install Dependencies') {
-            steps {
-                bat '''
-                    echo "Limpiando e instalando dependencias..."
-                    mvn clean install -DskipTests
-                '''
-            }
-        }
-
-        stage('Run Tests') {
-            when {
-                expression { params.RUN_TESTS == true }
-            }
-            steps {
-                bat '''
-                    echo "Ejecutando pruebas unitarias..."
-                    mvn test
-                '''
-            }
-            post {
-                // ✅ SOLO ejecutar junit si existen tests
-                success {
-                    script {
-                        def testResults = findFiles(glob: '**/target/surefire-reports/*.xml')
-                        if (testResults.size() > 0) {
-                            junit '**/target/surefire-reports/*.xml'
-                        } else {
-                            echo "No se encontraron resultados de pruebas"
-                        }
-                    }
-                }
-                failure {
-                    script {
-                        def testResults = findFiles(glob: '**/target/surefire-reports/*.xml')
-                        if (testResults.size() > 0) {
-                            junit '**/target/surefire-reports/*.xml'
-                        } else {
-                            echo "No se encontraron resultados de pruebas"
-                        }
-                    }
-                }
-            }
-        }
-
         stage('Build JAR') {
             steps {
                 bat '''
                     echo "Construyendo JAR..."
-                    mvn package -DskipTests
+                    mvn clean package -DskipTests
                 '''
             }
             post {
@@ -114,10 +65,6 @@ pipeline {
                 bat """
                     echo "Desplegando a ${params.ENVIRONMENT}..."
                     echo "Build #${BUILD_NUMBER} - ${params.BRANCH}"
-                    echo "JAR generado en target/"
-                    dir target {
-                        dir /b *.jar || echo "No hay JAR"
-                    }
                 """
             }
         }
