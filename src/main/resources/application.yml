@@ -1,0 +1,139 @@
+spring:
+  application:
+    name: kiert-backend
+
+  profiles:
+    active: mysql
+
+  config:
+    import: vault://
+
+  jackson:
+    default-property-inclusion: non_null
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 60MB
+
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 2000ms
+    database: 0
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1800000
+      cache-null-values: false
+
+  # ✅ MAIL CON VALORES POR DEFECTO
+  mail:
+    host: ${vault.mail.host:smtp.gmail.com}
+    port: ${vault.mail.port:587}
+    username: ${vault.mail.username:tugmail.com}
+    password: ${vault.mail.password:to codigo de verficacion de 2 pasos}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+server:
+  port: 8080
+  error:
+    include-message: always
+
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+    filter: true
+    display-request-duration: true
+    disable-swagger-default-url: true
+    use-root-path: false
+  show-actuator: true
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+  packages-to-scan: com.kiert.backend.controller
+  paths-to-match: /api/**
+
+# ✅ JWT CON VALORES POR DEFECTO
+kiert:
+  jwt:
+    secret: ${vault.jwt.secret:tu secret }
+    expiration-ms: ${vault.jwt.expiration-ms:86400000}
+  cors:
+    allowed-origins:
+      - "http://localhost:4200"
+      - "http://localhost:53334"
+      - "*"
+  frontend:
+    reset-password-url: "http://localhost:4200/restablecer-contrasena"
+
+  # ✅ CLOUDINARY CON VALORES POR DEFECTO
+  cloudinary:
+    cloud-name: ${vault.cloudinary.cloud-name:nombre}
+    api-key: ${vault.cloudinary.api-key:tu api key}
+    api-secret: ${vault.cloudinary.api-secret:tu key secreto}
+
+logging:
+  level:
+    org.springframework.vault: DEBUG
+    org.springframework.cloud.vault: DEBUG
+    com.kiert.backend: DEBUG
+
+---
+# PERFIL: mysql
+spring:
+  config:
+    activate:
+      on-profile: mysql
+    import: vault://
+
+  datasource:
+    url: ${vault.db.url:jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true}
+    username: ${vault.db.username:root}
+    password: ${vault.db.password:contraseña}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      ddl-auto: update
+      show-sql: true
+      format-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  sql:
+    init:
+      mode: never
