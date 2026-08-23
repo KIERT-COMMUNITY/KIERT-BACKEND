@@ -19,31 +19,25 @@ public class JwtService {
     private final long expiracionMs;
 
     public JwtService(JwtProperties jwtProperties) {
-        // ✅ Obtener secret y expiration del record
         String secret = jwtProperties.secret();
         this.expiracionMs = jwtProperties.expirationMs() != null ? jwtProperties.expirationMs() : 86400000L;
 
-        // ✅ Validar que la clave no sea nula
         if (secret == null || secret.isEmpty()) {
             log.error("❌ JWT Secret no está configurado");
-            throw new IllegalStateException("JWT Secret no configurado. Verifica application.yml o Vault.");
+            throw new IllegalStateException("JWT Secret no configurado");
         }
 
-        // ✅ Convertir a bytes
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
 
-        // ✅ Validar tamaño mínimo de 256 bits (32 bytes)
         if (keyBytes.length < 32) {
             log.error("❌ Clave JWT tiene {} bits. Mínimo 256 bits requeridos.", keyBytes.length * 8);
-            log.error("🔑 Longitud de la clave: {} caracteres", secret.length());
             throw new IllegalStateException(
                     String.format("Clave JWT insegura: %d bits. Se requieren mínimo 256 bits.", keyBytes.length * 8)
             );
         }
 
-        // ✅ Crear clave secreta
         this.clave = Keys.hmacShaKeyFor(keyBytes);
-        log.info("✅ JWT Service inicializado correctamente");
+        log.info("✅ JWT Service inicializado con HS256");
         log.info("🔑 Clave JWT: {} bits ({} caracteres)", keyBytes.length * 8, secret.length());
     }
 
@@ -56,7 +50,7 @@ public class JwtService {
                 .claim("usuarioId", usuarioId)
                 .issuedAt(ahora)
                 .expiration(expiracion)
-                .signWith(clave)
+                .signWith(clave, Jwts.SIG.HS256)  // ✅ FORZAR HS256
                 .compact();
     }
 
@@ -71,7 +65,9 @@ public class JwtService {
     public boolean esTokenValido(String token, String emailEsperado) {
         try {
             String email = extraerEmail(token);
-            return email.equals(emailEsperado) && !estaExpirado(token);
+            boolean valido = email.equals(emailEsperado) && !estaExpirado(token);
+            log.debug("🔐 Token válido: {}", valido);
+            return valido;
         } catch (Exception e) {
             log.warn("Token inválido: {}", e.getMessage());
             return false;
@@ -79,7 +75,13 @@ public class JwtService {
     }
 
     private boolean estaExpirado(String token) {
-        return extraerClaim(token, Claims::getExpiration).before(new Date());
+        try {
+            Date expiracion = extraerClaim(token, Claims::getExpiration);
+            return expiracion.before(new Date());
+        } catch (Exception e) {
+            log.error("Error al verificar expiración: {}", e.getMessage());
+            return true;
+        }
     }
 
     private <T> T extraerClaim(String token, Function<Claims, T> resolver) {
@@ -88,10 +90,15 @@ public class JwtService {
     }
 
     private Claims extraerTodosLosClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(clave)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        try {
+            return Jwts.parser()
+                    .verifyWith(clave)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+        } catch (Exception e) {
+            log.error("Error al parsear token: {}", e.getMessage());
+            throw e;
+        }
     }
 }
