@@ -19,7 +19,7 @@ spring:
       connection-timeout: 5000
       read-timeout: 15000
       fail-fast: true
-
+ #
       ssl:
         enabled: false
 
