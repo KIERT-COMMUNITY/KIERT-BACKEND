@@ -27,12 +27,17 @@ public class ChatService {
     private final SolicitudContactoRepository solicitudRepository;
     private final StorageService storageService;
 
+    // ========== CONVERSACIONES ==========
     @Transactional(readOnly = true)
     @Cacheable(value = "conversaciones", key = "#usuarioId")
     public List<ConversacionDTO> listarConversaciones(Long usuarioId) {
         log.info("📋 Listando conversaciones para usuario: {} (desde BD)", usuarioId);
 
         List<Mensaje> mensajes = mensajeRepository.findTodosLosMensajesDeUsuario(usuarioId);
+
+        if (mensajes.isEmpty()) {
+            return new ArrayList<>();
+        }
 
         return mensajes.stream()
                 .collect(Collectors.groupingBy(
@@ -71,6 +76,7 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
+    // ========== MENSAJES ==========
     @Transactional(readOnly = true)
     @Cacheable(value = "mensajes", key = "#usuarioId + ':' + #otroUsuarioId")
     public List<MensajeChatDTO> obtenerMensajes(Long usuarioId, Long otroUsuarioId) {
@@ -78,6 +84,7 @@ public class ChatService {
 
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, otroUsuarioId);
 
+        // Marcar mensajes como leídos automáticamente al obtenerlos
         mensajes.stream()
                 .filter(m -> m.getReceptor().getId().equals(usuarioId) && !m.isLeido())
                 .forEach(m -> m.setLeido(true));
@@ -103,7 +110,7 @@ public class ChatService {
                             m.getContenido(),
                             m.getFechaEnvio(),
                             m.getEmisor().getId().equals(usuarioId),
-                            archivos
+                            archivos.isEmpty() ? null : archivos
                     );
                 })
                 .collect(Collectors.toList());
@@ -164,8 +171,7 @@ public class ChatService {
         mensaje = mensajeRepository.save(mensaje);
         log.info("✅ Mensaje guardado con ID: {}", mensaje.getId());
 
-        String urlArchivo = null;
-        String nombreArchivo = null;
+        List<MensajeArchivoDTO> archivosDTO = new ArrayList<>();
 
         if (archivos != null && !archivos.isEmpty()) {
             for (MultipartFile archivo : archivos) {
@@ -173,30 +179,30 @@ public class ChatService {
                     String url = storageService.subirArchivo(archivo);
                     log.info("✅ Archivo subido a Cloudinary: {}", url);
 
-                    urlArchivo = url;
-                    nombreArchivo = archivo.getOriginalFilename();
+                    // Guardar cada archivo asociado al mensaje
+                    String nombreArchivo = archivo.getOriginalFilename();
+                    String tipoArchivo = determinarTipoArchivo(archivo);
 
+                    // Actualizar el mensaje con el último archivo (para compatibilidad)
                     mensaje.setUrlArchivo(url);
-                    mensaje.setNombreArchivo(archivo.getOriginalFilename());
-                    mensaje.setTipoMensaje("IMAGEN");
+                    mensaje.setNombreArchivo(nombreArchivo);
+                    mensaje.setTipoMensaje(tipoArchivo);
                     mensaje = mensajeRepository.save(mensaje);
+
+                    // Agregar a la lista de archivos DTO
+                    archivosDTO.add(new MensajeArchivoDTO(
+                            null,
+                            nombreArchivo,
+                            url,
+                            tipoArchivo,
+                            (int) (archivo.getSize() / 1024), // Tamaño en KB
+                            false
+                    ));
 
                 } catch (Exception e) {
                     log.error("❌ Error al subir archivo: {}", e.getMessage());
                 }
             }
-        }
-
-        List<MensajeArchivoDTO> archivosDTO = new ArrayList<>();
-        if (urlArchivo != null) {
-            archivosDTO.add(new MensajeArchivoDTO(
-                    null,
-                    nombreArchivo,
-                    urlArchivo,
-                    "imagen",
-                    null,
-                    false
-            ));
         }
 
         return new MensajeChatDTO(
@@ -205,10 +211,45 @@ public class ChatService {
                 mensaje.getContenido(),
                 mensaje.getFechaEnvio(),
                 true,
-                archivosDTO
+                archivosDTO.isEmpty() ? null : archivosDTO
         );
     }
 
+    private String determinarTipoArchivo(MultipartFile archivo) {
+        String nombre = archivo.getOriginalFilename();
+        if (nombre == null) return "documento";
+
+        String extension = nombre.substring(nombre.lastIndexOf(".") + 1).toLowerCase();
+
+        return switch (extension) {
+            case "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg" -> "imagen";
+            case "pdf" -> "pdf";
+            case "doc", "docx" -> "word";
+            case "xls", "xlsx" -> "excel";
+            case "ppt", "pptx" -> "powerpoint";
+            case "zip", "rar" -> "comprimido";
+            case "txt" -> "texto";
+            default -> "documento";
+        };
+    }
+
+    // ✅ Marcar mensajes como leídos
+    @Transactional
+    @CacheEvict(value = {"conversaciones", "mensajes"}, allEntries = true)
+    public void marcarMensajesComoLeidos(Long usuarioId, Long otroUsuarioId) {
+        log.info("📬 Marcando mensajes como leídos entre {} y {}", usuarioId, otroUsuarioId);
+
+        List<Mensaje> mensajesNoLeidos = mensajeRepository.findConversacionNoLeidos(usuarioId, otroUsuarioId);
+        if (!mensajesNoLeidos.isEmpty()) {
+            mensajesNoLeidos.forEach(m -> m.setLeido(true));
+            mensajeRepository.saveAll(mensajesNoLeidos);
+            log.info("✅ {} mensajes marcados como leídos", mensajesNoLeidos.size());
+        } else {
+            log.info("ℹ️ No hay mensajes no leídos para marcar");
+        }
+    }
+
+    // ========== SOLICITUDES ==========
     @Transactional(readOnly = true)
     @Cacheable(value = "solicitudes", key = "#usuarioId")
     public List<SolicitudContactoDTO> listarSolicitudes(Long usuarioId) {
@@ -285,6 +326,7 @@ public class ChatService {
         Usuario emisor = solicitud.getEmisor();
         Usuario receptor = solicitud.getReceptor();
 
+        // Mensaje de bienvenida del emisor al receptor
         Mensaje mensaje1 = Mensaje.builder()
                 .emisor(emisor)
                 .receptor(receptor)
@@ -293,6 +335,7 @@ public class ChatService {
                 .build();
         mensajeRepository.save(mensaje1);
 
+        // Mensaje de bienvenida del receptor al emisor
         Mensaje mensaje2 = Mensaje.builder()
                 .emisor(receptor)
                 .receptor(emisor)
@@ -319,12 +362,13 @@ public class ChatService {
         solicitudRepository.save(solicitud);
     }
 
+    // ========== CONTACTOS ==========
     @Cacheable(value = "contactos", key = "#usuario1 + ':' + #usuario2")
     public boolean sonContactos(Long usuario1, Long usuario2) {
         return solicitudRepository.sonContactos(usuario1, usuario2);
     }
 
-    // ✅ MÉTODO AGREGADO: Listar usuarios disponibles
+    // ✅ Listar usuarios disponibles
     @Transactional(readOnly = true)
     public List<UsuarioDisponibleDTO> listarUsuariosDisponibles(Long usuarioId) {
         log.info("📋 Listando usuarios disponibles para {}", usuarioId);
@@ -360,7 +404,7 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
-    // ✅ MÉTODO AGREGADO: Eliminar contacto
+    // ✅ Eliminar contacto
     @Transactional
     @CacheEvict(value = {"conversaciones", "mensajes", "contactos", "busquedaUsuarios"}, allEntries = true)
     public void eliminarContacto(Long usuarioId, Long contactoId) {
@@ -368,10 +412,12 @@ public class ChatService {
 
         // Eliminar todos los mensajes entre los dos usuarios
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, contactoId);
-        mensajeRepository.deleteAll(mensajes);
-        log.info("✅ Eliminados {} mensajes", mensajes.size());
+        if (!mensajes.isEmpty()) {
+            mensajeRepository.deleteAll(mensajes);
+            log.info("✅ Eliminados {} mensajes", mensajes.size());
+        }
 
-        // Buscar y eliminar/actualizar la solicitud de contacto aceptada
+        // Buscar y actualizar la solicitud de contacto aceptada
         solicitudRepository.findByEmisorIdAndReceptorIdAndEstado(
                         usuarioId, contactoId, SolicitudContacto.EstadoSolicitud.ACEPTADA)
                 .ifPresent(solicitud -> {
@@ -394,7 +440,7 @@ public class ChatService {
         log.info("✅ Contacto eliminado exitosamente");
     }
 
-    // ✅ MÉTODO AGREGADO: Obtener cantidad de mensajes no leídos
+    // ✅ Obtener cantidad de mensajes no leídos total
     public long obtenerMensajesNoLeidos(Long usuarioId) {
         log.info("📬 Obteniendo mensajes no leídos para usuario: {}", usuarioId);
         return mensajeRepository.countByReceptorIdAndLeidoFalse(usuarioId);

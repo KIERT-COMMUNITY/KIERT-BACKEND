@@ -8,7 +8,7 @@ spring:
       port: 8200
       scheme: http
       authentication: TOKEN
-      #token: PONER TOKEN
+      #token:
       # CORREGIDO - Configuración correcta de KV
       kv:
         enabled: true

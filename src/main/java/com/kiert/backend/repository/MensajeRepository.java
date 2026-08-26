@@ -26,8 +26,17 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
 
     long countByEmisorIdAndReceptorIdAndLeidoFalse(Long emisorId, Long receptorId);
 
-    // ✅ MÉTODO AGREGADO: Contar mensajes no leídos por receptor
+    // ✅ Contar mensajes no leídos por receptor
     long countByReceptorIdAndLeidoFalse(Long receptorId);
+
+    // ✅ Obtener mensajes no leídos de una conversación
+    @Query("""
+            select m from Mensaje m
+            where ((m.emisor.id = :usuarioId and m.receptor.id = :otroUsuarioId)
+               or (m.emisor.id = :otroUsuarioId and m.receptor.id = :usuarioId))
+               and m.leido = false
+            """)
+    List<Mensaje> findConversacionNoLeidos(@Param("usuarioId") Long usuarioId, @Param("otroUsuarioId") Long otroUsuarioId);
 
     @Query("""
             select distinct 

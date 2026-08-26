@@ -42,8 +42,8 @@ spring:
   mail:
     host: ${vault.mail.host:smtp.gmail.com}
     port: ${vault.mail.port:587}
-    username: ${vault.mail.username:correo}
-    password: ${vault.mail.password:password segundo paso}
+    username: ${vault.mail.username:gringoelmatador30@gmail.com}
+    password: ${vault.mail.password:qxii xkra gsbf jszj}
     properties:
       mail:
         smtp:
@@ -83,7 +83,7 @@ springdoc:
 # ========== JWT CONFIGURATION ==========
 kiert:
   jwt:
-    secret: ${vault.jwt.secret:codigo}
+    secret: ${vault.jwt.secret:TBOqs9hbL57mK002kBHg6rfQXIFDFvRyEsm3ISAAl70=}
     expiration-ms: ${vault.jwt.expiration-ms:86400000}  # 24 horas
   cors:
     allowed-origins:
@@ -95,9 +95,9 @@ kiert:
 
   # ========== CLOUDINARY CONFIGURATION ==========
   cloudinary:
-    cloud-name: ${vault.cloudinary.cloud-name:name}
-    api-key: ${vault.cloudinary.api-key:codigo}
-    api-secret: ${vault.cloudinary.api-secret:codigo}
+    cloud-name: ${vault.cloudinary.cloud-name:zopnporu}
+    api-key: ${vault.cloudinary.api-key:271319861416221}
+    api-secret: ${vault.cloudinary.api-secret:CyeOaPpO-eABboZou_R35PEKYs0}
 
 logging:
   level:
@@ -119,7 +119,7 @@ spring:
   datasource:
     url: ${vault.db.url:jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true}
     username: ${vault.db.username:root}
-    password: ${vault.db.password:contraseña}
+    password: ${vault.db.password:adrian.200503}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
