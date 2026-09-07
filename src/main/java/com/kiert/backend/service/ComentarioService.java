@@ -26,6 +26,8 @@ public class ComentarioService {
     private final UsuarioRepository usuarioRepository;
     private final ReaccionRepository reaccionRepository;
     private final ReaccionRespuestaRepository reaccionRespuestaRepository;
+    private final NotificationService notificationService;
+
 
     // ========== COMENTARIOS ==========
 
@@ -41,13 +43,13 @@ public class ComentarioService {
     // ✅ Método para crear comentario SIN imagen
     @Transactional
     public ComentarioDTO crearComentario(Long postId, Long autorId, String contenido) {
-        log.info("📝 Creando comentario en post: {}, usuario: {}, contenido: {}", postId, autorId, contenido);
+        log.info("📝 Creando comentario en post: {}, usuario: {}", postId, autorId);
 
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado con ID: " + postId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
         Usuario autor = usuarioRepository.findById(autorId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado con ID: " + autorId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         Comentario comentario = Comentario.builder()
                 .post(post)
@@ -59,8 +61,14 @@ public class ComentarioService {
         comentario = comentarioRepository.save(comentario);
         log.info("✅ Comentario creado con ID: {}", comentario.getId());
 
+        // ✅ CREAR NOTIFICACIÓN
+        if (!autorId.equals(post.getAutor().getId())) {
+            notificationService.crearNotificacionComentario(autorId, postId, comentario.getId());
+        }
+
         return toComentarioDTO(comentario);
     }
+
 
     @Transactional
     public void eliminarComentario(Long comentarioId, Long usuarioId) {
@@ -110,6 +118,11 @@ public class ComentarioService {
 
         respuesta = respuestaRepository.save(respuesta);
         log.info("✅ Respuesta creada con ID: {}", respuesta.getId());
+
+        // ✅ CREAR NOTIFICACIÓN
+        if (!autorId.equals(comentario.getAutor().getId())) {
+            notificationService.crearNotificacionRespuesta(autorId, comentarioId, respuesta.getId());
+        }
 
         return toRespuestaDTO(respuesta);
     }

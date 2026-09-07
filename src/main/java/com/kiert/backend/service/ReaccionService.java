@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/ReaccionService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.entity.Reaccion;
@@ -19,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@Slf4j
+@Slf4j  // ✅ IMPORTANTE: Esto permite usar 'log'
 @Service
 @RequiredArgsConstructor
 public class ReaccionService {
@@ -28,6 +29,9 @@ public class ReaccionService {
     private final UsuarioRepository usuarioRepository;
     private final PostRepository postRepository;
     private final ComentarioRepository comentarioRepository;
+    private final NotificationService notificationService;  // ✅ Inyectar NotificationService
+
+    // ========== REACCIONES A POSTS ==========
 
     @Transactional
     public Map<String, Long> reaccionarPost(Long usuarioId, Long postId, String tipo) {
@@ -39,8 +43,8 @@ public class ReaccionService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
-        // Verificar si ya existe reacción
         Optional<Reaccion> reaccionExistente = reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId);
+        boolean esNuevaReaccion = false;
 
         if (reaccionExistente.isPresent()) {
             Reaccion reaccion = reaccionExistente.get();
@@ -52,6 +56,7 @@ public class ReaccionService {
                 // Si es diferente tipo, actualizar
                 reaccion.setTipo(tipo);
                 reaccionRepository.save(reaccion);
+                esNuevaReaccion = true;
                 log.info("Reacción actualizada a {} para usuario {} en post {}", tipo, usuarioId, postId);
             }
         } else {
@@ -62,11 +67,19 @@ public class ReaccionService {
                     .tipo(tipo)
                     .build();
             reaccionRepository.save(nuevaReaccion);
+            esNuevaReaccion = true;
             log.info("Nueva reacción {} creada para usuario {} en post {}", tipo, usuarioId, postId);
+        }
+
+        // ✅ CREAR NOTIFICACIÓN DE LIKE
+        if (esNuevaReaccion && !usuarioId.equals(post.getAutor().getId())) {
+            notificationService.crearNotificacionLike(usuarioId, postId);
         }
 
         return obtenerReaccionesPost(postId);
     }
+
+    // ========== REACCIONES A COMENTARIOS ==========
 
     @Transactional
     public Map<String, Long> reaccionarComentario(Long usuarioId, Long comentarioId, String tipo) {
@@ -102,6 +115,8 @@ public class ReaccionService {
 
         return obtenerReaccionesComentario(comentarioId);
     }
+
+    // ========== OBTENER REACCIONES ==========
 
     public Map<String, Long> obtenerReaccionesPost(Long postId) {
         Map<String, Long> reacciones = new HashMap<>();
@@ -144,6 +159,8 @@ public class ReaccionService {
         }
         return reacciones;
     }
+
+    // ========== VERIFICAR SI USUARIO REACCIONÓ ==========
 
     public boolean usuarioReaccionoPost(Long usuarioId, Long postId) {
         return reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId).isPresent();
