@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: kiert-backend
+
+  cloud:
+    vault:
+      host: localhost
+      port: 8200
+      scheme: http
+      authentication: TOKEN
+      token:
+      # CORREGIDO - Configuración correcta de KV
+      kv:
+        enabled: true
+        backend: secret
+        default-context: kiert-backend  # SIN "secret/" al inicio
+
+      connection-timeout: 5000
+      read-timeout: 15000
+      fail-fast: true
+
+      ssl:
+        enabled: false
+
+logging:
+  level:
+    org.springframework.cloud.vault: DEBUG
+    org.springframework.vault: DEBUG
