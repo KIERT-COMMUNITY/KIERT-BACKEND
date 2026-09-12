@@ -1,8 +1,8 @@
 package com.kiert.backend.service;
 
-import com.kiert.backend.dto.AuthResponseDTO;
-import com.kiert.backend.dto.LoginRequestDTO;
-import com.kiert.backend.dto.RegisterRequestDTO;
+import com.kiert.backend.dto.response.AuthResponseDTO;
+import com.kiert.backend.dto.request.LoginRequestDTO;
+import com.kiert.backend.dto.request.RegisterRequestDTO;
 import com.kiert.backend.dto.UsuarioDTO;
 import com.kiert.backend.entity.PasswordResetToken;
 import com.kiert.backend.entity.Usuario;

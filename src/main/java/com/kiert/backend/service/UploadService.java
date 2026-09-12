@@ -1,7 +1,7 @@
 package com.kiert.backend.service;
 
-import com.kiert.backend.dto.UrlFirmadaRequestDTO;
-import com.kiert.backend.dto.UrlFirmadaResponseDTO;
+import com.kiert.backend.dto.request.UrlFirmadaRequestDTO;
+import com.kiert.backend.dto.response.UrlFirmadaResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

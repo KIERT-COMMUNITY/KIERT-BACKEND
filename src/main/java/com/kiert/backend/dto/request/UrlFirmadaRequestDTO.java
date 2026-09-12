@@ -1,4 +1,4 @@
-package com.kiert.backend.dto;
+package com.kiert.backend.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 

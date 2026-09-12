@@ -59,4 +59,9 @@ public class Post {
     @Column(nullable = false)
     @Builder.Default
     private boolean eliminado = false;
+    // ✅ NUEVO CAMPO: TOTAL COMPARTIDOS
+    @Column(name = "total_compartidos", nullable = false)
+    @Builder.Default
+    private Long totalCompartidos = 0L;
+
 }

@@ -1,7 +1,7 @@
 package com.kiert.backend.controller;
 
-import com.kiert.backend.dto.UrlFirmadaRequestDTO;
-import com.kiert.backend.dto.UrlFirmadaResponseDTO;
+import com.kiert.backend.dto.request.UrlFirmadaRequestDTO;
+import com.kiert.backend.dto.response.UrlFirmadaResponseDTO;
 import com.kiert.backend.service.UploadService;
 import com.kiert.backend.service.StorageService;
 import jakarta.validation.Valid;

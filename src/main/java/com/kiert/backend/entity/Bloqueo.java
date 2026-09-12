@@ -28,7 +28,7 @@ public class Bloqueo {
 
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private String tipo = "BLOQUEO"; // BLOQUEO, DENUNCIA
+    private String tipo = "BLOQUEO";
 
     @Column(nullable = false, length = 255)
     private String motivo;
