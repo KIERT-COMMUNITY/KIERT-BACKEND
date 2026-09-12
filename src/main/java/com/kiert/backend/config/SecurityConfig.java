@@ -4,6 +4,7 @@ import com.kiert.backend.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -33,7 +34,9 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Swagger - PÚBLICO
+                        // ===== RUTAS PÚBLICAS =====
+
+                        // Swagger
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
@@ -43,28 +46,51 @@ public class SecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
 
-                        // Auth - PÚBLICO
+                        // Auth (login, registro, recuperación)
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // Archivos - PÚBLICO
+                        // Archivos públicos
                         .requestMatchers("/api/archivos/**").permitAll()
 
-                        // Publicaciones - PÚBLICO (solo lectura)
-                        .requestMatchers("/api/publicaciones").permitAll()
+                        // ✅ PUBLICACIONES: GET público, POST/PUT/DELETE requieren auth
+                        .requestMatchers(HttpMethod.GET, "/api/publicaciones/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/publicaciones/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/publicaciones/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/publicaciones/**").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/publicaciones/**").authenticated()
 
-                        // WebSocket - PÚBLICO
-                        .requestMatchers("/ws/**").permitAll()
+                        // ✅ Comentarios GET público
+                        .requestMatchers(HttpMethod.GET, "/api/comentarios/**").permitAll()
 
-                        // ✅ CHAT - REQUIERE AUTENTICACIÓN
+                        // ✅ Reacciones GET público
+                        .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
+
+                        // ✅ WEBSOCKET - COMPLETAMENTE PÚBLICO
+                        .requestMatchers(
+                                "/ws",
+                                "/ws/**",
+                                "/ws/info",
+                                "/ws/info/**",
+                                "/ws/iframe.html",
+                                "/ws/*/xhr",
+                                "/ws/*/xhr_streaming",
+                                "/ws/*/xhr_send",
+                                "/ws/*/websocket",
+                                "/ws/*/eventsource",
+                                "/ws/*/htmlfile"
+                        ).permitAll()
+
+                        // ===== RUTAS PROTEGIDAS =====
                         .requestMatchers("/api/chat/**").authenticated()
-
-                        // ✅ Usuarios - REQUIERE AUTENTICACIÓN
                         .requestMatchers("/api/usuarios/**").authenticated()
-
-                        // ✅ Personalización - REQUIERE AUTENTICACIÓN
                         .requestMatchers("/api/personalizacion/**").authenticated()
+                        .requestMatchers("/api/grupos/**").authenticated()
+                        .requestMatchers("/api/notificaciones/**").authenticated()
+                        .requestMatchers("/api/bloqueos/**").authenticated()
+                        .requestMatchers("/api/reportes/**").authenticated()
+                        .requestMatchers("/api/perfil/**").authenticated()
 
-                        // Cualquier otra ruta - REQUIERE AUTENTICACIÓN
+                        // Cualquier otra ruta requiere auth
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
@@ -79,11 +105,20 @@ public class SecurityConfig {
                 "http://localhost:4200",
                 "http://localhost:53334",
                 "http://localhost:8080",
+                "http://127.0.0.1:4200",
                 "*"
         ));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
+        configuration.setAllowedMethods(List.of(
+                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"
+        ));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setExposedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept",
+                "Origin"
+        ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

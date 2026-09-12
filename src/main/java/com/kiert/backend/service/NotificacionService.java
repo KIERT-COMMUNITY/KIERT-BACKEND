@@ -3,11 +3,13 @@ package com.kiert.backend.service;
 
 import com.kiert.backend.dto.NotificacionDTO;
 import com.kiert.backend.entity.*;
+import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.kiert.backend.repository.GrupoChatRepository;
 
 import java.time.Instant;
 import java.util.List;
@@ -16,13 +18,14 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class NotificationService {
+public class NotificacionService {
 
     private final NotificacionRepository notificacionRepository;
     private final UsuarioRepository usuarioRepository;
     private final PostRepository postRepository;
     private final ComentarioRepository comentarioRepository;
     private final RespuestaComentarioRepository respuestaRepository;
+    private final GrupoChatRepository grupoChatRepository;
 
     // ========== CREAR NOTIFICACIONES ==========
 
@@ -207,7 +210,6 @@ public class NotificationService {
     }
 
     // ========== DTO MAPPING ==========
-
     private NotificacionDTO toDTO(Notificacion notificacion) {
         return new NotificacionDTO(
                 notificacion.getId(),
@@ -221,7 +223,46 @@ public class NotificationService {
                 notificacion.getPost() != null ? notificacion.getPost().getId() : null,
                 notificacion.getComentario() != null ? notificacion.getComentario().getId() : null,
                 notificacion.getRespuesta() != null ? notificacion.getRespuesta().getId() : null,
-                notificacion.getUrl()
+                notificacion.getUrl(),
+                notificacion.getGrupo() != null ? notificacion.getGrupo().getId() : null  // ✅ AGREGAR
         );
+    }
+    @Transactional
+    public Notificacion crearNotificacionGrupo(
+            Long usuarioDestinoId,
+            Long usuarioOrigenId,
+            String mensaje,
+            Long grupoId,
+            String url
+    ) {
+        log.info("📩 Creando notificación de grupo para usuario {}", usuarioDestinoId);
+
+        Usuario destino = usuarioRepository.findById(usuarioDestinoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario destino no encontrado"));
+
+        Usuario origen = usuarioOrigenId != null
+                ? usuarioRepository.findById(usuarioOrigenId).orElse(null)
+                : null;
+
+        // ✅ BUSCAR Y ASIGNAR EL GRUPO
+        GrupoChat grupo = grupoId != null
+                ? grupoChatRepository.findById(grupoId).orElse(null)
+                : null;
+
+        Notificacion notif = Notificacion.builder()
+                .usuarioDestino(destino)
+                .usuarioOrigen(origen)
+                .tipo("INVITACION_GRUPO")
+                .mensaje(mensaje)
+                .leida(false)
+                .grupo(grupo)              // ✅ ESTA ES LA LÍNEA QUE FALTABA
+                .url(url)
+                .fechaCreacion(Instant.now())
+                .build();
+
+        Notificacion guardada = notificacionRepository.save(notif);
+        log.info("✅ Notificación de grupo creada con ID: {} para grupo {}", guardada.getId(), grupoId);
+
+        return guardada;
     }
 }

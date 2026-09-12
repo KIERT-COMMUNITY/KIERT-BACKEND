@@ -60,4 +60,7 @@ public class Notificacion {
 
     @Column(name = "fecha_leida")
     private Instant fechaLeida;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grupo_id")
+    private GrupoChat grupo;
 }

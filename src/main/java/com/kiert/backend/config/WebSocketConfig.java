@@ -6,23 +6,34 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
-// Chat en tiempo real vía STOMP sobre WebSocket, como se sugiere en los
-// comentarios de chat.service.ts. El frontend se conecta a /ws y se
-// suscribe a /topic/chat/{usuarioId} para recibir mensajes nuevos.
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic");
+        // Broker simple para:
+        // - /topic/* → mensajes a grupos (broadcast)
+        // - /queue/* → mensajes a usuarios específicos (punto a punto)
+        registry.enableSimpleBroker("/topic", "/queue");
+
+        // Prefijo para mensajes que vienen del cliente al servidor
         registry.setApplicationDestinationPrefixes("/app");
+
+        // Prefijo para mensajes dirigidos a usuarios específicos
+        registry.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Endpoint principal para SockJS
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
-                .withSockJS();
+                .withSockJS()
+                .setClientLibraryUrl("https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js");
+
+        // Endpoint alternativo sin SockJS (para WebSocket puro)
+        registry.addEndpoint("/ws")
+                .setAllowedOriginPatterns("*");
     }
 }

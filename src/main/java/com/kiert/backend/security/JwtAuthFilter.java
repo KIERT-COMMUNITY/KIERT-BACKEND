@@ -16,7 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-@Slf4j  // ✅ AGREGAR ESTO
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
@@ -24,6 +24,45 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String PREFIJO_BEARER = "Bearer ";
     private final JwtService jwtService;
     private final UsuarioDetailsService usuarioDetailsService;
+
+    /**
+     * ✅ NO procesar estas rutas con JWT.
+     * Importante: solo rutas TOTALMENTE públicas.
+     * Las rutas que "a veces" requieren auth NO deben saltarse.
+     */
+    @Override
+    protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String metodo = request.getMethod();
+
+        // 1. WebSocket
+        if (path.startsWith("/ws")) {
+            return true;
+        }
+
+        // 2. OPTIONS preflight (CORS)
+        if ("OPTIONS".equalsIgnoreCase(metodo)) {
+            return true;
+        }
+
+        // 3. Rutas 100% públicas (nunca requieren auth)
+        if (path.startsWith("/api/auth/")
+                || path.startsWith("/swagger")
+                || path.startsWith("/swagger-ui")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/api-docs")
+                || path.startsWith("/webjars")
+                || path.startsWith("/api/archivos/")) {
+            return true;
+        }
+
+        // ⚠️ IMPORTANTE: /api/publicaciones NO se salta el filtro.
+        //    Aunque sea un endpoint con partes públicas,
+        //    el filtro debe procesar el token si viene.
+        //    Si no viene token → sigue como anónimo, y Spring Security decide.
+
+        return false;
+    }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -33,8 +72,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String header = request.getHeader("Authorization");
 
-        log.debug("🔍 [JWT] Procesando: {} - Header: {}", path, header != null ? "✅ presente" : "❌ ausente");
+        log.debug("🔍 [JWT] Procesando: {} - Header: {}",
+                path, header != null ? "✅ presente" : "❌ ausente");
 
+        // Si no hay token, seguir sin autenticar.
+        // Spring Security decidirá si la ruta requiere auth.
         if (header == null || !header.startsWith(PREFIJO_BEARER)) {
             log.debug("⛔ [JWT] No hay token para: {}", path);
             filterChain.doFilter(request, response);
@@ -42,7 +84,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         String token = header.substring(PREFIJO_BEARER.length());
-        log.debug("🔑 [JWT] Token recibido: {}...", token.substring(0, Math.min(token.length(), 30)));
+        log.debug("🔑 [JWT] Token recibido: {}...",
+                token.substring(0, Math.min(token.length(), 30)));
 
         try {
             String email = jwtService.extraerEmail(token);
@@ -50,27 +93,28 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = usuarioDetailsService.loadUserByUsername(email);
-                log.debug("👤 [JWT] UserDetails cargado: {}", userDetails.getUsername());
 
                 boolean valido = jwtService.esTokenValido(token, email);
-                log.debug("🔐 [JWT] Token válido: {}", valido);
 
                 if (valido) {
                     log.info("✅ [JWT] Autenticación exitosa para: {}", email);
 
                     UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities()
+                            );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
-
-                    log.debug("✅ [JWT] SecurityContext actualizado");
                 } else {
                     log.warn("⚠️ [JWT] Token inválido para: {}", email);
                     SecurityContextHolder.clearContext();
                 }
             }
         } catch (Exception ex) {
-            log.error("❌ [JWT] Error procesando token: {}", ex.getMessage());
+            // ✅ NO relanzar. Solo loguear. Spring Security devolverá 401 al no haber auth.
+            log.warn("❌ [JWT] Error procesando token (se ignora): {}", ex.getMessage());
             SecurityContextHolder.clearContext();
         }
 

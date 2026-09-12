@@ -3,7 +3,7 @@ package com.kiert.backend.controller;
 
 import com.kiert.backend.dto.NotificacionDTO;
 import com.kiert.backend.security.UsuarioActual;
-import com.kiert.backend.service.NotificationService;
+import com.kiert.backend.service.NotificacionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +19,7 @@ import java.util.Map;
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class NotificationController {
 
-    private final NotificationService notificationService;
+    private final NotificacionService notificationService;
     private final UsuarioActual usuarioActual;
 
     @GetMapping

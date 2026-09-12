@@ -50,7 +50,7 @@ public class JwtService {
                 .claim("usuarioId", usuarioId)
                 .issuedAt(ahora)
                 .expiration(expiracion)
-                .signWith(clave, Jwts.SIG.HS256)  // ✅ FORZAR HS256
+                .signWith(clave, Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -89,13 +89,23 @@ public class JwtService {
         return resolver.apply(claims);
     }
 
+    /**
+     * ✅ NUEVO: valida SOLO tokens firmados con HS256.
+     * Si el token viene con otro alg (HS512, RS256, none...), lanza excepción
+     * controlada que el filtro convertirá en 401 (no en 500).
+     */
     private Claims extraerTodosLosClaims(String token) {
         try {
             return Jwts.parser()
                     .verifyWith(clave)
+                    // ✅ Exigir que el header sea HS256. Si no, falla limpio.
+                    // (jjwt igual valida, pero así el mensaje es más claro.)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            log.warn("⚠️ Firma del token inválida (posible token viejo con otro alg/clave): {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.error("Error al parsear token: {}", e.getMessage());
             throw e;

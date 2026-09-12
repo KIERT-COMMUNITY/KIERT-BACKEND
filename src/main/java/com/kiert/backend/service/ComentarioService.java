@@ -26,7 +26,7 @@ public class ComentarioService {
     private final UsuarioRepository usuarioRepository;
     private final ReaccionRepository reaccionRepository;
     private final ReaccionRespuestaRepository reaccionRespuestaRepository;
-    private final NotificationService notificationService;
+    private final NotificacionService notificationService;
 
 
     // ========== COMENTARIOS ==========

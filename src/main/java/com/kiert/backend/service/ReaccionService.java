@@ -29,7 +29,7 @@ public class ReaccionService {
     private final UsuarioRepository usuarioRepository;
     private final PostRepository postRepository;
     private final ComentarioRepository comentarioRepository;
-    private final NotificationService notificationService;  // ✅ Inyectar NotificationService
+    private final NotificacionService notificationService;  // ✅ Inyectar NotificationService
 
     // ========== REACCIONES A POSTS ==========
 
