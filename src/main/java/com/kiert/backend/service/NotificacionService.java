@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/NotificationService.java
+// src/main/java/com/kiert/backend/service/NotificacionService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.NotificacionDTO;
@@ -9,7 +9,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.kiert.backend.repository.GrupoChatRepository;
 
 import java.time.Instant;
 import java.util.List;
@@ -27,99 +26,96 @@ public class NotificacionService {
     private final RespuestaComentarioRepository respuestaRepository;
     private final GrupoChatRepository grupoChatRepository;
 
-    // ========== CREAR NOTIFICACIONES ==========
+    // ============================================================
+    // CREAR NOTIFICACIONES
+    // ============================================================
 
     @Transactional
-    public void crearNotificacionLike(Long usuarioOrigenId, Long postId) {
-        log.info("🔔 Creando notificación de LIKE para post: {}", postId);
+    public Notificacion crearNotificacionLike(Long usuarioOrigenId, Long postId) {
+        log.info("🔔 Notificación LIKE post={}", postId);
 
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Post no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
         if (usuarioOrigenId.equals(post.getAutor().getId())) {
-            log.info("⏭️ Usuario se dio like a sí mismo, no se crea notificación");
-            return;
+            log.info("⏭️ Like propio, sin notificación");
+            return null;
         }
 
-        Usuario usuarioOrigen = usuarioRepository.findById(usuarioOrigenId)
-                .orElseThrow(() -> new RuntimeException("Usuario origen no encontrado"));
+        Usuario origen = usuarioRepository.findById(usuarioOrigenId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String mensaje = String.format("<strong>%s</strong> le dio like a tu publicación",
-                usuarioOrigen.getNombreUsuario());
+                origen.getNombreUsuario());
 
-        Notificacion notificacion = Notificacion.builder()
+        Notificacion notif = Notificacion.builder()
                 .usuarioDestino(post.getAutor())
-                .usuarioOrigen(usuarioOrigen)
+                .usuarioOrigen(origen)
                 .tipo("like")
                 .mensaje(mensaje)
                 .post(post)
                 .url("/publicacion/" + postId)
                 .leida(false)
-                .fechaCreacion(Instant.now())
                 .build();
+        // ⚠️ fechaCreacion se llena con @CreationTimestamp
 
-        notificacionRepository.save(notificacion);
-        log.info("✅ Notificación de like creada");
+        return notificacionRepository.save(notif);
     }
 
     @Transactional
-    public void crearNotificacionComentario(Long usuarioOrigenId, Long postId, Long comentarioId) {
-        log.info("🔔 Creando notificación de COMENTARIO para post: {}", postId);
+    public Notificacion crearNotificacionComentario(Long usuarioOrigenId, Long postId, Long comentarioId) {
+        log.info("🔔 Notificación COMENTARIO post={}", postId);
 
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Post no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
-        if (usuarioOrigenId.equals(post.getAutor().getId())) {
-            log.info("⏭️ Usuario comentó su propio post, no se crea notificación");
-            return;
-        }
+        if (usuarioOrigenId.equals(post.getAutor().getId())) return null;
 
-        Usuario usuarioOrigen = usuarioRepository.findById(usuarioOrigenId)
-                .orElseThrow(() -> new RuntimeException("Usuario origen no encontrado"));
+        Usuario origen = usuarioRepository.findById(usuarioOrigenId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        String mensaje = String.format("<strong>%s</strong> comentó en tu publicación: \"%s\"",
-                usuarioOrigen.getNombreUsuario(),
-                comentarioRepository.findById(comentarioId)
-                        .map(c -> c.getContenido().length() > 50 ? c.getContenido().substring(0, 50) + "..." : c.getContenido())
-                        .orElse(""));
+        Comentario comentario = comentarioRepository.findById(comentarioId).orElse(null);
+        String preview = comentario != null && comentario.getContenido() != null
+                ? (comentario.getContenido().length() > 50
+                   ? comentario.getContenido().substring(0, 50) + "..."
+                   : comentario.getContenido())
+                : "";
 
-        Notificacion notificacion = Notificacion.builder()
+        String mensaje = String.format("<strong>%s</strong> comentó: \"%s\"",
+                origen.getNombreUsuario(), preview);
+
+        Notificacion notif = Notificacion.builder()
                 .usuarioDestino(post.getAutor())
-                .usuarioOrigen(usuarioOrigen)
+                .usuarioOrigen(origen)
                 .tipo("comentario")
                 .mensaje(mensaje)
                 .post(post)
-                .comentario(comentarioRepository.findById(comentarioId).orElse(null))
+                .comentario(comentario)
                 .url("/publicacion/" + postId)
                 .leida(false)
-                .fechaCreacion(Instant.now())
                 .build();
 
-        notificacionRepository.save(notificacion);
-        log.info("✅ Notificación de comentario creada");
+        return notificacionRepository.save(notif);
     }
 
     @Transactional
-    public void crearNotificacionRespuesta(Long usuarioOrigenId, Long comentarioId, Long respuestaId) {
-        log.info("🔔 Creando notificación de RESPUESTA para comentario: {}", comentarioId);
+    public Notificacion crearNotificacionRespuesta(Long usuarioOrigenId, Long comentarioId, Long respuestaId) {
+        log.info("🔔 Notificación RESPUESTA comentario={}", comentarioId);
 
         Comentario comentario = comentarioRepository.findById(comentarioId)
-                .orElseThrow(() -> new RuntimeException("Comentario no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
 
-        if (usuarioOrigenId.equals(comentario.getAutor().getId())) {
-            log.info("⏭️ Usuario respondió a su propio comentario, no se crea notificación");
-            return;
-        }
+        if (usuarioOrigenId.equals(comentario.getAutor().getId())) return null;
 
-        Usuario usuarioOrigen = usuarioRepository.findById(usuarioOrigenId)
-                .orElseThrow(() -> new RuntimeException("Usuario origen no encontrado"));
+        Usuario origen = usuarioRepository.findById(usuarioOrigenId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String mensaje = String.format("<strong>%s</strong> respondió a tu comentario",
-                usuarioOrigen.getNombreUsuario());
+                origen.getNombreUsuario());
 
-        Notificacion notificacion = Notificacion.builder()
+        Notificacion notif = Notificacion.builder()
                 .usuarioDestino(comentario.getAutor())
-                .usuarioOrigen(usuarioOrigen)
+                .usuarioOrigen(origen)
                 .tipo("respuesta")
                 .mensaje(mensaje)
                 .post(comentario.getPost())
@@ -127,115 +123,44 @@ public class NotificacionService {
                 .respuesta(respuestaRepository.findById(respuestaId).orElse(null))
                 .url("/publicacion/" + comentario.getPost().getId())
                 .leida(false)
-                .fechaCreacion(Instant.now())
                 .build();
 
-        notificacionRepository.save(notificacion);
-        log.info("✅ Notificación de respuesta creada");
+        return notificacionRepository.save(notif);
     }
 
     @Transactional
-    public void crearNotificacionSolicitud(Long usuarioOrigenId, Long usuarioDestinoId) {
-        log.info("🔔 Creando notificación de SOLICITUD");
+    public Notificacion crearNotificacionSolicitud(Long usuarioOrigenId, Long usuarioDestinoId) {
+        log.info("🔔 Notificación SOLICITUD de {} a {}", usuarioOrigenId, usuarioDestinoId);
 
-        Usuario usuarioOrigen = usuarioRepository.findById(usuarioOrigenId)
-                .orElseThrow(() -> new RuntimeException("Usuario origen no encontrado"));
-        Usuario usuarioDestino = usuarioRepository.findById(usuarioDestinoId)
-                .orElseThrow(() -> new RuntimeException("Usuario destino no encontrado"));
+        Usuario origen = usuarioRepository.findById(usuarioOrigenId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario origen no encontrado"));
+        Usuario destino = usuarioRepository.findById(usuarioDestinoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario destino no encontrado"));
 
         String mensaje = String.format("<strong>%s</strong> quiere ser tu contacto",
-                usuarioOrigen.getNombreUsuario());
+                origen.getNombreUsuario());
 
-        Notificacion notificacion = Notificacion.builder()
-                .usuarioDestino(usuarioDestino)
-                .usuarioOrigen(usuarioOrigen)
+        Notificacion notif = Notificacion.builder()
+                .usuarioDestino(destino)
+                .usuarioOrigen(origen)
                 .tipo("solicitud")
                 .mensaje(mensaje)
-                .url("/chat/solicitudes")
+                .url("/chat")
                 .leida(false)
-                .fechaCreacion(Instant.now())
                 .build();
 
-        notificacionRepository.save(notificacion);
-        log.info("✅ Notificación de solicitud creada");
+        return notificacionRepository.save(notif);
     }
 
-    // ========== OBTENER NOTIFICACIONES ==========
-
-    @Transactional(readOnly = true)
-    public List<NotificacionDTO> obtenerNotificaciones(Long usuarioId) {
-        log.info("📋 Obteniendo notificaciones para usuario: {}", usuarioId);
-
-        List<Notificacion> notificaciones = notificacionRepository
-                .findByUsuarioDestinoIdOrderByFechaCreacionDesc(usuarioId);
-
-        return notificaciones.stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public long contarNoLeidas(Long usuarioId) {
-        return notificacionRepository.countNoLeidasByUsuario(usuarioId);
-    }
-
-    // ========== MARCAR COMO LEÍDAS ==========
-
-    @Transactional
-    public void marcarComoLeidas(List<Long> ids, Long usuarioId) {
-        log.info("✅ Marcando como leídas {} notificaciones", ids.size());
-        notificacionRepository.marcarComoLeidas(ids);
-    }
-
-    @Transactional
-    public void marcarTodasComoLeidas(Long usuarioId) {
-        log.info("✅ Marcando todas las notificaciones como leídas");
-        notificacionRepository.marcarTodasComoLeidas(usuarioId);
-    }
-
-    // ========== ELIMINAR ==========
-
-    @Transactional
-    public void eliminarNotificacion(Long id, Long usuarioId) {
-        log.info("🗑️ Eliminando notificación: {}", id);
-        Notificacion notificacion = notificacionRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Notificación no encontrada"));
-
-        if (!notificacion.getUsuarioDestino().getId().equals(usuarioId)) {
-            throw new SecurityException("No tienes permiso para eliminar esta notificación");
-        }
-
-        notificacionRepository.deleteById(id);
-        log.info("✅ Notificación eliminada");
-    }
-
-    // ========== DTO MAPPING ==========
-    private NotificacionDTO toDTO(Notificacion notificacion) {
-        return new NotificacionDTO(
-                notificacion.getId(),
-                notificacion.getTipo(),
-                notificacion.getMensaje(),
-                notificacion.getLeida(),
-                notificacion.getFechaCreacion(),
-                notificacion.getUsuarioOrigen() != null ? notificacion.getUsuarioOrigen().getId() : null,
-                notificacion.getUsuarioOrigen() != null ? notificacion.getUsuarioOrigen().getNombreUsuario() : null,
-                notificacion.getUsuarioOrigen() != null ? notificacion.getUsuarioOrigen().getFotoPerfilUrl() : null,
-                notificacion.getPost() != null ? notificacion.getPost().getId() : null,
-                notificacion.getComentario() != null ? notificacion.getComentario().getId() : null,
-                notificacion.getRespuesta() != null ? notificacion.getRespuesta().getId() : null,
-                notificacion.getUrl(),
-                notificacion.getGrupo() != null ? notificacion.getGrupo().getId() : null  // ✅ AGREGAR
-        );
-    }
     @Transactional
     public Notificacion crearNotificacionGrupo(
             Long usuarioDestinoId,
             Long usuarioOrigenId,
             String mensaje,
             Long grupoId,
-            String url
-    ) {
-        log.info("📩 Creando notificación de grupo para usuario {}", usuarioDestinoId);
+            String url) {
+
+        log.info("📩 Notificación INVITACION_GRUPO para {} (grupo {})", usuarioDestinoId, grupoId);
 
         Usuario destino = usuarioRepository.findById(usuarioDestinoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario destino no encontrado"));
@@ -244,7 +169,6 @@ public class NotificacionService {
                 ? usuarioRepository.findById(usuarioOrigenId).orElse(null)
                 : null;
 
-        // ✅ BUSCAR Y ASIGNAR EL GRUPO
         GrupoChat grupo = grupoId != null
                 ? grupoChatRepository.findById(grupoId).orElse(null)
                 : null;
@@ -255,14 +179,82 @@ public class NotificacionService {
                 .tipo("INVITACION_GRUPO")
                 .mensaje(mensaje)
                 .leida(false)
-                .grupo(grupo)              // ✅ ESTA ES LA LÍNEA QUE FALTABA
-                .url(url)
-                .fechaCreacion(Instant.now())
+                .grupo(grupo)
+                .url(url != null ? url : "/chat")
                 .build();
+        // ⚠️ SIN .fechaCreacion() — lo hace @CreationTimestamp
 
         Notificacion guardada = notificacionRepository.save(notif);
-        log.info("✅ Notificación de grupo creada con ID: {} para grupo {}", guardada.getId(), grupoId);
-
+        log.info("✅ Notificación de grupo creada ID={}", guardada.getId());
         return guardada;
+    }
+
+    // ============================================================
+    // LECTURA
+    // ============================================================
+
+    @Transactional(readOnly = true)
+    public List<NotificacionDTO> obtenerNotificaciones(Long usuarioId) {
+        return notificacionRepository
+                .findByUsuarioDestinoIdOrderByFechaCreacionDesc(usuarioId)
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public long contarNoLeidas(Long usuarioId) {
+        return notificacionRepository.countNoLeidasByUsuario(usuarioId);
+    }
+
+    // ============================================================
+    // ACTUALIZAR
+    // ============================================================
+
+    @Transactional
+    public void marcarComoLeidas(List<Long> ids, Long usuarioId) {
+        if (ids == null || ids.isEmpty()) return;
+        log.info("✅ Marcando {} como leídas (usuario {})", ids.size(), usuarioId);
+        notificacionRepository.marcarComoLeidas(ids);
+    }
+
+    @Transactional
+    public void marcarTodasComoLeidas(Long usuarioId) {
+        log.info("✅ Marcando todas como leídas (usuario {})", usuarioId);
+        notificacionRepository.marcarTodasComoLeidas(usuarioId);
+    }
+
+    @Transactional
+    public void eliminarNotificacion(Long id, Long usuarioId) {
+        Notificacion n = notificacionRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Notificación no encontrada"));
+
+        if (!n.getUsuarioDestino().getId().equals(usuarioId)) {
+            throw new SecurityException("No puedes eliminar esta notificación");
+        }
+
+        notificacionRepository.deleteById(id);
+    }
+
+    // ============================================================
+    // DTO
+    // ============================================================
+
+    private NotificacionDTO toDTO(Notificacion n) {
+        return new NotificacionDTO(
+                n.getId(),
+                n.getTipo(),
+                n.getMensaje(),
+                n.getLeida(),
+                n.getFechaCreacion(),
+                n.getUsuarioOrigen() != null ? n.getUsuarioOrigen().getId() : null,
+                n.getUsuarioOrigen() != null ? n.getUsuarioOrigen().getNombreUsuario() : null,
+                n.getUsuarioOrigen() != null ? n.getUsuarioOrigen().getFotoPerfilUrl() : null,
+                n.getPost() != null ? n.getPost().getId() : null,
+                n.getComentario() != null ? n.getComentario().getId() : null,
+                n.getRespuesta() != null ? n.getRespuesta().getId() : null,
+                n.getUrl(),
+                n.getGrupo() != null ? n.getGrupo().getId() : null
+        );
     }
 }

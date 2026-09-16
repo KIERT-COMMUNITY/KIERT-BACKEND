@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/controller/BloqueoController.java
 package com.kiert.backend.controller;
 
 import com.kiert.backend.dto.BloqueoDTO;
@@ -39,7 +40,7 @@ public class BloqueoController {
 
             BloqueoDTO bloqueo = bloqueoService.bloquear(usuarioId, dto);
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                    "mensaje", "Usuario bloqueado correctamente",
+                    "mensaje", "Usuario bloqueado correctamente. Ya no podrá enviarte mensajes.",
                     "bloqueo", bloqueo
             ));
         } catch (IllegalArgumentException e) {
@@ -64,7 +65,9 @@ public class BloqueoController {
             }
 
             bloqueoService.desbloquear(usuarioActualId, usuarioId);
-            return ResponseEntity.ok(Map.of("mensaje", "Usuario desbloqueado correctamente"));
+            return ResponseEntity.ok(Map.of(
+                    "mensaje", "Usuario desbloqueado correctamente. Ya pueden volver a comunicarse."
+            ));
         } catch (Exception e) {
             log.error("❌ Error al desbloquear usuario: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

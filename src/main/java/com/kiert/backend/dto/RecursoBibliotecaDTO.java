@@ -17,6 +17,10 @@ public record RecursoBibliotecaDTO(
         String duracion,
         String nivel,
         Boolean destacado,
+        Boolean esUsuario,
+        Long usuarioId,
+        String usuarioNombre,
         Instant fechaAgregado,
+        Instant fechaActualizacion,
         List<String> tags
 ) {}

@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/repository/GrupoChatRepository.java
 package com.kiert.backend.repository;
 
 import com.kiert.backend.entity.GrupoChat;
@@ -6,10 +7,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
 
-    // ✅ Grupos a los que pertenece un usuario (ACTIVO) O que creó
     @Query("SELECT DISTINCT g FROM GrupoChat g " +
             "WHERE g.activo = true AND (" +
             "  g.creador.id = :usuarioId " +
@@ -18,7 +19,6 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
             "ORDER BY g.fechaCreacion DESC")
     List<GrupoChat> findGruposDeUsuario(@Param("usuarioId") Long usuarioId);
 
-    // Grupos públicos para unirse
     @Query("SELECT g FROM GrupoChat g " +
             "WHERE g.tipo = 'PUBLICO' " +
             "AND g.activo = true " +
@@ -29,10 +29,16 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
             "ORDER BY g.fechaCreacion DESC")
     List<GrupoChat> findGruposPublicosDisponibles(@Param("usuarioId") Long usuarioId);
 
-    // Buscar grupos por nombre
     @Query("SELECT g FROM GrupoChat g " +
             "WHERE LOWER(g.nombre) LIKE LOWER(CONCAT('%', :query, '%')) " +
             "AND g.activo = true " +
             "ORDER BY g.fechaCreacion DESC")
     List<GrupoChat> buscarPorNombre(@Param("query") String query);
+
+    // 🔥 NUEVO: Buscar grupo por id y creador
+    @Query("SELECT g FROM GrupoChat g WHERE g.id = :grupoId AND g.creador.id = :usuarioId AND g.activo = true")
+    Optional<GrupoChat> findByIdAndCreador(
+            @Param("grupoId") Long grupoId,
+            @Param("usuarioId") Long usuarioId
+    );
 }

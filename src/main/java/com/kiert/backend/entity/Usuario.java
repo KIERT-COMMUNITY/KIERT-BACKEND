@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/entity/Usuario.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
@@ -20,7 +21,7 @@ public class Usuario {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false, length = 20)
+    @Column(name = "nombre_usuario", unique = true, nullable = false, length = 20)
     private String nombreUsuario;
 
     @Column(unique = true, nullable = false, length = 100)
@@ -32,11 +33,26 @@ public class Usuario {
     @Column(name = "foto_perfil_url")
     private String fotoPerfilUrl;
 
+    @Column(name = "en_linea", nullable = false)
+    @Builder.Default
+    private Boolean enLinea = false;
+
+    @Column(name = "ultima_conexion")
+    private Instant ultimaConexion;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean activo = true;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean eliminado = false;
+
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     @Builder.Default
     private Instant fechaCreacion = Instant.now();
 
-    // ✅ RELACIÓN CON PERSONALIZACIÓN
+    // RELACIÓN CON PERSONALIZACIÓN
     @OneToOne(mappedBy = "usuario", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private PersonalizacionUsuario personalizacion;
 
@@ -68,7 +84,7 @@ public class Usuario {
     @Builder.Default
     private List<PasswordResetToken> resetTokens = new ArrayList<>();
 
-    // ✅ MÉTODO PARA OBTENER EL MARCO DEL USUARIO
+    // MÉTODO PARA OBTENER EL MARCO DEL USUARIO
     public String getMarcoId() {
         if (this.personalizacion != null && this.personalizacion.getMarcoId() != null) {
             return this.personalizacion.getMarcoId();

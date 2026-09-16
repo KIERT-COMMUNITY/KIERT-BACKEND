@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/repository/PersonalizacionRepository.java
 package com.kiert.backend.repository;
 
 import com.kiert.backend.entity.PersonalizacionUsuario;

@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/controller/GrupoChatController.java
 package com.kiert.backend.controller;
 
 import com.kiert.backend.dto.*;
@@ -22,28 +23,24 @@ public class GrupoChatController {
     private final GrupoChatService grupoService;
     private final UsuarioActual usuarioActual;
 
-    /**
-     * Crear grupo
-     * POST /api/grupos
-     */
+    // ============================================================
+    // CREAR GRUPO
+    // ============================================================
     @PostMapping
     public ResponseEntity<?> crearGrupo(@RequestBody CrearGrupoDTO dto) {
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-
-            GrupoDTO grupo = grupoService.crearGrupo(usuarioId, dto);
-            return ResponseEntity.status(HttpStatus.CREATED).body(grupo);
+            return ResponseEntity.status(HttpStatus.CREATED).body(grupoService.crearGrupo(usuarioId, dto));
         } catch (Exception e) {
-            log.error("❌ Error al crear grupo: {}", e.getMessage());
+            log.error("❌ Error al crear grupo: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    /**
-     * Listar mis grupos
-     * GET /api/grupos/mis-grupos
-     */
+    // ============================================================
+    // LISTAR
+    // ============================================================
     @GetMapping("/mis-grupos")
     public ResponseEntity<List<GrupoDTO>> misGrupos() {
         Long usuarioId = usuarioActual.id();
@@ -51,10 +48,6 @@ public class GrupoChatController {
         return ResponseEntity.ok(grupoService.listarMisGrupos(usuarioId));
     }
 
-    /**
-     * Listar grupos públicos disponibles
-     * GET /api/grupos/publicos
-     */
     @GetMapping("/publicos")
     public ResponseEntity<List<GrupoDTO>> gruposPublicos() {
         Long usuarioId = usuarioActual.id();
@@ -62,30 +55,58 @@ public class GrupoChatController {
         return ResponseEntity.ok(grupoService.listarGruposPublicos(usuarioId));
     }
 
-    /**
-     * Obtener grupo por ID
-     * GET /api/grupos/{id}
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<GrupoDTO> obtenerGrupo(@PathVariable Long id) {
+    public ResponseEntity<?> obtenerGrupo(@PathVariable Long id) {
         Long usuarioId = usuarioActual.id();
         if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        return ResponseEntity.ok(grupoService.obtenerGrupo(id, usuarioId));
+        try {
+            return ResponseEntity.ok(grupoService.obtenerGrupo(id, usuarioId));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
     }
 
-    /**
-     * Listar miembros del grupo
-     * GET /api/grupos/{id}/miembros
-     */
+    // ============================================================
+    // MIEMBROS
+    // ============================================================
+    @GetMapping("/{id}/miembros")
+    public ResponseEntity<List<MiembroGrupoDTO>> listarMiembros(@PathVariable Long id) {
+        log.info("👥 GET /api/grupos/{}/miembros", id);
+        return ResponseEntity.ok(grupoService.listarMiembros(id));
+    }
+
+    // ============================================================
+    // MENSAJES
+    // ============================================================
     @GetMapping("/{id}/mensajes")
     public ResponseEntity<List<MensajeGrupoDTO>> obtenerMensajes(@PathVariable Long id) {
-        return ResponseEntity.ok(grupoService.obtenerMensajes(id));
+        Long usuarioId = usuarioActual.id();
+        return ResponseEntity.ok(grupoService.obtenerMensajes(id, usuarioId));
     }
 
-    /**
-     * Invitar usuarios
-     * POST /api/grupos/{id}/invitar
-     */
+    @PostMapping("/{id}/mensajes")
+    public ResponseEntity<?> enviarMensaje(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        try {
+            Long usuarioId = usuarioActual.id();
+            if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+            String contenido = body.get("contenido");
+            if (contenido == null || contenido.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Mensaje vacío"));
+            }
+
+            return ResponseEntity.ok(grupoService.enviarMensaje(id, usuarioId, contenido));
+        } catch (Exception e) {
+            log.error("❌ Error al enviar mensaje: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ============================================================
+    // INVITACIONES
+    // ============================================================
     @PostMapping("/{id}/invitar")
     public ResponseEntity<?> invitarUsuarios(
             @PathVariable Long id,
@@ -102,10 +123,6 @@ public class GrupoChatController {
         }
     }
 
-    /**
-     * Aceptar invitación
-     * POST /api/grupos/{id}/aceptar
-     */
     @PostMapping("/{id}/aceptar")
     public ResponseEntity<?> aceptarInvitacion(@PathVariable Long id) {
         try {
@@ -118,10 +135,6 @@ public class GrupoChatController {
         }
     }
 
-    /**
-     * Rechazar invitación
-     * POST /api/grupos/{id}/rechazar
-     */
     @PostMapping("/{id}/rechazar")
     public ResponseEntity<?> rechazarInvitacion(@PathVariable Long id) {
         Long usuarioId = usuarioActual.id();
@@ -130,10 +143,6 @@ public class GrupoChatController {
         return ResponseEntity.ok(Map.of("mensaje", "Invitación rechazada"));
     }
 
-    /**
-     * Unirse a grupo público
-     * POST /api/grupos/{id}/unirse
-     */
     @PostMapping("/{id}/unirse")
     public ResponseEntity<?> unirseAGrupo(@PathVariable Long id) {
         try {
@@ -146,41 +155,67 @@ public class GrupoChatController {
         }
     }
 
-    /**
-     * Salir del grupo     * DELETE /api/grupos/{id}/salir
-     */
     @DeleteMapping("/{id}/salir")
     public ResponseEntity<?> salirDelGrupo(@PathVariable Long id) {
-        Long usuarioId = usuarioActual.id();
-        if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        grupoService.salirDelGrupo(id, usuarioId);
-        return ResponseEntity.ok(Map.of("mensaje", "Saliste del grupo"));
+        try {
+            Long usuarioId = usuarioActual.id();
+            if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            grupoService.salirDelGrupo(id, usuarioId);
+            return ResponseEntity.ok(Map.of("mensaje", "Saliste del grupo"));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
-    /**
-     * Listar invitaciones pendientes
-     * GET /api/grupos/invitaciones
-     */
+    // ============================================================
+    // 🔥 ELIMINAR GRUPO (solo creador o ADMIN)
+    // ============================================================
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> eliminarGrupo(@PathVariable Long id) {
+        try {
+            Long usuarioId = usuarioActual.id();
+            if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+            grupoService.eliminarGrupo(id, usuarioId);
+            return ResponseEntity.ok(Map.of("mensaje", "Grupo eliminado correctamente"));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("❌ Error al eliminar grupo: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ============================================================
+    // 🔥 EXPULSAR MIEMBRO (solo ADMIN)
+    // ============================================================
+    @DeleteMapping("/{id}/miembros/{usuarioId}")
+    public ResponseEntity<?> expulsarMiembro(
+            @PathVariable Long id,
+            @PathVariable Long usuarioId) {
+        try {
+            Long adminId = usuarioActual.id();
+            if (adminId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+            grupoService.expulsarMiembro(id, adminId, usuarioId);
+            return ResponseEntity.ok(Map.of("mensaje", "Miembro expulsado correctamente"));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("❌ Error al expulsar miembro: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ============================================================
+    // INVITACIONES PENDIENTES
+    // ============================================================
     @GetMapping("/invitaciones")
     public ResponseEntity<List<InvitacionGrupoDTO>> invitacionesPendientes() {
         Long usuarioId = usuarioActual.id();
         if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         return ResponseEntity.ok(grupoService.listarInvitacionesPendientes(usuarioId));
-    }
-
-    @PostMapping("/{id}/mensajes")
-    public ResponseEntity<?> enviarMensaje(
-            @PathVariable Long id,
-            @RequestBody Map<String, String> body) {
-        try {
-            Long usuarioId = usuarioActual.id();
-            if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-
-            String contenido = body.get("contenido");
-            MensajeGrupoDTO mensaje = grupoService.enviarMensaje(id, usuarioId, contenido);
-            return ResponseEntity.ok(mensaje);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
     }
 }

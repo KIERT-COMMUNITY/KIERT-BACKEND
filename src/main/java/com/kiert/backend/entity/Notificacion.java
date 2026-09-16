@@ -30,13 +30,14 @@ public class Notificacion {
     @JoinColumn(name = "usuario_origen_id")
     private Usuario usuarioOrigen;
 
-    @Column(nullable = false)
-    private String tipo; // like, comentario, respuesta, solicitud, sistema
+    @Column(nullable = false, length = 30)
+    private String tipo; // like, comentario, respuesta, solicitud, sistema, INVITACION_GRUPO
 
     @Column(nullable = false, length = 500)
     private String mensaje;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean leida = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -51,7 +52,11 @@ public class Notificacion {
     @JoinColumn(name = "respuesta_id")
     private RespuestaComentario respuesta;
 
-    @Column(name = "url")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grupo_id")
+    private GrupoChat grupo;
+
+    @Column(name = "url", length = 500)
     private String url;
 
     @CreationTimestamp
@@ -60,7 +65,4 @@ public class Notificacion {
 
     @Column(name = "fecha_leida")
     private Instant fechaLeida;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "grupo_id")
-    private GrupoChat grupo;
 }

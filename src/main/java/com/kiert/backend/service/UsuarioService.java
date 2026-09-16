@@ -9,9 +9,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -82,5 +84,60 @@ public class UsuarioService {
                 usuario.getEmail(),
                 usuario.getFotoPerfilUrl()
         );
+    }
+
+    // ============================================================
+    // 🔥 ESTADO ONLINE / OFFLINE
+    // ============================================================
+
+    @Transactional
+    public void marcarEnLinea(Long usuarioId) {
+        log.info("🟢 Usuario {} marcado como EN LÍNEA", usuarioId);
+        usuarioRepository.findById(usuarioId).ifPresent(u -> {
+            u.setEnLinea(true);
+            u.setUltimaConexion(Instant.now());
+            usuarioRepository.save(u);
+        });
+    }
+
+    @Transactional
+    public void marcarDesconectado(Long usuarioId) {
+        log.info("🔴 Usuario {} marcado como DESCONECTADO", usuarioId);
+        usuarioRepository.findById(usuarioId).ifPresent(u -> {
+            u.setEnLinea(false);
+            u.setUltimaConexion(Instant.now());
+            usuarioRepository.save(u);
+        });
+    }
+
+    @Transactional
+    public void marcarTodosDesconectados() {
+        log.info("🔴 Marcando TODOS los usuarios como desconectados (arranque)");
+        List<Usuario> todos = usuarioRepository.findAll();
+        todos.forEach(u -> u.setEnLinea(false));
+        usuarioRepository.saveAll(todos);
+    }
+
+    /**
+     * 🧹 Limpieza automática: cada minuto marca como desconectados
+     * a usuarios que llevan más de 5 minutos sin actividad.
+     * Esto evita usuarios "fantasma" en línea por errores de red.
+     */
+    @Scheduled(fixedRate = 60000) // Cada 60 segundos
+    @Transactional
+    public void limpiarUsuariosInactivos() {
+        Instant hace5Minutos = Instant.now().minusSeconds(300);
+        List<Usuario> usuarios = usuarioRepository.findAll();
+
+        List<Usuario> inactivos = usuarios.stream()
+                .filter(u -> Boolean.TRUE.equals(u.getEnLinea()))
+                .filter(u -> u.getUltimaConexion() != null && u.getUltimaConexion().isBefore(hace5Minutos))
+                .collect(Collectors.toList());
+
+        if (!inactivos.isEmpty()) {
+            log.info("🧹 Limpiando {} usuarios inactivos", inactivos.size());
+            inactivos.forEach(u -> u.setEnLinea(false));
+            usuarioRepository.saveAll(inactivos);
+        }
     }
 }

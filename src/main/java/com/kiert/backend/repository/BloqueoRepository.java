@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/repository/BloqueoRepository.java
 package com.kiert.backend.repository;
 
 import com.kiert.backend.entity.Bloqueo;
@@ -53,4 +54,14 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
             @Param("usuarioA") Long usuarioA,
             @Param("usuarioB") Long usuarioB
     );
+
+    // 🔥 NUEVO: Obtener IDs de usuarios que YO bloqueé
+    @Query("SELECT b.usuarioBloqueado.id FROM Bloqueo b " +
+            "WHERE b.usuarioBloqueador.id = :usuarioId AND b.activo = true")
+    List<Long> findUsuariosBloqueadosIds(@Param("usuarioId") Long usuarioId);
+
+    // 🔥 NUEVO: Obtener IDs de usuarios que ME bloquearon
+    @Query("SELECT b.usuarioBloqueador.id FROM Bloqueo b " +
+            "WHERE b.usuarioBloqueado.id = :usuarioId AND b.activo = true")
+    List<Long> findUsuariosQueMeBloquearonIds(@Param("usuarioId") Long usuarioId);
 }

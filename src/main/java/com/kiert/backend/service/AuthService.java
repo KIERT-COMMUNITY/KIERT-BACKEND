@@ -34,7 +34,8 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
-    private final EmailService emailService; // ✅ INYECTAR EmailService
+    private final EmailService emailService;
+    private final UsuarioService usuarioService; // ✅ NUEVO: para marcar en línea/desconectado
 
     // ========== REGISTRO ==========
     @Transactional
@@ -54,6 +55,7 @@ public class AuthService {
                 .email(datos.email())
                 .passwordHash(passwordEncoder.encode(datos.password()))
                 .fechaCreacion(Instant.now())
+                .enLinea(false) // ✅ NUEVO: por defecto offline
                 .build();
 
         usuario = usuarioRepository.save(usuario);
@@ -66,11 +68,15 @@ public class AuthService {
             log.warn("⚠️ No se pudo enviar correo de bienvenida: {}", e.getMessage());
         }
 
+        // 🔥 Marcar como en línea al registrarse
+        usuarioService.marcarEnLinea(usuario.getId());
+
         String token = jwtService.generarToken(usuario.getId(), usuario.getEmail());
         return new AuthResponseDTO(token, aDTO(usuario));
     }
 
     // ========== LOGIN ==========
+    @Transactional // ✅ NUEVO: transacción para actualizar estado
     public AuthResponseDTO login(LoginRequestDTO datos) {
         log.info("🔑 Login para usuario: {}", datos.email());
 
@@ -83,8 +89,22 @@ public class AuthService {
         Usuario usuario = usuarioRepository.findByEmail(datos.email())
                 .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
 
+        // 🔥 Marcar como en línea al iniciar sesión
+        usuarioService.marcarEnLinea(usuario.getId());
+        log.info("🟢 Usuario {} marcado como EN LÍNEA tras login", usuario.getId());
+
         String token = jwtService.generarToken(usuario.getId(), usuario.getEmail());
         return new AuthResponseDTO(token, aDTO(usuario));
+    }
+
+    // ========== LOGOUT ==========
+    @Transactional
+    public void logout(Long usuarioId) {
+        log.info("🔴 Cerrando sesión para usuario: {}", usuarioId);
+        if (usuarioId != null) {
+            usuarioService.marcarDesconectado(usuarioId);
+            log.info("🔴 Usuario {} marcado como DESCONECTADO", usuarioId);
+        }
     }
 
     // ========== SOLICITAR RECUPERACIÓN DE CONTRASEÑA ==========
@@ -95,13 +115,12 @@ public class AuthService {
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No existe un usuario con ese email"));
 
-        // ✅ Eliminar tokens anteriores del mismo usuario
         passwordResetTokenRepository.deleteAll(
                 passwordResetTokenRepository.findByUsuarioId(usuario.getId())
         );
 
         String token = UUID.randomUUID().toString();
-        Instant fechaExpiracion = Instant.now().plusSeconds(3600); // 1 hora
+        Instant fechaExpiracion = Instant.now().plusSeconds(3600);
 
         PasswordResetToken resetToken = PasswordResetToken.builder()
                 .token(token)
@@ -113,7 +132,6 @@ public class AuthService {
         passwordResetTokenRepository.save(resetToken);
         log.info("✅ Token de recuperación generado para: {}", email);
 
-        // ✅ Enviar correo con el token
         try {
             emailService.enviarCorreoRecuperacion(email, token);
             log.info("✅ Correo de recuperación enviado a: {}", email);

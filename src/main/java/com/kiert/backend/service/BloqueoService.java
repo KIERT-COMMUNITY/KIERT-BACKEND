@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/BloqueoService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.BloqueoDTO;
@@ -52,7 +53,9 @@ public class BloqueoService {
                 .usuarioBloqueador(bloqueador)
                 .usuarioBloqueado(bloqueado)
                 .tipo("BLOQUEO")
-                .motivo(dto.motivo() != null && !dto.motivo().isBlank() ? dto.motivo() : "Sin motivo especificado")
+                .motivo(dto.motivo() != null && !dto.motivo().isBlank()
+                        ? dto.motivo()
+                        : "Sin motivo especificado")
                 .fechaCreacion(Instant.now())
                 .activo(true)
                 .build();

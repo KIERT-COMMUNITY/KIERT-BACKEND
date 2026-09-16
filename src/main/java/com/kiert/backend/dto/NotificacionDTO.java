@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/dto/NotificacionDTO.java
 package com.kiert.backend.dto;
 
 import java.time.Instant;
@@ -15,5 +16,5 @@ public record NotificacionDTO(
         Long comentarioId,
         Long respuestaId,
         String url,
-        Long grupoId  // ✅ AGREGAR ESTE CAMPO
+        Long grupoId
 ) {}

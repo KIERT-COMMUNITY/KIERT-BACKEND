@@ -5,6 +5,7 @@ import com.kiert.backend.dto.request.LoginRequestDTO;
 import com.kiert.backend.dto.request.RegisterRequestDTO;
 import com.kiert.backend.dto.SolicitarRecuperacionDTO;
 import com.kiert.backend.dto.RestablecerContrasenaDTO;
+import com.kiert.backend.security.UsuarioActual;
 import com.kiert.backend.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,14 +17,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.PATCH, RequestMethod.OPTIONS})
-
+@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {
+        RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT,
+        RequestMethod.DELETE, RequestMethod.PATCH, RequestMethod.OPTIONS
+})
 public class AuthController {
 
-
     private final AuthService authService;
-
-
+    private final UsuarioActual usuarioActual; // ✅ NUEVO: para obtener el usuario autenticado
 
     @PostMapping("/registro")
     public ResponseEntity<AuthResponseDTO> registrar(@Valid @RequestBody RegisterRequestDTO datos) {
@@ -35,6 +36,23 @@ public class AuthController {
     public ResponseEntity<AuthResponseDTO> login(@Valid @RequestBody LoginRequestDTO datos) {
         log.info("🔑 Login para usuario: {}", datos.email());
         return ResponseEntity.ok(authService.login(datos));
+    }
+
+    // ✅ NUEVO: Endpoint de logout
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        Long usuarioId = usuarioActual.id();
+        log.info("🔴 Solicitud de logout para usuario: {}", usuarioId);
+        authService.logout(usuarioId);
+        return ResponseEntity.ok().build();
+    }
+
+    // ✅ NUEVO: Endpoint de logout vía beacon (para cierre de pestaña)
+    @PostMapping("/logout-beacon")
+    public ResponseEntity<Void> logoutBeacon(@RequestParam(required = false) Long usuarioId) {
+        log.info("🔴 Logout vía beacon para usuario: {}", usuarioId);
+        authService.logout(usuarioId);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/recuperar")
