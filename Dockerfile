@@ -31,7 +31,7 @@ USER spring:spring
 # Copiar el JAR generado desde la etapa de build
 COPY --from=builder /app/target/*.jar app.jar
 
-# Exponer el puerto de Spring Boot
+#  el puerto de Spring Boot
 EXPOSE 8080
 
 # Health check para Docker Compose
