@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     tools {
-        // ⚠️ Los nombres deben coincidir EXACTAMENTE con Global Tool Configuration
-        jdk 'jdk-17'
-        maven 'Maven-3.9'
+        // ⚠️ Los nombres DEBEN coincidir exactamente con Global Tool Configuration de Jenkins
+        jdk 'JDK17'
+        maven 'maven-3.9'
     }
 
     parameters {
@@ -15,7 +15,7 @@ pipeline {
         )
         string(
                 name: 'BRANCH',
-                defaultValue: 'develop',
+                defaultValue: 'develop10',
                 description: 'Rama a construir'
         )
         booleanParam(
@@ -25,8 +25,13 @@ pipeline {
         )
         booleanParam(
                 name: 'RUN_SONAR',
-                defaultValue: true,
-                description: 'Ejecutar análisis de SonarQube'
+                defaultValue: false,
+                description: 'Ejecutar análisis de SonarQube (requiere servidor configurado)'
+        )
+        booleanParam(
+                name: 'BUILD_DOCKER',
+                defaultValue: false,
+                description: 'Construir imagen Docker (solo staging/production)'
         )
     }
 
@@ -46,7 +51,7 @@ pipeline {
                         branches: [[name: "*/${params.BRANCH}"]],
                         userRemoteConfigs: [[
                                                     url: 'https://github.com/KIERT-COMMUNITY/KIERT-BACKEND.git',
-                                                    credentialsId: 'github-credentials'
+                                                    credentialsId: 'Ardamins'
                                             ]]
                 )
                 script {
@@ -132,7 +137,8 @@ pipeline {
         stage('Docker Build') {
             when {
                 expression {
-                    params.ENVIRONMENT == 'production' || params.ENVIRONMENT == 'staging'
+                    params.BUILD_DOCKER == true &&
+                            (params.ENVIRONMENT == 'production' || params.ENVIRONMENT == 'staging')
                 }
             }
             steps {
