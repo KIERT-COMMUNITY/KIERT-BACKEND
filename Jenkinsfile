@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        // ⚠️ El nombre debe coincidir con Global Tool Configuration
+        // ⚠️ Los nombres deben coincidir EXACTAMENTE con Global Tool Configuration
         jdk 'jdk-17'
         maven 'maven-3.9'
     }
@@ -35,8 +35,6 @@ pipeline {
         SONAR_PROJECT_NAME = 'KIERT-BACKEND'
         IMAGE_NAME         = 'kiert-backend'
         IMAGE_TAG          = "${env.BUILD_NUMBER}"
-        // Token de SonarQube (se obtiene del credential configurado)
-        SONAR_TOKEN        = credentials('sonar-token')
     }
 
     stages {
@@ -106,7 +104,7 @@ pipeline {
             steps {
                 withSonarQubeEnv('SonarQube') {
                     bat """
-                        echo "Ejecutando análisis de SonarQube..."
+                        echo "Ejecutando analisis de SonarQube..."
                         mvn sonar:sonar -B ^
                             -Dsonar.projectKey=${env.SONAR_PROJECT_KEY} ^
                             -Dsonar.projectName=${env.SONAR_PROJECT_NAME} ^
