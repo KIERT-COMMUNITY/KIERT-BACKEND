@@ -1,0 +1,19 @@
+package com.kiert.backend.entity;
+
+public enum EventoAuditoria {
+    REGISTRO,
+    VERIFICACION_EMAIL,
+    REENVIO_CODIGO,
+    LOGIN,
+    LOGOUT,
+    LOGIN_FALLIDO,
+    CUENTA_NO_VERIFICADA,
+    SOLICITUD_RECUPERACION,
+    CAMBIO_PASSWORD,
+    CAMBIO_PERFIL,
+    CAMBIO_EMAIL,
+    CAMBIO_FOTO_PERFIL,
+    BLOQUEO,
+    DESBLOQUEO,
+    ELIMINACION_CUENTA
+}

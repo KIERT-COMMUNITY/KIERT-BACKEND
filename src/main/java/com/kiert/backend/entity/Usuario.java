@@ -33,6 +33,27 @@ public class Usuario {
     @Column(name = "foto_perfil_url")
     private String fotoPerfilUrl;
 
+    @Column(name = "bio", length = 255)
+    private String bio;
+
+    @Column(name = "marco_id", length = 50)
+    @Builder.Default
+    private String marcoId = "none";
+
+    // ============================================================
+    // ESTADO DE LA CUENTA
+    // ============================================================
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean activo = false;
+
+    @Column(name = "email_verificado", nullable = false)
+    @Builder.Default
+    private Boolean emailVerificado = false;
+
+    @Column(name = "fecha_verificacion_email")
+    private Instant fechaVerificacionEmail;
+
     @Column(name = "en_linea", nullable = false)
     @Builder.Default
     private Boolean enLinea = false;
@@ -42,17 +63,37 @@ public class Usuario {
 
     @Column(nullable = false)
     @Builder.Default
-    private Boolean activo = true;
-
-    @Column(nullable = false)
-    @Builder.Default
     private Boolean eliminado = false;
 
+    @Column(name = "fecha_eliminacion")
+    private Instant fechaEliminacion;
+
+    // ============================================================
+    // AUDITORIA DE PASSWORD
+    // ============================================================
+    @Column(name = "fecha_ultimo_cambio_password")
+    private Instant fechaUltimoCambioPassword;
+
+    @Column(name = "intentos_login_fallidos", nullable = false)
+    @Builder.Default
+    private Integer intentosLoginFallidos = 0;
+
+    @Column(name = "bloqueado_hasta")
+    private Instant bloqueadoHasta;
+
+    // ============================================================
+    // FECHAS
+    // ============================================================
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     @Builder.Default
     private Instant fechaCreacion = Instant.now();
 
-    // RELACIÓN CON PERSONALIZACIÓN
+    @Column(name = "fecha_actualizacion")
+    private Instant fechaActualizacion;
+
+    // ============================================================
+    // RELACIONES
+    // ============================================================
     @OneToOne(mappedBy = "usuario", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private PersonalizacionUsuario personalizacion;
 
@@ -84,11 +125,18 @@ public class Usuario {
     @Builder.Default
     private List<PasswordResetToken> resetTokens = new ArrayList<>();
 
-    // MÉTODO PARA OBTENER EL MARCO DEL USUARIO
+    // ============================================================
+    // METODOS AUXILIARES
+    // ============================================================
     public String getMarcoId() {
         if (this.personalizacion != null && this.personalizacion.getMarcoId() != null) {
             return this.personalizacion.getMarcoId();
         }
         return "none";
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.fechaActualizacion = Instant.now();
     }
 }
