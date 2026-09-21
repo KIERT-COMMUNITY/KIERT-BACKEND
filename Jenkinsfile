@@ -4,7 +4,7 @@ pipeline {
     tools {
         // ⚠️ Los nombres deben coincidir EXACTAMENTE con Global Tool Configuration
         jdk 'jdk-17'
-        maven 'maven-3.9'
+        maven 'Maven-3.9'
     }
 
     parameters {
