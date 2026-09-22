@@ -5,9 +5,10 @@ public record ConversacionDTO(
         Long usuarioId,
         String nombreUsuario,
         String fotoPerfilUrl,
-        String marcoId,              // ✅ NUEVO
+        String marcoId,
         String ultimoMensaje,
-        String ultimaConexion,
+        String ultimaConexion,      // ← el que tienes
         long noLeidos,
-        Boolean online
+        Boolean online,
+        String ultimaConexionReal   // ← 9no campo (¡ya lo tienes añadido!)
 ) {}

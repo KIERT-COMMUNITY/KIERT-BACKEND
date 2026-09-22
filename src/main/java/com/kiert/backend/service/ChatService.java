@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -46,61 +47,80 @@ public class ChatService {
         List<Mensaje> mensajes = mensajeRepository.findTodosLosMensajesDeUsuario(usuarioId);
         if (mensajes.isEmpty()) return new ArrayList<>();
 
-        return mensajes.stream()
+        // 1️⃣ Agrupar por el ID del otro usuario
+        Map<Long, List<Mensaje>> mensajesPorUsuario = mensajes.stream()
                 .filter(m -> {
                     Long otroId = m.getEmisor().getId().equals(usuarioId)
                             ? m.getReceptor().getId()
                             : m.getEmisor().getId();
                     return !bloqueadosIds.contains(otroId) && !bloqueadoresIds.contains(otroId);
                 })
-                .collect(Collectors.groupingBy(
-                        m -> m.getEmisor().getId().equals(usuarioId)
+                .collect(Collectors.groupingBy(m ->
+                        m.getEmisor().getId().equals(usuarioId)
                                 ? m.getReceptor().getId()
                                 : m.getEmisor().getId()
-                ))
-                .entrySet().stream()
-                .map(entry -> {
-                    Long otroUsuarioId = entry.getKey();
-                    List<Mensaje> mensajesConUsuario = entry.getValue();
+                ));
 
-                    Mensaje ultimo = mensajesConUsuario.stream()
-                            .max(Comparator.comparing(Mensaje::getFechaEnvio))
-                            .orElse(null);
+        // 2️⃣ Convertir a DTOs (con tipo explícito)
+        List<ConversacionDTO> conversaciones = new ArrayList<>();
 
-                    long noLeidos = mensajesConUsuario.stream()
-                            .filter(m -> m.getReceptor().getId().equals(usuarioId) && !m.isLeido())
-                            .count();
+        for (Map.Entry<Long, List<Mensaje>> entry : mensajesPorUsuario.entrySet()) {
+            Long otroUsuarioId = entry.getKey();
+            List<Mensaje> mensajesConUsuario = entry.getValue();
 
-                    Usuario otroUsuario = usuarioRepository.findById(otroUsuarioId)
-                            .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+            Mensaje ultimo = mensajesConUsuario.stream()
+                    .max(Comparator.comparing(Mensaje::getFechaEnvio))
+                    .orElse(null);
 
-                    String marcoId = personalizacionRepository
-                            .findByUsuarioId(otroUsuarioId)
-                            .map(PersonalizacionUsuario::getMarcoId)
-                            .orElse("none");
+            long noLeidos = mensajesConUsuario.stream()
+                    .filter(m -> m.getReceptor().getId().equals(usuarioId) && !m.isLeido())
+                    .count();
 
-                    // 🔥 ONLINE REAL
-                    Boolean online = otroUsuario.getEnLinea() != null && otroUsuario.getEnLinea();
+            Usuario otroUsuario = usuarioRepository.findById(otroUsuarioId)
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-                    return new ConversacionDTO(
-                            otroUsuario.getId(),
-                            otroUsuario.getNombreUsuario(),
-                            otroUsuario.getFotoPerfilUrl(),
-                            marcoId,
-                            ultimo != null ? ultimo.getContenido() : null,
-                            ultimo != null ? ultimo.getFechaEnvio().toString() : null,
-                            noLeidos,
-                            online
-                    );
-                })
-                .sorted((c1, c2) -> {
-                    if (c1.ultimaConexion() == null) return 1;
-                    if (c2.ultimaConexion() == null) return -1;
-                    return c2.ultimaConexion().compareTo(c1.ultimaConexion());
-                })
-                .collect(Collectors.toList());
+            String marcoId = personalizacionRepository
+                    .findByUsuarioId(otroUsuarioId)
+                    .map(PersonalizacionUsuario::getMarcoId)
+                    .orElse("none");
+
+            // 🔥 Estado online REAL
+            Boolean online = otroUsuario.getEnLinea() != null && otroUsuario.getEnLinea();
+
+            // 🔥 Última conexión REAL del usuario
+            String ultimaConexionReal = otroUsuario.getUltimaConexion() != null
+                    ? otroUsuario.getUltimaConexion().toString()
+                    : null;
+
+            // 🔥 Fecha del último mensaje (para ordenar)
+            String fechaUltimoMensaje = ultimo != null
+                    ? ultimo.getFechaEnvio().toString()
+                    : null;
+
+            conversaciones.add(new ConversacionDTO(
+                    otroUsuario.getId(),
+                    otroUsuario.getNombreUsuario(),
+                    otroUsuario.getFotoPerfilUrl(),
+                    marcoId,
+                    ultimo != null ? ultimo.getContenido() : null,
+                    fechaUltimoMensaje,         // ultimaConexion (fecha mensaje)
+                    noLeidos,
+                    online,
+                    ultimaConexionReal          // ultimaConexionReal (fecha real)
+            ));
+        }
+
+        // 3️⃣ Ordenar por fecha del último mensaje (descendente)
+        conversaciones.sort((c1, c2) -> {
+            String f1 = c1.ultimaConexion();
+            String f2 = c2.ultimaConexion();
+            if (f1 == null) return 1;
+            if (f2 == null) return -1;
+            return f2.compareTo(f1);
+        });
+
+        return conversaciones;
     }
-
     // ============================================================
     // MENSAJES
     // ============================================================

@@ -9,7 +9,7 @@ import org.springframework.cache.annotation.EnableCaching;
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableCaching
-@EnableConfigurationProperties  // ✅ Habilita el uso de @ConfigurationProperties
+@EnableConfigurationProperties  //  Habilita el uso de @ConfigurationProperties
 public class KiertBackendApplication {
 
     public static void main(String[] args) {
