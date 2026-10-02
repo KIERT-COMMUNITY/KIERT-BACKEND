@@ -31,7 +31,7 @@ public class PerfilService {
     @Transactional(readOnly = true)
     @Cacheable(value = "perfil", key = "#usuarioId")
     public UsuarioDTO obtenerPerfil(Long usuarioId) {
-        log.info("📋 [DB] Obteniendo perfil del usuario {}", usuarioId);
+        log.info("[DB] Obteniendo perfil del usuario {}", usuarioId);
         Usuario usuario = buscar(usuarioId);
         return aDTO(usuario);
     }
@@ -54,7 +54,7 @@ public class PerfilService {
             @CacheEvict(value = "gruposUsuario", allEntries = true)
     })
     public UsuarioDTO actualizarFotoPerfil(Long usuarioId, String urlFoto) {
-        log.info("📸 Actualizando foto de perfil del usuario {}: {}", usuarioId, urlFoto);
+        log.info("Actualizando foto de perfil del usuario {}: {}", usuarioId, urlFoto);
         Usuario usuario = buscar(usuarioId);
         usuario.setFotoPerfilUrl(urlFoto);
         usuario = usuarioRepository.save(usuario);
@@ -78,7 +78,7 @@ public class PerfilService {
             @CacheEvict(value = "gruposUsuario", allEntries = true)
     })
     public UsuarioDTO subirFotoPerfil(Long usuarioId, MultipartFile archivo) {
-        log.info("📸 Subiendo foto para usuario: {}", usuarioId);
+        log.info("Subiendo foto para usuario: {}", usuarioId);
 
         if (archivo == null || archivo.isEmpty()) {
             throw new BadRequestException("Debes enviar una imagen.");
@@ -92,9 +92,9 @@ public class PerfilService {
 
         try {
             String urlFoto = storageService.subirArchivo(archivo);
-            log.info("✅ Foto de perfil subida para el usuario {}: {}", usuarioId, urlFoto);
+            log.info("Foto de perfil subida para el usuario {}: {}", usuarioId, urlFoto);
 
-            // ⚠️ NO llamar a actualizarFotoPerfil() internamente.
+            // NO llamar a actualizarFotoPerfil() internamente.
             // El @CacheEvict de este método ya se encarga de la invalidación.
             Usuario usuario = buscar(usuarioId);
             usuario.setFotoPerfilUrl(urlFoto);
@@ -103,7 +103,7 @@ public class PerfilService {
         } catch (BadRequestException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.error("❌ Error al subir foto de perfil para el usuario {}: {}", usuarioId, ex.getMessage());
+            log.error("Error al subir foto de perfil para el usuario {}: {}", usuarioId, ex.getMessage());
             throw new BadRequestException("No se pudo subir la imagen. Intenta nuevamente.");
         }
     }
@@ -113,7 +113,7 @@ public class PerfilService {
     // ============================================================
     @CacheEvict(value = "perfil", key = "#usuarioId")
     public void eliminarCachePerfil(Long usuarioId) {
-        log.info("🧹 Eliminando caché del usuario {}", usuarioId);
+        log.info("Eliminando caché del usuario {}", usuarioId);
         // @CacheEvict ya hace el trabajo, no necesitas redisTemplate.delete()
     }
 

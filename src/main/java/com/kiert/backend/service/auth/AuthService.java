@@ -208,7 +208,7 @@ public class AuthService {
     public AuthResponseDTO login(LoginRequestDTO datos) {
         log.info("Login para usuario: {}", datos.email());
 
-        // 🔒 RATE LIMITING: máx 5 intentos cada 15 min por email
+        // RATE LIMITING: máx 5 intentos cada 15 min por email
         rateLimitService.verificar(
                 "login:email:" + datos.email(),
                 5,
@@ -258,7 +258,7 @@ public class AuthService {
             throw new BadRequestException("Credenciales invalidas");
         }
 
-        // ✅ LOGIN EXITOSO: resetear rate limit
+        // LOGIN EXITOSO: resetear rate limit
         rateLimitService.resetear("login:email:" + datos.email());
 
         // Marcar en línea
@@ -287,7 +287,7 @@ public class AuthService {
         if (usuarioId != null) {
             usuarioService.marcarDesconectado(usuarioId);
 
-            // 🔒 AÑADIR TOKEN A BLACKLIST
+            // AÑADIR TOKEN A BLACKLIST
             if (token != null && !token.isBlank()) {
                 try {
                     Instant expiracion = jwtService.obtenerExpiracion(token);
@@ -380,14 +380,14 @@ public class AuthService {
             throw e;
         }
 
-        // ✅ Éxito: resetear rate limit
+        // Éxito: resetear rate limit
         rateLimitService.resetear("reset:email:" + email);
 
         usuario.setPasswordHash(passwordEncoder.encode(nuevaPassword));
         usuario.setFechaUltimoCambioPassword(Instant.now());
         usuarioRepository.save(usuario);
 
-        // 🔒 Invalidar TODOS los tokens del usuario (forzar re-login)
+        //Invalidar TODOS los tokens del usuario (forzar re-login)
         // (Esto requiere que guardes los tokens por usuario o uses un "token version")
         // Por ahora, no lo hacemos porque JwtService no lo soporta.
 

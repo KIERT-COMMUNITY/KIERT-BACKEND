@@ -24,11 +24,11 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     /**
      * Verifica si ya existe un reporte del mismo usuario para el mismo contenido.
      *
-     * ⚠️ PROBLEMA CONOCIDO: si pasas `null` en `postId` y `comentarioId`,
+     * ️ PROBLEMA CONOCIDO: si pasas `null` en `postId` y `comentarioId`,
      * la condición `(:postId IS NULL OR r.post.id = :postId)` se cumple SIEMPRE,
      * lo cual puede dar falsos positivos.
      *
-     * ✅ SOLUCIÓN: usar la versión específica según el tipo de reporte.
+     *  SOLUCIÓN: usar la versión específica según el tipo de reporte.
      */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
@@ -49,7 +49,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     /**
-     * ✅ NUEVO: Verifica duplicado de reporte a un POST (sin falsos positivos).
+     *NUEVO: Verifica duplicado de reporte a un POST (sin falsos positivos).
      */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
@@ -63,7 +63,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     /**
-     * ✅ NUEVO: Verifica duplicado de reporte a un COMENTARIO.
+     * NUEVO: Verifica duplicado de reporte a un COMENTARIO.
      */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
@@ -77,7 +77,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     /**
-     * ✅ NUEVO: Verifica duplicado de reporte a una RESPUESTA.
+     *NUEVO: Verifica duplicado de reporte a una RESPUESTA.
      */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
@@ -91,7 +91,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     /**
-     * ✅ NUEVO: Verifica duplicado de reporte a un USUARIO.
+     *  NUEVO: Verifica duplicado de reporte a un USUARIO.
      */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
@@ -131,7 +131,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     /**
-     * ✅ NUEVO: Reportes PENDIENTES (para el panel admin).
+     * NUEVO: Reportes PENDIENTES (para el panel admin).
      */
     @Query("""
             SELECT r FROM Reporte r
@@ -146,7 +146,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     Page<Reporte> findPendientes(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Reportes asignados a un moderador.
+     * NUEVO: Reportes asignados a un moderador.
      */
     @Query("""
             SELECT r FROM Reporte r
@@ -182,7 +182,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     * NUEVO: Versión paginada.
      */
     @Query("""
             SELECT r FROM Reporte r
@@ -199,7 +199,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     /**
-     * ✅ NUEVO: Reportes CONTRA un usuario específico.
+     * NUEVO: Reportes CONTRA un usuario específico.
      * Útil para ver "¿cuántas veces ha sido reportado X?".
      */
     @Query("""
@@ -214,7 +214,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     /**
-     * ✅ NUEVO: Cuenta reportes contra un usuario.
+     * NUEVO: Cuenta reportes contra un usuario.
      */
     @Query("""
             SELECT COUNT(r) FROM Reporte r
@@ -227,7 +227,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Obtiene un reporte con todas sus relaciones cargadas.
+     * NUEVO: Obtiene un reporte con todas sus relaciones cargadas.
      */
     @Query("""
             SELECT r FROM Reporte r
@@ -252,7 +252,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     long countByEstado(String estado);
 
     /**
-     * ✅ NUEVO: Cuenta reportes agrupados por estado.
+     * NUEVO: Cuenta reportes agrupados por estado.
      * Devuelve [estado, count]. 1 query en lugar de 4.
      */
     @Query("""
@@ -263,7 +263,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     List<Object[]> contarPorEstado();
 
     /**
-     * ✅ NUEVO: Cuenta reportes agrupados por tipo.
+     * NUEVO: Cuenta reportes agrupados por tipo.
      * Devuelve [tipo, count].
      */
     @Query("""
@@ -275,7 +275,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     List<Object[]> contarPorTipo();
 
     /**
-     * ✅ NUEVO: Cuenta reportes agrupados por motivo.
+     * NUEVO: Cuenta reportes agrupados por motivo.
      * Devuelve [motivo, count].
      */
     @Query("""
@@ -288,7 +288,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     List<Object[]> contarPorMotivo();
 
     /**
-     * ✅ NUEVO: Cuenta reportes por rango de fechas (para reportes).
+     * NUEVO: Cuenta reportes por rango de fechas (para reportes).
      */
     @Query("""
             SELECT COUNT(r) FROM Reporte r
@@ -305,7 +305,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top usuarios más reportados (no rechazados).
+     * NUEVO: Top usuarios más reportados (no rechazados).
      * Devuelve [usuarioId, count].
      */
     @Query("""
@@ -319,7 +319,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     List<Object[]> topUsuariosMasReportados(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Top usuarios que MÁS reportan (por si abusan del sistema).
+     * NUEVO: Top usuarios que MÁS reportan (por si abusan del sistema).
      * Devuelve [usuarioId, count].
      */
     @Query("""
@@ -339,7 +339,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cambia el estado de varios reportes en 1 query.
+     * NUEVO: Cambia el estado de varios reportes en 1 query.
      * Útil para moderación en lote.
      */
     @Modifying
@@ -367,7 +367,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina reportes RESUELTOS/RECHAZADOS con más de N días.
+     * NUEVO: Elimina reportes RESUELTOS/RECHAZADOS con más de N días.
      * Se ejecuta con un @Scheduled para mantener la tabla pequeña.
      */
     @Modifying
@@ -379,7 +379,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     int eliminarResueltosAntiguos(@Param("limite") Instant limite);
 
     /**
-     * ✅ NUEVO: Cuenta cuántos reportes se eliminarán (para saber el impacto).
+     * NUEVO: Cuenta cuántos reportes se eliminarán (para saber el impacto).
      */
     @Query("""
             SELECT COUNT(r) FROM Reporte r
@@ -393,13 +393,13 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de reportes en el sistema.
+     * NUEVO: Total de reportes en el sistema.
      */
     @Query("SELECT COUNT(r) FROM Reporte r")
     long countTotal();
 
     /**
-     * ✅ NUEVO: Total de reportes activos (no resueltos ni rechazados).
+     * NUEVO: Total de reportes activos (no resueltos ni rechazados).
      */
     @Query("""
             SELECT COUNT(r) FROM Reporte r

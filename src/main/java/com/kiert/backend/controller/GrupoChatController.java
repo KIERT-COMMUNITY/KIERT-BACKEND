@@ -34,7 +34,7 @@ public class GrupoChatController {
             if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             return ResponseEntity.status(HttpStatus.CREATED).body(grupoService.crearGrupo(usuarioId, dto));
         } catch (Exception e) {
-            log.error("❌ Error al crear grupo: {}", e.getMessage(), e);
+            log.error("Error al crear grupo: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -72,7 +72,7 @@ public class GrupoChatController {
     // ============================================================
     @GetMapping("/{id}/miembros")
     public ResponseEntity<List<MiembroGrupoDTO>> listarMiembros(@PathVariable Long id) {
-        log.info("👥 GET /api/grupos/{}/miembros", id);
+        log.info("GET /api/grupos/{}/miembros", id);
         return ResponseEntity.ok(grupoService.listarMiembros(id));
     }
 
@@ -100,13 +100,13 @@ public class GrupoChatController {
 
             return ResponseEntity.ok(grupoService.enviarMensaje(id, usuarioId, contenido));
         } catch (Exception e) {
-            log.error("❌ Error al enviar mensaje: {}", e.getMessage(), e);
+            log.error("Error al enviar mensaje: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
     // ============================================================
-    // 📎 MENSAJE CON ARCHIVO
+    // MENSAJE CON ARCHIVO
     // ============================================================
     @PostMapping("/{id}/mensajes/con-archivo")
     public ResponseEntity<?> enviarMensajeConArchivo(
@@ -123,7 +123,7 @@ public class GrupoChatController {
 
             return ResponseEntity.ok(grupoService.enviarMensajeConArchivo(id, usuarioId, contenido, archivo));
         } catch (Exception e) {
-            log.error("❌ Error al enviar mensaje con archivo: {}", e.getMessage(), e);
+            log.error("Error al enviar mensaje con archivo: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -207,7 +207,7 @@ public class GrupoChatController {
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error al eliminar grupo: {}", e.getMessage(), e);
+            log.error("Error al eliminar grupo: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -228,7 +228,7 @@ public class GrupoChatController {
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error al expulsar miembro: {}", e.getMessage(), e);
+            log.error("Error al expulsar miembro: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -244,7 +244,7 @@ public class GrupoChatController {
     }
 
     // ============================================================
-    // 📸 FOTO DEL GRUPO
+    // FOTO DEL GRUPO
     // ============================================================
     @PostMapping("/{id}/foto")
     public ResponseEntity<?> actualizarFoto(
@@ -258,7 +258,7 @@ public class GrupoChatController {
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error al subir foto: {}", e.getMessage(), e);
+            log.error("Error al subir foto: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -278,7 +278,7 @@ public class GrupoChatController {
     }
 
     // ============================================================
-    // ✏️ EDITAR INFO DEL GRUPO
+    // EDITAR INFO DEL GRUPO
     // ============================================================
     @PatchMapping("/{id}/info")
     public ResponseEntity<?> actualizarInfo(
@@ -300,7 +300,7 @@ public class GrupoChatController {
     }
 
     // ============================================================
-    // 🔗 INVITACIONES POR LINK
+    // INVITACIONES POR LINK
     // ============================================================
     @PostMapping("/{id}/invitacion-link")
     public ResponseEntity<?> generarLinkInvitacion(
@@ -315,7 +315,7 @@ public class GrupoChatController {
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error al generar link: {}", e.getMessage(), e);
+            log.error("Error al generar link: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -350,7 +350,7 @@ public class GrupoChatController {
     }
 
     // ============================================================
-    // 🌐 INFO PÚBLICA DE INVITACIÓN (sin auth)
+    // INFO PÚBLICA DE INVITACIÓN (sin auth)
     // ============================================================
     @GetMapping("/invitacion/{token}")
     public ResponseEntity<InfoInvitacionDTO> infoInvitacion(@PathVariable String token) {
@@ -358,7 +358,7 @@ public class GrupoChatController {
     }
 
     // ============================================================
-    // 🎉 UNIRSE CON LINK (requiere auth)
+    // UNIRSE CON LINK (requiere auth)
     // ============================================================
     @PostMapping("/invitacion/{token}/unirse")
     public ResponseEntity<?> unirseConLink(@PathVariable String token) {
@@ -372,10 +372,11 @@ public class GrupoChatController {
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error al unirse con link: {}", e.getMessage(), e);
+            log.error("Error al unirse con link: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
     @GetMapping("/{id}/historial")
     public ResponseEntity<?> listarHistorial(@PathVariable Long id) {
         try {

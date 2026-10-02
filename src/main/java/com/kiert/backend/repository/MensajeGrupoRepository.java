@@ -34,7 +34,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     List<MensajeGrupo> findMensajesDeGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para chats largos).
+     *NUEVO: Versión paginada (recomendada para chats largos).
      * El frontend puede pedir "cargar más" con page=1, 2, ...
      * Ordena DESC para traer los más recientes primero.
      */
@@ -51,7 +51,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     );
 
     /**
-     * ✅ NUEVO: Mensajes desde una fecha específica.
+     * NUEVO: Mensajes desde una fecha específica.
      * Útil para "cargar mensajes nuevos" desde la última vez que el usuario vio el chat.
      */
     @Query("""
@@ -68,7 +68,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     );
 
     /**
-     * ✅ NUEVO: Rango de fechas (para exportar o auditar).
+     * NUEVO: Rango de fechas (para exportar o auditar).
      */
     @Query("""
             SELECT m FROM MensajeGrupo m
@@ -89,7 +89,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Último mensaje de un grupo.
+     * NUEVO: Último mensaje de un grupo.
      * Usado para mostrar el preview en el sidebar.
      */
     @Query("""
@@ -105,7 +105,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     );
 
     /**
-     * ✅ NUEVO (OPTIMIZACIÓN CRÍTICA): Último mensaje de CADA grupo
+     *NUEVO (OPTIMIZACIÓN CRÍTICA): Último mensaje de CADA grupo
      * del listado, en 1 sola query.
      *
      * Elimina el N+1 al cargar el sidebar con N grupos.
@@ -132,7 +132,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta mensajes activos de un grupo.
+     * NUEVO: Cuenta mensajes activos de un grupo.
      */
     @Query("""
             SELECT COUNT(m) FROM MensajeGrupo m
@@ -142,7 +142,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     long countByGrupoId(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Cuenta mensajes por emisor en un grupo.
+     *NUEVO: Cuenta mensajes por emisor en un grupo.
      */
     @Query("""
             SELECT COUNT(m) FROM MensajeGrupo m
@@ -156,7 +156,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     );
 
     /**
-     * ✅ NUEVO: Cuenta mensajes activos por grupo (para el listado).
+     *NUEVO: Cuenta mensajes activos por grupo (para el listado).
      * Devuelve [grupoId, count].
      */
     @Query("""
@@ -173,7 +173,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Mensajes de un emisor específico en un grupo.
+     *NUEVO: Mensajes de un emisor específico en un grupo.
      */
     @Query("""
             SELECT m FROM MensajeGrupo m
@@ -194,7 +194,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Mensajes que tienen archivos adjuntos (para filtro "solo archivos").
+     *NUEVO: Mensajes que tienen archivos adjuntos (para filtro "solo archivos").
      */
     @Query("""
             SELECT m FROM MensajeGrupo m
@@ -210,7 +210,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     );
 
     /**
-     * ✅ NUEVO: Cuenta archivos compartidos en un grupo.
+     *NUEVO: Cuenta archivos compartidos en un grupo.
      */
     @Query("""
             SELECT COUNT(m) FROM MensajeGrupo m
@@ -225,7 +225,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Buscar mensajes por texto en un grupo.
+     *NUEVO: Buscar mensajes por texto en un grupo.
      */
     @Query("""
             SELECT m FROM MensajeGrupo m
@@ -246,7 +246,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Marca como eliminados TODOS los mensajes de un grupo.
+     *NUEVO: Marca como eliminados TODOS los mensajes de un grupo.
      * Útil cuando se elimina un grupo (bulk en lugar de N updates).
      */
     @Modifying
@@ -259,7 +259,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     int eliminarPorGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Marca como eliminados TODOS los mensajes de un emisor en un grupo.
+     *NUEVO: Marca como eliminados TODOS los mensajes de un emisor en un grupo.
      * Útil cuando un usuario es expulsado (opcional, según política).
      */
     @Modifying
@@ -280,7 +280,7 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina (hard delete) mensajes eliminados hace más de N días.
+     * NUEVO: Elimina (hard delete) mensajes eliminados hace más de N días.
      */
     @Modifying
     @Query(value = """
@@ -295,13 +295,13 @@ public interface MensajeGrupoRepository extends JpaRepository<MensajeGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de mensajes activos en el sistema.
+     * NUEVO: Total de mensajes activos en el sistema.
      */
     @Query("SELECT COUNT(m) FROM MensajeGrupo m WHERE m.eliminado = false")
     long countActivosGlobales();
 
     /**
-     * ✅ NUEVO: Top grupos con más mensajes.
+     * NUEVO: Top grupos con más mensajes.
      */
     @Query("""
             SELECT m.grupo.id, COUNT(m) as total

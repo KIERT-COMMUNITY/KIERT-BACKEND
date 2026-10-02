@@ -21,7 +21,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
 
     /**
      * Busca un token por su valor, cargando el usuario asociado.
-     * ⚠️ NO valida expiración ni uso. Usa `findVigenteByToken` en su lugar.
+     * NO valida expiración ni uso. Usa `findVigenteByToken` en su lugar.
      */
     @Query("""
             SELECT t FROM PasswordResetToken t
@@ -31,7 +31,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     Optional<PasswordResetToken> findByToken(@Param("token") String token);
 
     /**
-     * ✅ NUEVO: Busca un token VIGENTE por valor.
+     *  NUEVO: Busca un token VIGENTE por valor.
      * Filtra `usado = false` y `fechaExpiracion > :ahora` EN LA QUERY.
      */
     @Query("""
@@ -47,7 +47,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     );
 
     /**
-     * ✅ NUEVO: Verifica si un token es válido (sin cargar la entidad).
+     * NUEVO: Verifica si un token es válido (sin cargar la entidad).
      */
     @Query("""
             SELECT COUNT(t) > 0 FROM PasswordResetToken t
@@ -66,7 +66,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
 
     /**
      * Lista tokens de un usuario ordenados por fecha DESC.
-     * ✅ MEJORA: ordena por fecha para consistencia.
+     *  MEJORA: ordena por fecha para consistencia.
      */
     @Query("""
             SELECT t FROM PasswordResetToken t
@@ -76,7 +76,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     List<PasswordResetToken> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Tokens vigentes de un usuario (no usados, no expirados).
+     * NUEVO: Tokens vigentes de un usuario (no usados, no expirados).
      */
     @Query("""
             SELECT t FROM PasswordResetToken t
@@ -91,7 +91,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     );
 
     /**
-     * ✅ NUEVO: Cuenta tokens vigentes de un usuario (para rate limiting).
+     *NUEVO: Cuenta tokens vigentes de un usuario (para rate limiting).
      */
     @Query("""
             SELECT COUNT(t) FROM PasswordResetToken t
@@ -109,7 +109,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     // ============================================================
 
     /**
-     * ✅ NUEVO: Invalida todos los tokens vigentes de un usuario.
+     *NUEVO: Invalida todos los tokens vigentes de un usuario.
      * Útil antes de generar un nuevo token (evita múltiples activos).
      */
     @Modifying
@@ -126,7 +126,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     );
 
     /**
-     * ✅ NUEVO: Invalida todos los tokens vigentes de un email.
+     * NUEVO: Invalida todos los tokens vigentes de un email.
      * (útil si el usuario cambió de email recientemente)
      */
     @Modifying
@@ -147,7 +147,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     // ============================================================
 
     /**
-     * ✅ NUEVO: Marca un token específico como usado (bulk).
+     * NUEVO: Marca un token específico como usado (bulk).
      * Más eficiente que `save()` tras `findByToken`.
      */
     @Modifying
@@ -168,7 +168,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina tokens usados o expirados con más de N días.
+     * NUEVO: Elimina tokens usados o expirados con más de N días.
      */
     @Modifying
     @Query("""
@@ -179,7 +179,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     int eliminarTokensAntiguos(@Param("limite") Instant limite);
 
     /**
-     * ✅ NUEVO: Cuenta cuántos tokens se eliminarán (para saber el impacto).
+     * NUEVO: Cuenta cuántos tokens se eliminarán (para saber el impacto).
      */
     @Query("""
             SELECT COUNT(t) FROM PasswordResetToken t
@@ -193,7 +193,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta tokens solicitados por una IP en un período.
+     * NUEVO: Cuenta tokens solicitados por una IP en un período.
      * Útil para rate limiting adicional.
      */
     @Query("""
@@ -207,7 +207,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     );
 
     /**
-     * ✅ NUEVO: Top IPs con más solicitudes (para detectar abuso).
+     * NUEVO: Top IPs con más solicitudes (para detectar abuso).
      * Devuelve [ip, count].
      */
     @Query("""
@@ -225,13 +225,13 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de tokens generados en el sistema.
+     * NUEVO: Total de tokens generados en el sistema.
      */
     @Query("SELECT COUNT(t) FROM PasswordResetToken t")
     long countTotal();
 
     /**
-     * ✅ NUEVO: Tokens vigentes en el sistema (todos los usuarios).
+     * NUEVO: Tokens vigentes en el sistema (todos los usuarios).
      */
     @Query("""
             SELECT COUNT(t) FROM PasswordResetToken t

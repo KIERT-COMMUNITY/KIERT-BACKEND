@@ -58,7 +58,7 @@ public class RateLimitService {
         try {
             redis.delete("ratelimit:" + clave);
         } catch (Exception e) {
-            log.error("⚠️ Error reseteando rate limit ({}): {}", clave, e.getMessage());
+            log.error("Error reseteando rate limit ({}): {}", clave, e.getMessage());
         }
     }
 

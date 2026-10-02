@@ -50,18 +50,18 @@ public class CodigoVerificacionService {
 
     @Transactional
     public String generarCodigo(String email, TipoCodigo tipo, String ipCliente) {
-        // 1️⃣ Rate limiting por email
+        // 1. Rate limiting por email
         verificarLimiteGeneracion(email);
 
-        // 2️⃣ Rate limiting por IP (si se proporciona)
+        // 2. Rate limiting por IP (si se proporciona)
         if (ipCliente != null && !ipCliente.isBlank()) {
             verificarLimiteGeneracionPorIp(ipCliente);
         }
 
-        // 3️⃣ Invalidar códigos anteriores (MySQL)
+        // 3. Invalidar códigos anteriores (MySQL)
         codigoRepository.invalidarCodigosAnteriores(email, tipo);
 
-        // 4️⃣ Generar código
+        // 4. Generar código
         String codigo = String.format("%06d", random.nextInt(1_000_000));
 
         CodigoVerificacion entity = CodigoVerificacion.builder()
@@ -72,13 +72,13 @@ public class CodigoVerificacionService {
 
         codigoRepository.save(entity);
 
-        // 5️⃣ Incrementar contadores Redis
+        // 5. Incrementar contadores Redis
         incrementarContador(KEY_GENERAR_POR_EMAIL + email, VENTANA_EMAIL);
         if (ipCliente != null && !ipCliente.isBlank()) {
             incrementarContador(KEY_GENERAR_POR_IP + ipCliente, VENTANA_IP);
         }
 
-        // 6️⃣ Resetear intentos de validación (nuevo código = nueva ventana)
+        // 6. Resetear intentos de validación (nuevo código = nueva ventana)
         redis.delete(KEY_INTENTOS_VALIDAR + email);
 
         log.info("Código generado para {} ({}): {}", email, tipo, codigo);
@@ -90,10 +90,10 @@ public class CodigoVerificacionService {
     // ============================================================
     @Transactional
     public void validarYConsumir(String email, String codigo, TipoCodigo tipo) {
-        // 1️⃣ Rate limiting por intentos de validación
+        // 1. Rate limiting por intentos de validación
         verificarLimiteIntentosValidacion(email);
 
-        // 2️⃣ Buscar código en MySQL
+        // 2. Buscar código en MySQL
         CodigoVerificacion entity = codigoRepository
                 .findTopByEmailAndCodigoAndTipoAndUsadoFalseOrderByFechaCreacionDesc(email, codigo, tipo)
                 .orElseThrow(() -> {
@@ -109,7 +109,7 @@ public class CodigoVerificacionService {
         entity.setUsado(true);
         codigoRepository.save(entity);
 
-        // 3️⃣ Limpiar contador de intentos al validar con éxito
+        // 3. Limpiar contador de intentos al validar con éxito
         redis.delete(KEY_INTENTOS_VALIDAR + email);
 
         log.info("Código validado y consumido para {} ({})", email, tipo);

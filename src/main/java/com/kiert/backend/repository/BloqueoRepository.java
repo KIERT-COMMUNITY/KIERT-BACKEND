@@ -23,7 +23,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
 
     /**
      * Busca el bloqueo activo entre 2 usuarios (A bloquea a B).
-     * ✅ Ya tenía JOIN FETCH, lo mantengo.
+     * Ya tenía JOIN FETCH, lo mantengo.
      */
     @Query("""
             SELECT b FROM Bloqueo b
@@ -39,7 +39,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     );
 
     /**
-     * ✅ NUEVO: Busca un bloqueo en CUALQUIER dirección (A→B o B→A).
+     * NUEVO: Busca un bloqueo en CUALQUIER dirección (A→B o B→A).
      * Útil para verificar si hay bloqueo entre dos usuarios.
      */
     @Query("""
@@ -99,7 +99,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
 
     /**
      * Lista bloqueos hechos por un usuario (a quién bloqueó).
-     * ⚠️ Sin paginación. Usa la versión paginada para usuarios con muchos.
+     * Sin paginación. Usa la versión paginada para usuarios con muchos.
      */
     @Query("""
             SELECT b FROM Bloqueo b
@@ -111,7 +111,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     List<Bloqueo> findBloqueosActivosDeUsuario(@Param("bloqueadorId") Long bloqueadorId);
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     * NUEVO: Versión paginada.
      */
     @Query("""
             SELECT b FROM Bloqueo b
@@ -138,7 +138,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     List<Bloqueo> findBloqueosRecibidos(@Param("bloqueadoId") Long bloqueadoId);
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     * NUEVO: Versión paginada.
      */
     @Query("""
             SELECT b FROM Bloqueo b
@@ -178,7 +178,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     List<Long> findUsuariosQueMeBloquearonIds(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: IDs de usuarios bloqueados en CUALQUIER dirección.
+     * NUEVO: IDs de usuarios bloqueados en CUALQUIER dirección.
      * Útil para "usuarios disponibles" (excluir bloqueados bidireccional).
      */
     @Query("""
@@ -197,7 +197,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta cuántos usuarios he bloqueado.
+     * NUEVO: Cuenta cuántos usuarios he bloqueado.
      */
     @Query("""
             SELECT COUNT(b) FROM Bloqueo b
@@ -207,7 +207,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     long contarBloqueados(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Cuenta cuántos usuarios me bloquearon.
+     * NUEVO: Cuenta cuántos usuarios me bloquearon.
      */
     @Query("""
             SELECT COUNT(b) FROM Bloqueo b
@@ -221,7 +221,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top usuarios más bloqueados (no activos, históricos).
+     * NUEVO: Top usuarios más bloqueados (no activos, históricos).
      * Devuelve [usuarioId, count].
      */
     @Query("""
@@ -234,7 +234,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     List<Object[]> topUsuariosMasBloqueados(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Top usuarios que más bloquean.
+     * NUEVO: Top usuarios que más bloquean.
      */
     @Query("""
             SELECT b.usuarioBloqueador.id, COUNT(b) as total
@@ -250,7 +250,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Historial completo de bloqueos de un usuario (activos e inactivos).
+     * NUEVO: Historial completo de bloqueos de un usuario (activos e inactivos).
      */
     @Query("""
             SELECT b FROM Bloqueo b
@@ -268,7 +268,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Desactiva un bloqueo específico (desbloquear).
+     * NUEVO: Desactiva un bloqueo específico (desbloquear).
      */
     @Modifying
     @Query("""
@@ -284,7 +284,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     );
 
     /**
-     * ✅ NUEVO: Desactiva TODOS los bloqueos de un usuario (hechos por él).
+     * NUEVO: Desactiva TODOS los bloqueos de un usuario (hechos por él).
      * Útil al eliminar cuenta.
      */
     @Modifying
@@ -296,7 +296,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     int desactivarTodosDeUsuario(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Desactiva TODOS los bloqueos RECIBIDOS por un usuario.
+     * NUEVO: Desactiva TODOS los bloqueos RECIBIDOS por un usuario.
      */
     @Modifying
     @Query("""
@@ -311,7 +311,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina (hard delete) TODOS los bloqueos entre dos usuarios.
+     * NUEVO: Elimina (hard delete) TODOS los bloqueos entre dos usuarios.
      * Al eliminar contacto, se eliminan los bloqueos.
      */
     @Modifying
@@ -330,13 +330,13 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de bloqueos activos en el sistema.
+     * NUEVO: Total de bloqueos activos en el sistema.
      */
     @Query("SELECT COUNT(b) FROM Bloqueo b WHERE b.activo = true")
     long countActivos();
 
     /**
-     * ✅ NUEVO: Total de bloqueos históricos (incluyendo inactivos).
+     * NUEVO: Total de bloqueos históricos (incluyendo inactivos).
      */
     @Query("SELECT COUNT(b) FROM Bloqueo b")
     long countTotal();
@@ -346,7 +346,7 @@ public interface BloqueoRepository extends JpaRepository<Bloqueo, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina (hard delete) bloqueos inactivos con más de N días.
+     * NUEVO: Elimina (hard delete) bloqueos inactivos con más de N días.
      * Se ejecuta con un @Scheduled para mantener la tabla pequeña.
      */
     @Modifying

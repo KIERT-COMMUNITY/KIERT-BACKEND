@@ -40,7 +40,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     );
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para chats largos).
+     *NUEVO: Versión paginada (recomendada para chats largos).
      * Ordena DESC para traer los más recientes primero.
      */
     @Query("""
@@ -60,7 +60,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     );
 
     /**
-     * ✅ NUEVO: Mensajes nuevos desde una fecha específica.
+     *NUEVO: Mensajes nuevos desde una fecha específica.
      * Útil para polling incremental: "dame los mensajes desde la última vez que consulté".
      */
     @Query("""
@@ -104,7 +104,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     // ============================================================
 
     /**
-     * ✅ OPTIMIZACIÓN CRÍTICA: Obtiene solo el último mensaje por contacto.
+     * OPTIMIZACIÓN CRÍTICA: Obtiene solo el último mensaje por contacto.
      * En lugar de traer 10,000 mensajes y agrupar en memoria,
      * trae N filas (N = número de contactos).
      *
@@ -145,7 +145,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     long countByReceptorIdAndLeidoFalse(Long receptorId);
 
     /**
-     * ✅ NUEVO: Cuenta no leídos SIN incluir eliminados.
+     * NUEVO: Cuenta no leídos SIN incluir eliminados.
      */
     @Query("""
             SELECT COUNT(m) FROM Mensaje m
@@ -156,7 +156,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     long contarNoLeidosDeUsuario(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Cuenta no leídos agrupados por emisor.
+     *NUEVO: Cuenta no leídos agrupados por emisor.
      * Devuelve [emisorId, count] para todos los contactos en 1 query.
      *
      * Elimina el N+1 en `listarConversaciones()`.
@@ -195,7 +195,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Marca como leídos todos los mensajes de una conversación
+     *NUEVO: Marca como leídos todos los mensajes de una conversación
      * en 1 sola query. Mucho más eficiente que iterar con save().
      */
     @Modifying
@@ -237,7 +237,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Buscar mensajes dentro de una conversación.
+     * NUEVO: Buscar mensajes dentro de una conversación.
      * Para "buscar en este chat".
      */
     @Query("""
@@ -263,7 +263,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Mensajes con archivos adjuntos de una conversación.
+     * NUEVO: Mensajes con archivos adjuntos de una conversación.
      */
     @Query("""
             SELECT m FROM Mensaje m
@@ -287,7 +287,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Marca como eliminados todos los mensajes entre 2 usuarios.
+     *NUEVO: Marca como eliminados todos los mensajes entre 2 usuarios.
      * Útil cuando se elimina un contacto.
      */
     @Modifying
@@ -313,7 +313,7 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina (hard delete) mensajes eliminados hace más de N días.
+     * NUEVO: Elimina (hard delete) mensajes eliminados hace más de N días.
      */
     @Modifying
     @Query(value = """
@@ -328,13 +328,13 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de mensajes activos en el sistema.
+     *NUEVO: Total de mensajes activos en el sistema.
      */
     @Query("SELECT COUNT(m) FROM Mensaje m WHERE m.eliminado = false")
     long countActivosGlobales();
 
     /**
-     * ✅ NUEVO: Últimos mensajes del sistema (para admin).
+     *NUEVO: Últimos mensajes del sistema (para admin).
      */
     @Query("""
             SELECT m FROM Mensaje m

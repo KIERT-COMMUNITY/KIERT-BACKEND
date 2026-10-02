@@ -20,19 +20,19 @@ public class UsuarioActual {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth == null || !auth.isAuthenticated()) {
-                log.debug("⚠️ UsuarioActual: sin autenticación");
+                log.debug("UsuarioActual: sin autenticación");
                 return null;
             }
 
             Object principal = auth.getPrincipal();
             if (principal == null) {
-                log.warn("⚠️ UsuarioActual: principal null");
+                log.warn("UsuarioActual: principal null");
                 return null;
             }
 
-            // ✅ CASO PRINCIPAL: UsuarioPrincipal (tu UserDetails custom)
+            // CASO PRINCIPAL: UsuarioPrincipal (tu UserDetails custom)
             if (principal instanceof UsuarioPrincipal up) {
-                log.debug("✅ UsuarioActual (UsuarioPrincipal): {}", up.getId());
+                log.debug("UsuarioActual (UsuarioPrincipal): {}", up.getId());
                 return up.getId();
             }
 
@@ -59,12 +59,12 @@ public class UsuarioActual {
                 }
             }
 
-            log.warn("⚠️ UsuarioActual: tipo no soportado: {}",
+            log.warn("UsuarioActual: tipo no soportado: {}",
                     principal.getClass().getName());
             return null;
 
         } catch (Exception e) {
-            log.error("❌ UsuarioActual error: {}", e.getMessage(), e);
+            log.error("UsuarioActual error: {}", e.getMessage(), e);
             return null;
         }
     }

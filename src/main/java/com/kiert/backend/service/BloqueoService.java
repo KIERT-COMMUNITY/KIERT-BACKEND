@@ -39,7 +39,7 @@ public class BloqueoService {
     @Transactional
     @CacheEvict(value = CACHE_BLOQUEOS, allEntries = true)
     public BloqueoDTO bloquear(Long usuarioBloqueadorId, CrearBloqueoDTO dto) {
-        log.info("🚫 Usuario {} bloquea a {}", usuarioBloqueadorId, dto.usuarioBloqueadoId());
+        log.info(" Usuario {} bloquea a {}", usuarioBloqueadorId, dto.usuarioBloqueadoId());
 
         if (usuarioBloqueadorId.equals(dto.usuarioBloqueadoId())) {
             throw new IllegalArgumentException("No puedes bloquearte a ti mismo");
@@ -55,7 +55,7 @@ public class BloqueoService {
         var existente = bloqueoRepository.findBloqueoActivo(
                 usuarioBloqueadorId, dto.usuarioBloqueadoId());
         if (existente.isPresent()) {
-            log.info("ℹ️ Ya existe bloqueo activo");
+            log.info(" Ya existe bloqueo activo");
             return mapearADTO(existente.get());
         }
 
@@ -71,7 +71,7 @@ public class BloqueoService {
                 .build();
 
         bloqueo = bloqueoRepository.save(bloqueo);
-        log.info("✅ Usuario bloqueado con ID: {}", bloqueo.getId());
+        log.info(" Usuario bloqueado con ID: {}", bloqueo.getId());
 
         return mapearADTO(bloqueo);
     }
@@ -82,7 +82,7 @@ public class BloqueoService {
     @Transactional
     @CacheEvict(value = CACHE_BLOQUEOS, allEntries = true)
     public void desbloquear(Long usuarioBloqueadorId, Long usuarioBloqueadoId) {
-        log.info("🔓 Usuario {} desbloquea a {}", usuarioBloqueadorId, usuarioBloqueadoId);
+        log.info(" Usuario {} desbloquea a {}", usuarioBloqueadorId, usuarioBloqueadoId);
 
         Bloqueo bloqueo = bloqueoRepository
                 .findBloqueoActivo(usuarioBloqueadorId, usuarioBloqueadoId)
@@ -91,7 +91,7 @@ public class BloqueoService {
         bloqueo.setActivo(false);
         bloqueoRepository.save(bloqueo);
 
-        log.info("✅ Usuario desbloqueado correctamente");
+        log.info(" Usuario desbloqueado correctamente");
     }
 
     // ============================================================
@@ -108,7 +108,7 @@ public class BloqueoService {
             key = "'estado:' + #usuarioActualId + ':' + #otroUsuarioId"
     )
     public EstadoBloqueoDTO verificarEstado(Long usuarioActualId, Long otroUsuarioId) {
-        log.debug("🔍 Consultando estado de bloqueo: {} → {}", usuarioActualId, otroUsuarioId);
+        log.debug(" Consultando estado de bloqueo: {} → {}", usuarioActualId, otroUsuarioId);
 
         var bloqueo = bloqueoRepository.findBloqueoActivo(usuarioActualId, otroUsuarioId);
         if (bloqueo.isPresent()) {
@@ -132,7 +132,7 @@ public class BloqueoService {
             key = "'lista:' + #usuarioId"
     )
     public List<BloqueoDTO> listarBloqueados(Long usuarioId) {
-        log.debug("🔍 Listando bloqueados de usuario {}", usuarioId);
+        log.debug(" Listando bloqueados de usuario {}", usuarioId);
 
         return bloqueoRepository.findBloqueosActivosDeUsuario(usuarioId)
                 .stream()
@@ -142,7 +142,7 @@ public class BloqueoService {
 
     /**
      * Verificar si hay bloqueo entre dos usuarios (en cualquier dirección)
-     * 🔑 Clave normalizada con min/max para que (A,B) y (B,A) compartan caché
+     *  Clave normalizada con min/max para que (A,B) y (B,A) compartan caché
      */
     @Transactional(readOnly = true)
     @Cacheable(
@@ -150,7 +150,7 @@ public class BloqueoService {
             key = "'entre:' + T(java.lang.Math).min(#usuarioA, #usuarioB) + ':' + T(java.lang.Math).max(#usuarioA, #usuarioB)"
     )
     public boolean hayBloqueoEntre(Long usuarioA, Long usuarioB) {
-        log.debug("🔍 Verificando bloqueo entre {} y {}", usuarioA, usuarioB);
+        log.debug(" Verificando bloqueo entre {} y {}", usuarioA, usuarioB);
 
         return bloqueoRepository.existeBloqueoEntre(usuarioA, usuarioB);
     }

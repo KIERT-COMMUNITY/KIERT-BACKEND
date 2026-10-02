@@ -29,7 +29,7 @@ public class CompraUsuario {
     @Column(name = "item_id", length = 50, nullable = false)
     private String itemId;
 
-    // ✅ CAMBIO: BigDecimal en lugar de Double
+    //CAMBIO: BigDecimal en lugar de Double
     @Column(name = "precio", nullable = false, precision = 10, scale = 2)
     private BigDecimal precio;
 

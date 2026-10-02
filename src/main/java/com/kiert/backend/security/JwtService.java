@@ -25,22 +25,22 @@ public class JwtService {
         this.expiracionMs = jwtProperties.expirationMs() != null ? jwtProperties.expirationMs() : 86400000L;
 
         if (secret == null || secret.isEmpty()) {
-            log.error("❌ JWT Secret no está configurado");
+            log.error("JWT Secret no está configurado");
             throw new IllegalStateException("JWT Secret no configurado");
         }
 
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
 
         if (keyBytes.length < 32) {
-            log.error("❌ Clave JWT tiene {} bits. Mínimo 256 bits requeridos.", keyBytes.length * 8);
+            log.error("Clave JWT tiene {} bits. Mínimo 256 bits requeridos.", keyBytes.length * 8);
             throw new IllegalStateException(
                     String.format("Clave JWT insegura: %d bits. Se requieren mínimo 256 bits.", keyBytes.length * 8)
             );
         }
 
         this.clave = Keys.hmacShaKeyFor(keyBytes);
-        log.info("✅ JWT Service inicializado con HS256");
-        log.info("🔑 Clave JWT: {} bits ({} caracteres)", keyBytes.length * 8, secret.length());
+        log.info("JWT Service inicializado con HS256");
+        log.info("Clave JWT: {} bits ({} caracteres)", keyBytes.length * 8, secret.length());
     }
 
     // ============================================================
@@ -71,7 +71,7 @@ public class JwtService {
     }
 
     /**
-     * ✅ NUEVO: Devuelve la fecha de expiración del token.
+     * NUEVO: Devuelve la fecha de expiración del token.
      * Útil para el TTL de la blacklist: cuando el token expire,
      * ya no hace falta mantenerlo en la lista negra.
      */
@@ -87,7 +87,7 @@ public class JwtService {
         try {
             String email = extraerEmail(token);
             boolean valido = email.equals(emailEsperado) && !estaExpirado(token);
-            log.debug("🔐 Token válido: {}", valido);
+            log.debug("Token válido: {}", valido);
             return valido;
         } catch (Exception e) {
             log.warn("Token inválido: {}", e.getMessage());
@@ -111,7 +111,7 @@ public class JwtService {
     }
 
     /**
-     * ✅ Valida SOLO tokens firmados con HS256.
+     * Valida SOLO tokens firmados con HS256.
      * Si el token viene con otro alg (HS512, RS256, none...), lanza excepción
      * controlada que el filtro convertirá en 401 (no en 500).
      */
@@ -123,7 +123,7 @@ public class JwtService {
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (io.jsonwebtoken.security.SignatureException e) {
-            log.warn("⚠️ Firma del token inválida: {}", e.getMessage());
+            log.warn("Firma del token inválida: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
             log.error("Error al parsear token: {}", e.getMessage());

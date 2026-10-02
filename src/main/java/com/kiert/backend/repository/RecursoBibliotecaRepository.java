@@ -34,7 +34,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<RecursoBiblioteca> findAllActiveOrderByFechaAgregadoDesc();
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada).
+     *  NUEVO: Versión paginada (recomendada).
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -59,7 +59,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     );
 
     /**
-     * ✅ NUEVO: Recursos por categoría paginados.
+     *  NUEVO: Recursos por categoría paginados.
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -86,7 +86,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<RecursoBiblioteca> findDestacados();
 
     /**
-     * ✅ NUEVO: Recursos destacados paginados.
+     *  NUEVO: Recursos destacados paginados.
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -118,7 +118,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<String> findDistinctNiveles();
 
     /**
-     * ✅ NUEVO: Categorías + nivel (para filtros combinados).
+     *  NUEVO: Categorías + nivel (para filtros combinados).
      */
     @Query("""
             SELECT DISTINCT r.subcategoria FROM RecursoBiblioteca r
@@ -147,7 +147,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<RecursoBiblioteca> findVisiblesParaUsuario(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     *  NUEVO: Versión paginada.
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -178,7 +178,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     );
 
     /**
-     * ✅ NUEVO: Visibles por categoría paginados.
+     *  NUEVO: Visibles por categoría paginados.
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -210,7 +210,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<RecursoBiblioteca> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     *  NUEVO: Versión paginada.
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -224,7 +224,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     );
 
     /**
-     * ✅ NUEVO: Cuenta recursos de un usuario.
+     * NUEVO: Cuenta recursos de un usuario.
      */
     @Query("""
             SELECT COUNT(r) FROM RecursoBiblioteca r
@@ -252,7 +252,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     // ============================================================
 
     /**
-     * ✅ NUEVO: Obtiene un recurso activo por ID con su creador cargado.
+     * NUEVO: Obtiene un recurso activo por ID con su creador cargado.
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -287,7 +287,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<RecursoBiblioteca> buscar(@Param("query") String query);
 
     /**
-     * ✅ NUEVO: Búsqueda paginada.
+     * NUEVO: Búsqueda paginada.
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -350,7 +350,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     );
 
     /**
-     * ✅ NUEVO: Búsqueda visible para usuario, paginada.
+     * NUEVO: Búsqueda visible para usuario, paginada.
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -378,7 +378,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     // ============================================================
 
     /**
-     * ✅ NUEVO: Recursos recientes (para home).
+     * NUEVO: Recursos recientes (para home).
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -390,7 +390,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<RecursoBiblioteca> findRecientes(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Recursos destacados recientes (para home).
+     * NUEVO: Recursos destacados recientes (para home).
      */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
@@ -407,7 +407,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta recursos agrupados por categoría.
+     * NUEVO: Cuenta recursos agrupados por categoría.
      * Devuelve [categoria, count].
      */
     @Query("""
@@ -420,7 +420,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<Object[]> contarPorCategoria();
 
     /**
-     * ✅ NUEVO: Cuenta recursos agrupados por nivel.
+     * NUEVO: Cuenta recursos agrupados por nivel.
      * Devuelve [nivel, count].
      */
     @Query("""
@@ -437,7 +437,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     // ============================================================
 
     /**
-     * ✅ NUEVO: Verifica si existe un recurso activo con ese título
+     * NUEVO: Verifica si existe un recurso activo con ese título
      * para el mismo usuario (anti-duplicados).
      */
     @Query("""
@@ -456,7 +456,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     // ============================================================
 
     /**
-     * ✅ NUEVO: Desactiva varios recursos en 1 query.
+     * NUEVO: Desactiva varios recursos en 1 query.
      */
     @Modifying
     @Query("""
@@ -467,7 +467,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     int desactivarEnLote(@Param("ids") List<Long> ids);
 
     /**
-     * ✅ NUEVO: Marca/desmarca varios recursos como destacados.
+     * NUEVO: Marca/desmarca varios recursos como destacados.
      */
     @Modifying
     @Query("""
@@ -485,7 +485,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina (hard delete) recursos desactivados hace más de N días.
+     * NUEVO: Elimina (hard delete) recursos desactivados hace más de N días.
      */
     @Modifying
     @Query(value = """
@@ -500,13 +500,13 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de recursos activos.
+     *  NUEVO: Total de recursos activos.
      */
     @Query("SELECT COUNT(r) FROM RecursoBiblioteca r WHERE r.activo = true")
     long countActivos();
 
     /**
-     * ✅ NUEVO: Total de recursos globales activos.
+     *  NUEVO: Total de recursos globales activos.
      */
     @Query("""
             SELECT COUNT(r) FROM RecursoBiblioteca r
@@ -516,7 +516,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     long countGlobalesActivos();
 
     /**
-     * ✅ NUEVO: Total de recursos subidos por usuarios activos.
+     *NUEVO: Total de recursos subidos por usuarios activos.
      */
     @Query("""
             SELECT COUNT(r) FROM RecursoBiblioteca r

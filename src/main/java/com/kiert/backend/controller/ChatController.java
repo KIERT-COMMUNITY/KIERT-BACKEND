@@ -112,7 +112,7 @@ public class ChatController {
             try {
                 notificacionService.crearNotificacionSolicitud(usuarioId, request.usuarioId());
             } catch (Exception e) {
-                log.error("⚠️ Error creando notificación: {}", e.getMessage());
+                log.error(" Error creando notificación: {}", e.getMessage());
             }
 
             return ResponseEntity.ok(solicitud);

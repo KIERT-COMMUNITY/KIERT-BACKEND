@@ -62,7 +62,7 @@ public class MensajeGrupo {
 
     @Column(nullable = false)
     @Builder.Default
-    private boolean eliminado = false;            // ✅ Ya lo tenías
+    private boolean eliminado = false;            //Ya lo tenías
 
     // ============================================================
     // MÉTODOS AUXILIARES

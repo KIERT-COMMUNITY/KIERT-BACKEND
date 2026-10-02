@@ -33,7 +33,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     List<Compartido> findByPostId(@Param("postId") Long postId);
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para posts virales).
+     *  NUEVO: Versión paginada (recomendada para posts virales).
      */
     @Query("""
             SELECT c FROM Compartido c
@@ -48,7 +48,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     );
 
     /**
-     * ✅ NUEVO: Compartidos INTERNOS (dentro de la app) de un post.
+     *  NUEVO: Compartidos INTERNOS (dentro de la app) de un post.
      * Los EXTERNOS no cuentan para la lista de "quién compartió".
      */
     @Query("""
@@ -65,7 +65,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Últimos compartidos de un usuario (para el perfil).
+     *  NUEVO: Últimos compartidos de un usuario (para el perfil).
      */
     @Query("""
             SELECT c FROM Compartido c
@@ -80,7 +80,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     );
 
     /**
-     * ✅ NUEVO: Compartidos de un usuario en un post específico.
+     *  NUEVO: Compartidos de un usuario en un post específico.
      * Útil para "mis compartidos de este post".
      */
     @Query("""
@@ -101,7 +101,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     long countByPostId(Long postId);
 
     /**
-     * ✅ NUEVO: Contar compartidos INTERNOS de un post (excluye externos).
+     *  NUEVO: Contar compartidos INTERNOS de un post (excluye externos).
      */
     @Query("""
             SELECT COUNT(c) FROM Compartido c
@@ -111,7 +111,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     long countInternosByPostId(@Param("postId") Long postId);
 
     /**
-     * ✅ NUEVO: Contar TODOS los compartidos de un usuario.
+     *  NUEVO: Contar TODOS los compartidos de un usuario.
      * Útil para estadísticas del perfil.
      */
     @Query("""
@@ -125,7 +125,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta compartidos agrupados por post.
+     *  NUEVO: Cuenta compartidos agrupados por post.
      * Devuelve [postId, count].
      *
      * Uso en el feed: 1 sola query para N posts.
@@ -149,7 +149,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     boolean existsByUsuarioIdAndPostId(Long usuarioId, Long postId);
 
     /**
-     * ✅ NUEVO: Devuelve el compartido específico si existe.
+     *  NUEVO: Devuelve el compartido específico si existe.
      */
     @Query("""
             SELECT c FROM Compartido c
@@ -167,7 +167,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Contar compartidos por tipo (INTERNO vs EXTERNO) en un rango de fechas.
+     *  NUEVO: Contar compartidos por tipo (INTERNO vs EXTERNO) en un rango de fechas.
      * Útil para reportes.
      */
     @Query("""
@@ -179,7 +179,7 @@ public interface CompartidoRepository extends JpaRepository<Compartido, Long> {
     List<Object[]> contarPorTipoDesde(@Param("desde") java.time.Instant desde);
 
     /**
-     * ✅ NUEVO: Top N posts más compartidos en un rango de fechas.
+     *  NUEVO: Top N posts más compartidos en un rango de fechas.
      */
     @Query("""
             SELECT c.post.id, COUNT(c) as total

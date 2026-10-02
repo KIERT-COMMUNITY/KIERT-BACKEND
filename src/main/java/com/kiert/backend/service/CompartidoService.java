@@ -47,7 +47,7 @@ public class CompartidoService {
             @CacheEvict(value = "post", key = "#postId")
     })
     public CompartidoDTO compartir(Long usuarioId, Long postId, CompartirPostDTO dto) {
-        log.info("🔗 Compartiendo post {} por usuario {}", postId, usuarioId);
+        log.info("Compartiendo post {} por usuario {}", postId, usuarioId);
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -74,7 +74,7 @@ public class CompartidoService {
         post.setTotalCompartidos(post.getTotalCompartidos() + 1);
         postRepository.save(post);
 
-        log.info("✅ Post compartido con ID: {}", compartido.getId());
+        log.info("Post compartido con ID: {}", compartido.getId());
 
         return mapearADTO(compartido);
     }
@@ -88,7 +88,7 @@ public class CompartidoService {
             key = "'post:' + #postId"
     )
     public List<CompartidoDTO> listarPorPost(Long postId) {
-        log.info("📋 [DB] Listando compartidos del post: {}", postId);
+        log.info("[DB] Listando compartidos del post: {}", postId);
         return compartidoRepository.findByPostId(postId)
                 .stream().map(this::mapearADTO).toList();
     }
@@ -97,7 +97,7 @@ public class CompartidoService {
     // CONTAR COMPARTIDOS (lectura muy frecuente — N+1 en feeds)
     // ============================================================
     /**
-     * ⚠️ IMPORTANTE: Este método usa el contador desnormalizado `post.totalCompartidos`
+     * IMPORTANTE: Este método usa el contador desnormalizado `post.totalCompartidos`
      * en lugar de un COUNT(*) a la tabla compartidos, porque es mucho más rápido
      * y se mantiene sincronizado por el método compartir().
      *
@@ -110,7 +110,7 @@ public class CompartidoService {
             key = "'post:' + #postId"
     )
     public long contarCompartidos(Long postId) {
-        log.debug("🔍 [DB] Obteniendo contador de compartidos del post: {}", postId);
+        log.debug("[DB] Obteniendo contador de compartidos del post: {}", postId);
 
         // Usar el contador desnormalizado del post (rápido)
         return postRepository.findById(postId)

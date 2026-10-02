@@ -22,7 +22,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ⚠️ LEGACY: Carga TODOS los posts activos (con autor, personalización y adjuntos).
+     *  LEGACY: Carga TODOS los posts activos (con autor, personalización y adjuntos).
      * Usar solo en casos puntuales. Para el feed usar `findAllActivePaginado`.
      */
     @Deprecated
@@ -37,7 +37,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findAllActiveOrderByFechaCreacionDesc();
 
     /**
-     * ✅ NUEVO: Feed paginado SIN adjuntos (evita el bug de HHH000104).
+     * NUEVO: Feed paginado SIN adjuntos (evita el bug de HHH000104).
      * Los adjuntos se cargan en una query separada (`findAdjuntosByPostIds`).
      */
     @Query("""
@@ -81,7 +81,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Posts por categoría paginados (sin adjuntos).
+     * NUEVO: Posts por categoría paginados (sin adjuntos).
      */
     @Query("""
             SELECT p FROM Post p
@@ -97,7 +97,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     );
 
     /**
-     * ✅ NUEVO: Categorías distintas con al menos 1 post activo.
+     * NUEVO: Categorías distintas con al menos 1 post activo.
      */
     @Query("""
             SELECT DISTINCT p.categoria FROM Post p
@@ -111,7 +111,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Posts de un usuario paginados (para el perfil).
+     * NUEVO: Posts de un usuario paginados (para el perfil).
      */
     @Query("""
             SELECT p FROM Post p
@@ -127,7 +127,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     );
 
     /**
-     * ✅ NUEVO: Cuenta posts activos de un usuario.
+     * NUEVO: Cuenta posts activos de un usuario.
      */
     @Query("""
             SELECT COUNT(p) FROM Post p
@@ -141,7 +141,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Buscar posts por título o descripción.
+     * NUEVO: Buscar posts por título o descripción.
      */
     @Query("""
             SELECT p FROM Post p
@@ -164,7 +164,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ CRÍTICO: Carga los adjuntos de varios posts en 1 query.
+     * CRÍTICO: Carga los adjuntos de varios posts en 1 query.
      * Se usa DESPUÉS de `findAllActivePaginado` para evitar el bug HHH000104.
      */
     @Query("""
@@ -179,7 +179,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top N posts con más compartidos.
+     *NUEVO: Top N posts con más compartidos.
      */
     @Query("""
             SELECT p FROM Post p
@@ -191,7 +191,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findTopMasCompartidos(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Posts más recientes (para home).
+     * NUEVO: Posts más recientes (para home).
      */
     @Query("""
             SELECT p FROM Post p
@@ -207,7 +207,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Posts que tienen adjuntos de un tipo específico.
+     * NUEVO: Posts que tienen adjuntos de un tipo específico.
      * Útil para "galería de imágenes" o "videos".
      */
     @Query("""
@@ -230,7 +230,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta posts agrupados por categoría.
+     * NUEVO: Cuenta posts agrupados por categoría.
      * Devuelve [categoria, count].
      */
     @Query("""
@@ -243,7 +243,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     List<Object[]> contarPorCategoria();
 
     /**
-     * ✅ NUEVO: Cuenta posts por usuario (bulk, para feed).
+     * NUEVO: Cuenta posts por usuario (bulk, para feed).
      * Devuelve [usuarioId, count].
      */
     @Query("""
@@ -260,7 +260,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Todos los posts (incluyendo eliminados) para admin.
+     *NUEVO: Todos los posts (incluyendo eliminados) para admin.
      */
     @Query("""
             SELECT p FROM Post p
@@ -270,7 +270,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     Page<Post> findAllParaAdmin(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Posts eliminados (soft-deleted) para restaurar.
+     * NUEVO: Posts eliminados (soft-deleted) para restaurar.
      */
     @Query("""
             SELECT p FROM Post p
@@ -281,7 +281,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     Page<Post> findEliminados(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Restaurar un post eliminado.
+     * NUEVO: Restaurar un post eliminado.
      */
     @Modifying
     @Query("""
@@ -297,7 +297,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Soft-delete en lote (útil para moderación).
+     * NUEVO: Soft-delete en lote (útil para moderación).
      */
     @Modifying
     @Query("""
@@ -313,7 +313,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     );
 
     /**
-     * ✅ NUEVO: Elimina posts borrados hace más de N días (hard delete).
+     * NUEVO: Elimina posts borrados hace más de N días (hard delete).
      */
     @Modifying
     @Query(value = """
@@ -328,13 +328,13 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de posts activos.
+     * NUEVO: Total de posts activos.
      */
     @Query("SELECT COUNT(p) FROM Post p WHERE p.eliminado = false")
     long countActivos();
 
     /**
-     * ✅ NUEVO: Total de posts creados en un rango de fechas (para reportes).
+     * NUEVO: Total de posts creados en un rango de fechas (para reportes).
      */
     @Query("""
             SELECT COUNT(p) FROM Post p

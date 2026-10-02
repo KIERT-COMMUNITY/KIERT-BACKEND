@@ -53,7 +53,7 @@ public class ChatService {
             key = "'usuario:' + #usuarioId"
     )
     public List<ConversacionDTO> listarConversaciones(Long usuarioId) {
-        log.info("📋 [DB] Listando conversaciones para usuario: {}", usuarioId);
+        log.info("[DB] Listando conversaciones para usuario: {}", usuarioId);
 
         List<Long> bloqueadosIds = bloqueoRepository.findUsuariosBloqueadosIds(usuarioId);
         List<Long> bloqueadoresIds = bloqueoRepository.findUsuariosQueMeBloquearonIds(usuarioId);
@@ -140,7 +140,7 @@ public class ChatService {
             condition = "#usuarioId != null && #otroUsuarioId != null"
     )
     public List<MensajeChatDTO> obtenerMensajes(Long usuarioId, Long otroUsuarioId) {
-        log.info("💬 [DB] Obteniendo mensajes entre {} y {}", usuarioId, otroUsuarioId);
+        log.info("[DB] Obteniendo mensajes entre {} y {}", usuarioId, otroUsuarioId);
 
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, otroUsuarioId);
 
@@ -190,7 +190,7 @@ public class ChatService {
             @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
     })
     public MensajeChatDTO enviarMensaje(Long emisorId, Long receptorId, String contenido) {
-        log.info("📤 Enviando mensaje de {} a {}", emisorId, receptorId);
+        log.info("Enviando mensaje de {} a {}", emisorId, receptorId);
 
         if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
             var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
@@ -230,7 +230,7 @@ public class ChatService {
                     receptorId.toString(), "/queue/mensajes", dto
             );
         } catch (Exception e) {
-            log.error("❌ Error WebSocket: {}", e.getMessage());
+            log.error("Error WebSocket: {}", e.getMessage());
         }
 
         return new MensajeChatDTO(
@@ -257,7 +257,7 @@ public class ChatService {
             Long emisorId, Long receptorId,
             String contenido, List<MultipartFile> archivos) {
 
-        log.info("📤 Enviando mensaje con archivos de {} a {}", emisorId, receptorId);
+        log.info("Enviando mensaje con archivos de {} a {}", emisorId, receptorId);
 
         if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
             var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
@@ -300,7 +300,7 @@ public class ChatService {
                             (int) (archivo.getSize() / 1024), false
                     ));
                 } catch (Exception e) {
-                    log.error("❌ Error al subir archivo: {}", e.getMessage());
+                    log.error("Error al subir archivo: {}", e.getMessage());
                 }
             }
         }
@@ -317,7 +317,7 @@ public class ChatService {
         try {
             messagingTemplate.convertAndSendToUser(receptorId.toString(), "/queue/mensajes", dto);
         } catch (Exception e) {
-            log.error("❌ Error WebSocket: {}", e.getMessage());
+            log.error("Error WebSocket: {}", e.getMessage());
         }
 
         return new MensajeChatDTO(
@@ -372,7 +372,7 @@ public class ChatService {
             key = "'recibidas:' + #usuarioId"
     )
     public List<SolicitudContactoDTO> listarSolicitudes(Long usuarioId) {
-        log.info("📋 [DB] Listando solicitudes recibidas de usuario: {}", usuarioId);
+        log.info("[DB] Listando solicitudes recibidas de usuario: {}", usuarioId);
 
         List<SolicitudContacto> solicitudes = solicitudRepository.findByReceptorIdAndEstado(
                 usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE);
@@ -395,7 +395,7 @@ public class ChatService {
             key = "'enviadas:' + #usuarioId"
     )
     public List<SolicitudContactoDTO> listarSolicitudesEnviadas(Long usuarioId) {
-        log.info("📋 [DB] Listando solicitudes enviadas de usuario: {}", usuarioId);
+        log.info("[DB] Listando solicitudes enviadas de usuario: {}", usuarioId);
 
         List<SolicitudContacto> solicitudes = solicitudRepository.findByEmisorIdAndEstado(
                 usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE);
@@ -493,7 +493,7 @@ public class ChatService {
         solicitud.setFechaRespuesta(ahora);
         solicitudRepository.save(solicitud);
 
-        // ✅ CORREGIDO: pasar el 3er argumento (Instant)
+        // CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarNotificacionesSolicitudComoLeidas(
                 usuarioId,
                 solicitud.getEmisor().getId(),
@@ -535,7 +535,7 @@ public class ChatService {
         solicitud.setFechaRespuesta(ahora);
         solicitudRepository.save(solicitud);
 
-        // ✅ CORREGIDO: pasar el 3er argumento (Instant)
+        // CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarNotificacionesSolicitudComoLeidas(
                 usuarioId,
                 solicitud.getEmisor().getId(),
@@ -553,7 +553,7 @@ public class ChatService {
             key = "'usuario:' + #usuarioId"
     )
     public List<UsuarioDisponibleDTO> listarUsuariosDisponibles(Long usuarioId) {
-        log.info("📋 [DB] Listando usuarios disponibles para: {}", usuarioId);
+        log.info("[DB] Listando usuarios disponibles para: {}", usuarioId);
 
         List<Long> contactosIds = mensajeRepository.findContactosId(usuarioId);
         List<Long> solicitudesEnviadasIds = solicitudRepository.findByEmisorIdAndEstado(

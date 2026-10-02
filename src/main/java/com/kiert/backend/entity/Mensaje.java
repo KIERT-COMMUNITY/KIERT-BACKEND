@@ -57,7 +57,7 @@ public class Mensaje {
     private boolean leido = false;
 
     @Column(name = "fecha_leido")
-    private Instant fechaLeido;                   // ✅ NUEVO: cuándo se leyó
+    private Instant fechaLeido;                   // NUEVO: cuándo se leyó
 
     // ============================================================
     // FECHAS
@@ -72,11 +72,11 @@ public class Mensaje {
     // ============================================================
 
     @Column(name = "fecha_eliminacion")
-    private Instant fechaEliminacion;             // ✅ NUEVO
+    private Instant fechaEliminacion;             // NUEVO
 
     @Column(nullable = false)
     @Builder.Default
-    private boolean eliminado = false;            // ✅ NUEVO
+    private boolean eliminado = false;            //NUEVO
 
     // ============================================================
     // MÉTODOS AUXILIARES

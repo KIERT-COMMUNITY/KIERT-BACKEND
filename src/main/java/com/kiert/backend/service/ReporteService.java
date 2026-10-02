@@ -52,7 +52,7 @@ public class ReporteService {
             @CacheEvict(value = CACHE_MIS_REPORTES, key = "'usuario:' + #usuarioReportanteId")
     })
     public ReporteDTO crearReporte(Long usuarioReportanteId, CrearReporteDTO dto, String ip) {
-        log.info("📢 Creando reporte tipo={} motivo={} por usuario={}",
+        log.info("Creando reporte tipo={} motivo={} por usuario={}",
                 dto.tipoReporte(), dto.motivo(), usuarioReportanteId);
 
         // Validaciones
@@ -124,7 +124,7 @@ public class ReporteService {
         }
 
         reporte = reporteRepository.save(reporte);
-        log.info("✅ Reporte creado con ID: {}", reporte.getId());
+        log.info("Reporte creado con ID: {}", reporte.getId());
 
         return mapearADTO(reporte);
     }
@@ -133,7 +133,7 @@ public class ReporteService {
     // LISTAR REPORTES (paginado, sin caché)
     // ============================================================
     /**
-     * ⚠️ NO se cachea porque:
+     * NO se cachea porque:
      * - Page<T> no es serializable fácilmente por Jackson
      * - Los filtros + paginación generan muchísimas claves
      * - Es una consulta de moderación, no un hot path
@@ -150,7 +150,7 @@ public class ReporteService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_MIS_REPORTES, key = "'usuario:' + #usuarioId")
     public List<ReporteDTO> listarMisReportes(Long usuarioId) {
-        log.info("📋 [DB] Listando reportes del usuario: {}", usuarioId);
+        log.info("[DB] Listando reportes del usuario: {}", usuarioId);
         return reporteRepository.findByUsuarioReportanteIdOrderByFechaCreacionDesc(usuarioId)
                 .stream().map(this::mapearADTO).toList();
     }
@@ -178,7 +178,7 @@ public class ReporteService {
         reporte.setFechaRevision(Instant.now());
 
         reporte = reporteRepository.save(reporte);
-        log.info("✅ Reporte {} actualizado a estado {}", reporteId, dto.estado());
+        log.info("Reporte {} actualizado a estado {}", reporteId, dto.estado());
 
         return mapearADTO(reporte);
     }
@@ -189,7 +189,7 @@ public class ReporteService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_RESUMEN_REPORTES, key = "'all'")
     public ReporteResumenDTO obtenerResumen() {
-        log.info("📊 [DB] Obteniendo resumen de reportes (4 queries COUNT)");
+        log.info("[DB] Obteniendo resumen de reportes (4 queries COUNT)");
         return new ReporteResumenDTO(
                 reporteRepository.countByEstado("PENDIENTE"),
                 reporteRepository.countByEstado("REVISANDO"),

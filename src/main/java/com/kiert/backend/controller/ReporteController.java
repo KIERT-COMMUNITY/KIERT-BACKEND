@@ -51,10 +51,10 @@ public class ReporteController {
             ));
 
         } catch (IllegalArgumentException | IllegalStateException e) {
-            log.warn("⚠️ Error de validación al crear reporte: {}", e.getMessage());
+            log.warn(" Error de validación al crear reporte: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error al crear reporte: {}", e.getMessage(), e);
+            log.error("Error al crear reporte: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al procesar el reporte"));
         }
@@ -102,7 +102,7 @@ public class ReporteController {
             ReporteDTO actualizado = reporteService.actualizarEstado(id, moderadorId, dto);
             return ResponseEntity.ok(actualizado);
         } catch (Exception e) {
-            log.error("❌ Error al actualizar reporte: {}", e.getMessage());
+            log.error("Error al actualizar reporte: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", e.getMessage()));
         }

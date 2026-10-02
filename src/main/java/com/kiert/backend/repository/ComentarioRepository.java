@@ -23,7 +23,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
 
     /**
      * Lista comentarios activos de un post, ordenados por fecha ASC.
-     * ⚠️ Para posts con muchos comentarios, usa `findByPostIdPaginado`.
+     *  Para posts con muchos comentarios, usa `findByPostIdPaginado`.
      */
     @Query("""
             SELECT c FROM Comentario c
@@ -37,7 +37,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     );
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para posts con muchos comentarios).
+     * NUEVO: Versión paginada (recomendada para posts con muchos comentarios).
      */
     @Query("""
             SELECT c FROM Comentario c
@@ -70,7 +70,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     long countActiveByPostId(@Param("postId") Long postId);
 
     /**
-     * ✅ NUEVO: Contar TODOS los comentarios de un usuario (para el perfil).
+     *  NUEVO: Contar TODOS los comentarios de un usuario (para el perfil).
      */
     @Query("""
             SELECT COUNT(c) FROM Comentario c
@@ -106,7 +106,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     List<Comentario> findActiveWithRespuestasByPostId(@Param("postId") Long postId);
 
     /**
-     * ✅ NUEVO (recomendado): Carga los comentarios de un post SIN respuestas.
+     *  NUEVO (recomendado): Carga los comentarios de un post SIN respuestas.
      * Luego carga las respuestas de esos comentarios con otra query.
      *
      * Uso en el service:
@@ -130,7 +130,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Últimos N comentarios de un usuario.
+     *  NUEVO: Últimos N comentarios de un usuario.
      * Útil para la pestaña "Actividad" del perfil.
      */
     @Query("""
@@ -151,7 +151,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Buscar comentarios por texto (opcional, para admin o búsqueda).
+     * NUEVO: Buscar comentarios por texto (opcional, para admin o búsqueda).
      */
     @Query("""
             SELECT c FROM Comentario c
@@ -173,7 +173,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Marca como eliminados TODOS los comentarios de un post.
+     * NUEVO: Marca como eliminados TODOS los comentarios de un post.
      * Útil cuando se elimina un post.
      */
     @Modifying
@@ -194,7 +194,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta comentarios activos agrupados por post.
+     *  NUEVO: Cuenta comentarios activos agrupados por post.
      * Útil para rellenar el feed sin N+1.
      *
      * Devuelve [postId, count].
@@ -213,7 +213,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Verifica si un comentario existe y está activo.
+     *  NUEVO: Verifica si un comentario existe y está activo.
      */
     @Query("""
             SELECT COUNT(c) > 0 FROM Comentario c
@@ -223,7 +223,7 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     boolean existeActivo(@Param("id") Long id);
 
     /**
-     * ✅ NUEVO: Obtiene un comentario activo por ID con autor cargado.
+     * NUEVO: Obtiene un comentario activo por ID con autor cargado.
      */
     @Query("""
             SELECT c FROM Comentario c

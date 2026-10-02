@@ -34,7 +34,7 @@ public class UsuarioService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_USUARIOS, key = "#id")
     public UsuarioDTO obtenerUsuarioPorId(Long id) {
-        log.info("📋 [DB] Obteniendo usuario por ID: {}", id);
+        log.info("[DB] Obteniendo usuario por ID: {}", id);
 
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -51,7 +51,7 @@ public class UsuarioService {
     // BUSCAR USUARIOS
     // ============================================================
     /**
-     * ⚠️ CAMBIO CLAVE: la clave incluye `usuarioActualId` porque el resultado
+     * CAMBIO CLAVE: la clave incluye `usuarioActualId` porque el resultado
      * filtra al usuario actual. Sin esto, dos usuarios distintos verían
      * los mismos resultados cacheados.
      *
@@ -64,7 +64,7 @@ public class UsuarioService {
             condition = "#query != null && #query.trim().length() >= 3"
     )
     public List<UsuarioDisponibleDTO> buscarUsuarios(String query, Long usuarioActualId) {
-        log.info("🔍 [DB] Buscando usuarios con: '{}' (usuario: {})", query, usuarioActualId);
+        log.info("[DB] Buscando usuarios con: '{}' (usuario: {})", query, usuarioActualId);
 
         if (query == null || query.trim().length() < 1) {
             return List.of();
@@ -75,7 +75,7 @@ public class UsuarioService {
 
         return usuarios.stream()
                 .filter(u -> !u.getId().equals(usuarioActualId))
-                .limit(LIMITE_BUSQUEDA)   // ✅ límite
+                .limit(LIMITE_BUSQUEDA)   // límite
                 .map(u -> new UsuarioDisponibleDTO(
                         u.getId(),
                         u.getNombreUsuario(),
@@ -90,7 +90,7 @@ public class UsuarioService {
     @Transactional
     @CacheEvict(value = {CACHE_USUARIOS, CACHE_BUSQUEDA_USUARIOS}, allEntries = true)
     public UsuarioDTO actualizarUsuario(Long id, UsuarioDTO datos) {
-        log.info("✏️ Actualizando usuario: {}", id);
+        log.info("Actualizando usuario: {}", id);
 
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -124,14 +124,14 @@ public class UsuarioService {
     }
 
     /**
-     * ⚠️ ELIMINADO: marcarTodosDesconectados()
+     * ELIMINADO: marcarTodosDesconectados()
      * Ya no se necesita porque las claves Redis expiran solas.
      * Si quieres forzar limpieza al arranque, hazlo desde un CommandLineRunner
      * que borre las claves presencia:online:* (no necesario).
      */
 
     /**
-     * ⚠️ ELIMINADO: limpiarUsuariosInactivos()
+     * ELIMINADO: limpiarUsuariosInactivos()
      * Ya no se necesita porque el TTL de 5 min en Redis se encarga.
      */
 

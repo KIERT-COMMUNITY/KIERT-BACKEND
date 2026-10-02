@@ -24,7 +24,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
 
     /**
      * Lista solicitudes recibidas por un usuario con un estado.
-     * ✅ MEJORA: incluye JOIN FETCH del emisor para evitar N+1.
+     *  MEJORA: incluye JOIN FETCH del emisor para evitar N+1.
      */
     @Query("""
             SELECT s FROM SolicitudContacto s
@@ -40,7 +40,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     );
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para usuarios con muchas solicitudes).
+     * NUEVO: Versión paginada (recomendada para usuarios con muchas solicitudes).
      */
     @Query("""
             SELECT s FROM SolicitudContacto s
@@ -62,7 +62,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
 
     /**
      * Lista solicitudes enviadas por un usuario con un estado.
-     * ✅ MEJORA: incluye JOIN FETCH del receptor.
+     * MEJORA: incluye JOIN FETCH del receptor.
      */
     @Query("""
             SELECT s FROM SolicitudContacto s
@@ -78,7 +78,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     );
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     * NUEVO: Versión paginada.
      */
     @Query("""
             SELECT s FROM SolicitudContacto s
@@ -100,7 +100,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
 
     /**
      * Lista solicitudes donde el usuario es emisor O receptor.
-     * ✅ MEJORA: incluye JOIN FETCH de ambos.
+     * MEJORA: incluye JOIN FETCH de ambos.
      */
     @Query("""
             SELECT s FROM SolicitudContacto s
@@ -121,7 +121,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
 
     /**
      * Busca una solicitud entre dos usuarios con un estado específico.
-     * ✅ MEJORA: incluye JOIN FETCH.
+     * MEJORA: incluye JOIN FETCH.
      */
     @Query("""
             SELECT s FROM SolicitudContacto s
@@ -138,7 +138,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     );
 
     /**
-     * ✅ NUEVO: Busca solicitud en CUALQUIER dirección (A→B o B→A).
+     *NUEVO: Busca solicitud en CUALQUIER dirección (A→B o B→A).
      * Útil para verificar si ya hay una solicitud pendiente.
      */
     @Query("""
@@ -193,7 +193,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta solicitudes recibidas pendientes (badge navbar).
+     *NUEVO: Cuenta solicitudes recibidas pendientes (badge navbar).
      */
     @Query("""
             SELECT COUNT(s) FROM SolicitudContacto s
@@ -203,7 +203,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     long contarRecibidasPendientes(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Cuenta solicitudes enviadas pendientes.
+     * NUEVO: Cuenta solicitudes enviadas pendientes.
      */
     @Query("""
             SELECT COUNT(s) FROM SolicitudContacto s
@@ -213,7 +213,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     long contarEnviadasPendientes(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Cuenta total de contactos (solicitudes ACEPTADAS).
+     *NUEVO: Cuenta total de contactos (solicitudes ACEPTADAS).
      */
     @Query("""
             SELECT COUNT(s) FROM SolicitudContacto s
@@ -223,7 +223,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     long contarContactos(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Cuenta contactos de varios usuarios (bulk).
+     * NUEVO: Cuenta contactos de varios usuarios (bulk).
      * Devuelve [usuarioId, count].
      */
     @Query("""
@@ -244,7 +244,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     // ============================================================
 
     /**
-     * ✅ NUEVO: Lista los contactos (usuarios) de un usuario.
+     * NUEVO: Lista los contactos (usuarios) de un usuario.
      * Devuelve los IDs de los contactos.
      */
     @Query("""
@@ -263,7 +263,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     // ============================================================
 
     /**
-     * ✅ NUEVO: Acepta varias solicitudes en 1 query.
+     * NUEVO: Acepta varias solicitudes en 1 query.
      */
     @Modifying
     @Query("""
@@ -281,7 +281,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     );
 
     /**
-     * ✅ NUEVO: Rechaza varias solicitudes en 1 query.
+     * NUEVO: Rechaza varias solicitudes en 1 query.
      */
     @Modifying
     @Query("""
@@ -299,7 +299,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     );
 
     /**
-     * ✅ NUEVO: Cancela solicitudes pendientes enviadas por un usuario.
+     *NUEVO: Cancela solicitudes pendientes enviadas por un usuario.
      */
     @Modifying
     @Query("""
@@ -321,7 +321,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina la solicitud entre dos usuarios (al eliminar contacto).
+     * NUEVO: Elimina la solicitud entre dos usuarios (al eliminar contacto).
      */
     @Modifying
     @Query("""
@@ -339,7 +339,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top usuarios que más solicitudes envían (posible spam).
+     *NUEVO: Top usuarios que más solicitudes envían (posible spam).
      * Devuelve [usuarioId, count].
      */
     @Query("""
@@ -355,7 +355,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     );
 
     /**
-     * ✅ NUEVO: Top usuarios que más solicitudes reciben.
+     *NUEVO: Top usuarios que más solicitudes reciben.
      */
     @Query("""
             SELECT s.receptor.id, COUNT(s) as total
@@ -374,7 +374,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta solicitudes agrupadas por estado.
+     *NUEVO: Cuenta solicitudes agrupadas por estado.
      * Devuelve [estado, count].
      */
     @Query("""
@@ -385,7 +385,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     List<Object[]> contarPorEstado();
 
     /**
-     * ✅ NUEVO: Total de solicitudes en el sistema.
+     * NUEVO: Total de solicitudes en el sistema.
      */
     @Query("SELECT COUNT(s) FROM SolicitudContacto s")
     long countTotal();
@@ -395,7 +395,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina solicitudes rechazadas o canceladas antiguas.
+     *NUEVO: Elimina solicitudes rechazadas o canceladas antiguas.
      */
     @Modifying
     @Query("""

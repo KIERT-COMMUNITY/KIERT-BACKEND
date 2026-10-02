@@ -29,7 +29,7 @@ public class DocumentoController {
 
     @GetMapping("/categorias")
     public ResponseEntity<List<String>> obtenerCategorias() {
-        log.info("📋 Obteniendo categorías de documentos");
+        log.info("Obteniendo categorías de documentos");
         return ResponseEntity.ok(documentoService.obtenerCategorias());
     }
 
@@ -37,25 +37,25 @@ public class DocumentoController {
 
     @GetMapping
     public ResponseEntity<List<DocumentoDTO>> listarTodos() {
-        log.info("📋 Listando todos los documentos");
+        log.info("Listando todos los documentos");
         return ResponseEntity.ok(documentoService.listarTodos());
     }
 
     @GetMapping("/categoria/{categoria}")
     public ResponseEntity<List<DocumentoDTO>> listarPorCategoria(@PathVariable String categoria) {
-        log.info("📋 Listando documentos por categoría: {}", categoria);
+        log.info("Listando documentos por categoría: {}", categoria);
         return ResponseEntity.ok(documentoService.listarPorCategoria(categoria));
     }
 
     @GetMapping("/usuario/{usuarioId}")
     public ResponseEntity<List<DocumentoDTO>> listarPorUsuario(@PathVariable Long usuarioId) {
-        log.info("📋 Listando documentos del usuario: {}", usuarioId);
+        log.info("Listando documentos del usuario: {}", usuarioId);
         return ResponseEntity.ok(documentoService.listarPorUsuario(usuarioId));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<DocumentoDTO> obtenerPorId(@PathVariable Long id) {
-        log.info("🔍 Obteniendo documento: {}", id);
+        log.info("Obteniendo documento: {}", id);
         return ResponseEntity.ok(documentoService.obtenerPorId(id));
     }
 
@@ -63,7 +63,7 @@ public class DocumentoController {
 
     @GetMapping("/buscar")
     public ResponseEntity<List<DocumentoDTO>> buscar(@RequestParam(required = false) String query) {
-        log.info("🔍 Buscando documentos: {}", query);
+        log.info("Buscando documentos: {}", query);
         return ResponseEntity.ok(documentoService.buscar(query));
     }
 
@@ -71,7 +71,7 @@ public class DocumentoController {
     public ResponseEntity<List<DocumentoDTO>> buscarPorCategoria(
             @PathVariable String categoria,
             @RequestParam(required = false) String query) {
-        log.info("🔍 Buscando documentos en categoría {}: {}", categoria, query);
+        log.info("Buscando documentos en categoría {}: {}", categoria, query);
         return ResponseEntity.ok(documentoService.buscarPorCategoria(categoria, query));
     }
 
@@ -86,7 +86,7 @@ public class DocumentoController {
             @RequestParam("archivo") MultipartFile archivo) {
 
         Long usuarioId = usuarioActual.id();
-        log.info("📝 Creando documento para usuario: {}", usuarioId);
+        log.info("Creando documento para usuario: {}", usuarioId);
 
         CrearDocumentoDTO datos = new CrearDocumentoDTO(titulo, descripcion, categoria, categoriaPersonalizada);
         DocumentoDTO creado = documentoService.crear(usuarioId, datos, archivo);
@@ -102,7 +102,7 @@ public class DocumentoController {
             @RequestBody CrearDocumentoDTO datos) {
 
         Long usuarioId = usuarioActual.id();
-        log.info("✏️ Actualizando documento: {}", id);
+        log.info("Actualizando documento: {}", id);
 
         return ResponseEntity.ok(documentoService.actualizar(id, usuarioId, datos));
     }
@@ -112,7 +112,7 @@ public class DocumentoController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminarDocumento(@PathVariable Long id) {
         Long usuarioId = usuarioActual.id();
-        log.info("🗑️ Eliminando documento: {}", id);
+        log.info("Eliminando documento: {}", id);
         documentoService.eliminar(id, usuarioId);
         return ResponseEntity.noContent().build();
     }
@@ -121,7 +121,7 @@ public class DocumentoController {
 
     @PostMapping("/{id}/descargar")
     public ResponseEntity<Void> incrementarDescargas(@PathVariable Long id) {
-        log.info("📥 Incrementando descargas del documento: {}", id);
+        log.info("Incrementando descargas del documento: {}", id);
         documentoService.incrementarDescargas(id);
         return ResponseEntity.ok().build();
     }

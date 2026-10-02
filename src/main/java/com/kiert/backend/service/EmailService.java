@@ -45,7 +45,7 @@ public class EmailService {
     @Async
     public void enviarCodigoVerificacion(String emailDestino, String nombreUsuario, String codigo) {
         if (!puedeEnviar(emailDestino, "verificacion")) {
-            log.warn("⚠️ Rate limit alcanzado, no se envía verificación a {}", emailDestino);
+            log.warn("Rate limit alcanzado, no se envía verificación a {}", emailDestino);
             return;
         }
 
@@ -58,9 +58,9 @@ public class EmailService {
             );
             enviarHtml(emailDestino, "Kiert - Verifica tu cuenta", html);
             registrarEnvio(emailDestino);
-            log.info("✅ Código de verificación enviado a: {}", emailDestino);
+            log.info("Código de verificación enviado a: {}", emailDestino);
         } catch (Exception e) {
-            log.error("❌ Error al enviar verificación a {}: {}", emailDestino, e.getMessage(), e);
+            log.error("Error al enviar verificación a {}: {}", emailDestino, e.getMessage(), e);
         }
     }
 
@@ -70,7 +70,7 @@ public class EmailService {
     @Async
     public void enviarCodigoRecuperacion(String emailDestino, String nombreUsuario, String codigo) {
         if (!puedeEnviar(emailDestino, "recuperacion")) {
-            log.warn("⚠️ Rate limit alcanzado, no se envía recuperación a {}", emailDestino);
+            log.warn("Rate limit alcanzado, no se envía recuperación a {}", emailDestino);
             return;
         }
 
@@ -83,9 +83,9 @@ public class EmailService {
             );
             enviarHtml(emailDestino, "Kiert - Recupera tu contraseña", html);
             registrarEnvio(emailDestino);
-            log.info("✅ Código de recuperación enviado a: {}", emailDestino);
+            log.info("Código de recuperación enviado a: {}", emailDestino);
         } catch (Exception e) {
-            log.error("❌ Error al enviar recuperación a {}: {}", emailDestino, e.getMessage(), e);
+            log.error("Error al enviar recuperación a {}: {}", emailDestino, e.getMessage(), e);
         }
     }
 
@@ -95,7 +95,7 @@ public class EmailService {
     @Async
     public void enviarCorreoBienvenida(String emailDestino, String nombreUsuario) {
         if (!puedeEnviar(emailDestino, "bienvenida")) {
-            log.warn("⚠️ Rate limit alcanzado, no se envía bienvenida a {}", emailDestino);
+            log.warn("Rate limit alcanzado, no se envía bienvenida a {}", emailDestino);
             return;
         }
 
@@ -103,9 +103,9 @@ public class EmailService {
             String html = plantillaBienvenida(nombreUsuario);
             enviarHtml(emailDestino, "Bienvenido a Kiert, comunidad para desarrolladores", html);
             registrarEnvio(emailDestino);
-            log.info("✅ Correo de bienvenida enviado a: {}", emailDestino);
+            log.info("Correo de bienvenida enviado a: {}", emailDestino);
         } catch (Exception e) {
-            log.error("❌ Error al enviar bienvenida a {}: {}", emailDestino, e.getMessage(), e);
+            log.error("Error al enviar bienvenida a {}: {}", emailDestino, e.getMessage(), e);
         }
     }
 
@@ -117,19 +117,19 @@ public class EmailService {
             String keyDestino = KEY_RATELIMIT_DESTINO + emailDestino;
             String valorDestino = stringRedis.opsForValue().get(keyDestino);
             if (valorDestino != null && Long.parseLong(valorDestino) >= MAX_EMAILS_POR_DESTINO) {
-                log.warn("🚫 Rate limit destino alcanzado para {} ({})", emailDestino, tipo);
+                log.warn("Rate limit destino alcanzado para {} ({})", emailDestino, tipo);
                 return false;
             }
 
             String valorGlobal = stringRedis.opsForValue().get(KEY_RATELIMIT_GLOBAL);
             if (valorGlobal != null && Long.parseLong(valorGlobal) >= MAX_EMAILS_GLOBAL) {
-                log.error("🚫 Rate limit GLOBAL alcanzado. Protegiendo SMTP.");
+                log.error("Rate limit GLOBAL alcanzado. Protegiendo SMTP.");
                 return false;
             }
 
             return true;
         } catch (Exception e) {
-            log.error("⚠️ Error consultando rate limit en Redis: {}", e.getMessage());
+            log.error("Error consultando rate limit en Redis: {}", e.getMessage());
             return true; // fail-open
         }
     }
@@ -147,7 +147,7 @@ public class EmailService {
                 stringRedis.expire(KEY_RATELIMIT_GLOBAL, VENTANA_GLOBAL);
             }
         } catch (Exception e) {
-            log.error("⚠️ Error actualizando rate limit en Redis: {}", e.getMessage());
+            log.error("Error actualizando rate limit en Redis: {}", e.getMessage());
         }
     }
 

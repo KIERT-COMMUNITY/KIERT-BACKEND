@@ -27,7 +27,7 @@ public class CloudinaryService {
     // ========== SUBIR ARCHIVO (PARA CHAT) ==========
     public String subirArchivo(MultipartFile archivo) {
         try {
-            log.info("📤 Subiendo archivo a Cloudinary: {}", archivo.getOriginalFilename());
+            log.info("Subiendo archivo a Cloudinary: {}", archivo.getOriginalFilename());
 
             String folder = "chat";
             String resourceType = "auto";
@@ -48,7 +48,7 @@ public class CloudinaryService {
             return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
-            log.error("❌ Error al subir archivo a Cloudinary: {}", e.getMessage());
+            log.error("Error al subir archivo a Cloudinary: {}", e.getMessage());
             throw new BadRequestException("Error al subir el archivo: " + e.getMessage());
         }
     }
@@ -56,7 +56,7 @@ public class CloudinaryService {
     // ========== SUBIR ARCHIVO CON CARPETA PERSONALIZADA ==========
     public String subirArchivo(MultipartFile archivo, String carpeta) {
         try {
-            log.info("📤 Subiendo archivo a Cloudinary en carpeta: {}", carpeta);
+            log.info("Subiendo archivo a Cloudinary en carpeta: {}", carpeta);
 
             Map<String, Object> uploadResult = cloudinary.uploader().upload(
                     archivo.getBytes(),
@@ -69,7 +69,7 @@ public class CloudinaryService {
             return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
-            log.error("❌ Error al subir archivo: {}", e.getMessage());
+            log.error("Error al subir archivo: {}", e.getMessage());
             throw new BadRequestException("Error al subir el archivo: " + e.getMessage());
         }
     }
@@ -77,7 +77,7 @@ public class CloudinaryService {
     // ========== SUBIR IMAGEN (CORREGIDO) ==========
     public String subirImagen(MultipartFile imagen, String carpeta) {
         try {
-            log.info("🖼️ Subiendo imagen a Cloudinary: {}", imagen.getOriginalFilename());
+            log.info("Subiendo imagen a Cloudinary: {}", imagen.getOriginalFilename());
 
             if (imagen.getSize() > MAX_IMAGE_SIZE) {
                 throw new BadRequestException("La imagen no puede exceder los 15MB");
@@ -88,7 +88,7 @@ public class CloudinaryService {
                 throw new BadRequestException("El archivo debe ser una imagen (no GIF)");
             }
 
-            // ✅ CORREGIDO: Sin transformaciones inválidas
+            // CORREGIDO: Sin transformaciones inválidas
             Map<String, Object> uploadResult = cloudinary.uploader().upload(
                     imagen.getBytes(),
                     ObjectUtils.asMap(
@@ -102,7 +102,7 @@ public class CloudinaryService {
             return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
-            log.error("❌ Error al subir imagen: {}", e.getMessage(), e);
+            log.error("Error al subir imagen: {}", e.getMessage(), e);
             throw new BadRequestException("Error al subir la imagen: " + e.getMessage());
         }
     }
@@ -110,7 +110,7 @@ public class CloudinaryService {
     // ========== SUBIR VIDEO ==========
     public Map<String, Object> subirVideo(MultipartFile video, String carpeta) {
         try {
-            log.info("🎥 Subiendo video a Cloudinary: {}", video.getOriginalFilename());
+            log.info("Subiendo video a Cloudinary: {}", video.getOriginalFilename());
 
             if (video.getSize() > MAX_VIDEO_SIZE) {
                 throw new BadRequestException("El video no puede exceder los 50MB");
@@ -132,11 +132,11 @@ public class CloudinaryService {
                     )
             );
 
-            log.info("✅ Video subido exitosamente");
+            log.info("Video subido exitosamente");
             return uploadResult;
 
         } catch (IOException e) {
-            log.error("❌ Error al subir video: {}", e.getMessage(), e);
+            log.error("Error al subir video: {}", e.getMessage(), e);
             throw new BadRequestException("Error al subir el video: " + e.getMessage());
         }
     }
@@ -144,7 +144,7 @@ public class CloudinaryService {
     // ========== SUBIR GIF ==========
     public String subirGif(MultipartFile gif, String carpeta) {
         try {
-            log.info("🎬 Subiendo GIF a Cloudinary: {}", gif.getOriginalFilename());
+            log.info("Subiendo GIF a Cloudinary: {}", gif.getOriginalFilename());
 
             if (gif.getSize() > MAX_GIF_SIZE) {
                 throw new BadRequestException("El GIF no puede exceder los 15MB");
@@ -168,7 +168,7 @@ public class CloudinaryService {
             return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
-            log.error("❌ Error al subir GIF: {}", e.getMessage(), e);
+            log.error("Error al subir GIF: {}", e.getMessage(), e);
             throw new BadRequestException("Error al subir el GIF: " + e.getMessage());
         }
     }
@@ -176,7 +176,7 @@ public class CloudinaryService {
     // ========== SUBIR MARCO ==========
     public String subirMarco(MultipartFile archivo, String nombre) {
         try {
-            log.info("📤 Subiendo marco a Cloudinary: {}", nombre);
+            log.info("Subiendo marco a Cloudinary: {}", nombre);
 
             Map<String, Object> uploadResult = cloudinary.uploader().upload(
                     archivo.getBytes(),
@@ -191,7 +191,7 @@ public class CloudinaryService {
             return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
-            log.error("❌ Error al subir marco: {}", e.getMessage());
+            log.error("Error al subir marco: {}", e.getMessage());
             throw new BadRequestException("Error al subir el marco: " + e.getMessage());
         }
     }
@@ -226,13 +226,13 @@ public class CloudinaryService {
 
     // ========== GENERAR URL FIRMADA ==========
     public String generarUrlFirmadaSubida(String nombreArchivo) {
-        log.info("🔑 Generando URL firmada para: {}", nombreArchivo);
+        log.info("Generando URL firmada para: {}", nombreArchivo);
         return null;
     }
 
     // ========== URL PÚBLICA ==========
     public String urlPublica(String nombreArchivo) {
-        log.info("🌐 Generando URL pública para: {}", nombreArchivo);
+        log.info("Generando URL pública para: {}", nombreArchivo);
         return cloudinary.url().generate(nombreArchivo);
     }
 

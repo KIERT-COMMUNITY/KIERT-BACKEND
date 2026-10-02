@@ -23,7 +23,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
 
     /**
      * Busca un link por su token, cargando grupo y creador.
-     * ✅ MEJORA: incluye JOIN FETCH para evitar N+1.
+     * MEJORA: incluye JOIN FETCH para evitar N+1.
      */
     @Query("""
             SELECT i FROM InvitacionLink i
@@ -34,7 +34,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     Optional<InvitacionLink> findByToken(@Param("token") String token);
 
     /**
-     * ✅ NUEVO: Busca un link VÁLIDO por token.
+     * NUEVO: Busca un link VÁLIDO por token.
      * Filtra activo, no expirado, y con usos disponibles EN LA QUERY.
      */
     @Query("""
@@ -57,7 +57,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
 
     /**
      * Lista todos los links activos de un grupo.
-     * ✅ MEJORA: incluye JOIN FETCH del creador.
+     * MEJORA: incluye JOIN FETCH del creador.
      */
     @Query("""
             SELECT i FROM InvitacionLink i
@@ -69,7 +69,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     List<InvitacionLink> findActivosByGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     * NUEVO: Versión paginada.
      */
     @Query("""
             SELECT i FROM InvitacionLink i
@@ -84,7 +84,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     );
 
     /**
-     * ✅ NUEVO: Solo links vigentes de un grupo (no expirados, con usos).
+     * NUEVO: Solo links vigentes de un grupo (no expirados, con usos).
      */
     @Query("""
             SELECT i FROM InvitacionLink i
@@ -105,7 +105,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Links creados por un usuario (en todos los grupos).
+     * NUEVO: Links creados por un usuario (en todos los grupos).
      */
     @Query("""
             SELECT i FROM InvitacionLink i
@@ -119,7 +119,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     );
 
     /**
-     * ✅ NUEVO: Links vigentes creados por un usuario en un grupo específico.
+     * NUEVO: Links vigentes creados por un usuario en un grupo específico.
      */
     @Query("""
             SELECT i FROM InvitacionLink i
@@ -151,7 +151,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     boolean existeTokenActivo(@Param("token") String token);
 
     /**
-     * ✅ NUEVO: Verifica si un token es VIGENTE (activo + no expirado + con usos).
+     * NUEVO: Verifica si un token es VIGENTE (activo + no expirado + con usos).
      */
     @Query("""
             SELECT COUNT(i) > 0 FROM InvitacionLink i
@@ -170,7 +170,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta links activos de un grupo.
+     *NUEVO: Cuenta links activos de un grupo.
      */
     @Query("""
             SELECT COUNT(i) FROM InvitacionLink i
@@ -180,7 +180,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     long countActivosByGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Cuenta links vigentes de un grupo.
+     * NUEVO: Cuenta links vigentes de un grupo.
      */
     @Query("""
             SELECT COUNT(i) FROM InvitacionLink i
@@ -199,10 +199,10 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Incrementa usos y actualiza fecha_ultimo_uso EN 1 QUERY.
+     * NUEVO: Incrementa usos y actualiza fecha_ultimo_uso EN 1 QUERY.
      * Mucho más eficiente que cargar la entidad y guardarla.
      *
-     * ⚠️ IMPORTANTE: usa `WHERE usos_maximos = 0 OR usos_actuales < usos_maximos`
+     * IMPORTANTE: usa `WHERE usos_maximos = 0 OR usos_actuales < usos_maximos`
      * para garantizar que no se exceda el límite, incluso con concurrencia.
      */
     @Modifying
@@ -221,7 +221,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     );
 
     /**
-     * ✅ NUEVO: Desactiva todos los links de un grupo (útil al eliminar grupo).
+     * NUEVO: Desactiva todos los links de un grupo (útil al eliminar grupo).
      */
     @Modifying
     @Query("""
@@ -233,7 +233,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     int desactivarPorGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Desactiva un link específico.
+     * NUEVO: Desactiva un link específico.
      */
     @Modifying
     @Query("""
@@ -248,7 +248,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina links expirados hace más de N días.
+     * NUEVO: Elimina links expirados hace más de N días.
      */
     @Modifying
     @Query("""
@@ -259,7 +259,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     int eliminarExpirados(@Param("limite") Instant limite);
 
     /**
-     * ✅ NUEVO: Elimina links agotados (usos = usos_maximos) hace más de N días.
+     * NUEVO: Elimina links agotados (usos = usos_maximos) hace más de N días.
      */
     @Modifying
     @Query("""
@@ -276,13 +276,13 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de links activos en el sistema.
+     * NUEVO: Total de links activos en el sistema.
      */
     @Query("SELECT COUNT(i) FROM InvitacionLink i WHERE i.activo = true")
     long countActivosGlobales();
 
     /**
-     * ✅ NUEVO: Top N links más usados.
+     * NUEVO: Top N links más usados.
      */
     @Query("""
             SELECT i FROM InvitacionLink i
@@ -294,7 +294,7 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
     List<InvitacionLink> findMasUsados(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Links con más usos agrupados por grupo.
+     * NUEVO: Links con más usos agrupados por grupo.
      * Devuelve [grupoId, totalUsos].
      */
     @Query("""

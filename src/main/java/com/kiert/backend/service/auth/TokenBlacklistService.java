@@ -34,9 +34,9 @@ public class TokenBlacklistService {
                     "1",
                     Duration.ofSeconds(segundosRestantes)
             );
-            log.info("🔒 Token invalidado en blacklist (TTL {}s)", segundosRestantes);
+            log.info(" Token invalidado en blacklist (TTL {}s)", segundosRestantes);
         } catch (Exception e) {
-            log.error("⚠️ Error añadiendo token a blacklist: {}", e.getMessage());
+            log.error("Error añadiendo token a blacklist: {}", e.getMessage());
         }
     }
 
@@ -48,7 +48,7 @@ public class TokenBlacklistService {
         try {
             return Boolean.TRUE.equals(redis.hasKey(KEY_BLACKLIST + token));
         } catch (Exception e) {
-            log.error("⚠️ Error consultando blacklist: {}", e.getMessage());
+            log.error(" Error consultando blacklist: {}", e.getMessage());
             return false;  // fail-open
         }
     }

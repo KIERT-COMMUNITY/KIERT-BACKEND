@@ -23,7 +23,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
 
     /**
      * Lista miembros ACTIVOS de un grupo con su usuario cargado.
-     * ⚠️ Para grupos grandes (500+), usa `findMiembrosActivosPaginado`.
+     *  Para grupos grandes (500+), usa `findMiembrosActivosPaginado`.
      */
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -36,7 +36,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     List<MiembroGrupo> findMiembrosActivos(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para grupos grandes).
+     *  NUEVO: Versión paginada (recomendada para grupos grandes).
      */
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -57,7 +57,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
 
     /**
      * Busca un miembro por grupo+usuario (cualquier estado).
-     * ✅ MEJORA: incluye JOIN FETCH de usuario y grupo para evitar N+1.
+     *  MEJORA: incluye JOIN FETCH de usuario y grupo para evitar N+1.
      */
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -84,7 +84,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
 
     /**
      * Lista invitaciones PENDIENTES del usuario.
-     * ✅ MEJORA: filtra por grupos activos (no muestra grupos eliminados).
+     * MEJORA: filtra por grupos activos (no muestra grupos eliminados).
      */
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -98,7 +98,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     List<MiembroGrupo> findInvitacionesPendientes(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Invitaciones PENDIENTES de un grupo específico.
+     * NUEVO: Invitaciones PENDIENTES de un grupo específico.
      */
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -111,7 +111,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     List<MiembroGrupo> findPendientesDeGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Cuenta invitaciones pendientes del usuario (para badge).
+     * NUEVO: Cuenta invitaciones pendientes del usuario (para badge).
      */
     @Query("""
             SELECT COUNT(m) FROM MiembroGrupo m
@@ -127,7 +127,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Miembros con rol ADMIN de un grupo.
+     * NUEVO: Miembros con rol ADMIN de un grupo.
      */
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -140,7 +140,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     List<MiembroGrupo> findAdminsDeGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Cuenta admins de un grupo.
+     *NUEVO: Cuenta admins de un grupo.
      */
     @Query("""
             SELECT COUNT(m) FROM MiembroGrupo m
@@ -151,7 +151,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     long countAdminsDeGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Grupos donde el usuario es ADMIN.
+     * NUEVO: Grupos donde el usuario es ADMIN.
      */
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -179,7 +179,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     long countMiembrosActivos(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Cuenta miembros por estado.
+     * NUEVO: Cuenta miembros por estado.
      */
     @Query("""
             SELECT COUNT(m) FROM MiembroGrupo m
@@ -192,7 +192,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     );
 
     /**
-     * ✅ NUEVO: Cuenta miembros agrupados por rol.
+     *NUEVO: Cuenta miembros agrupados por rol.
      * Devuelve [rol, count].
      */
     @Query("""
@@ -205,7 +205,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     List<Object[]> contarPorRol(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Contar miembros activos de varios grupos en 1 query.
+     * NUEVO: Contar miembros activos de varios grupos en 1 query.
      * Devuelve [grupoId, count].
      * Útil para el sidebar sin N+1.
      */
@@ -219,7 +219,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     List<Object[]> contarMiembrosPorGrupos(@Param("grupoIds") List<Long> grupoIds);
 
     /**
-     * ✅ NUEVO: Cuenta cuántos grupos activos tiene el usuario como miembro.
+     * NUEVO: Cuenta cuántos grupos activos tiene el usuario como miembro.
      */
     @Query("""
             SELECT COUNT(DISTINCT m.grupo.id) FROM MiembroGrupo m
@@ -249,7 +249,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     );
 
     /**
-     * ✅ NUEVO: Verifica si el usuario es ADMIN del grupo.
+     *NUEVO: Verifica si el usuario es ADMIN del grupo.
      */
     @Query("""
             SELECT COUNT(m) > 0 FROM MiembroGrupo m
@@ -264,7 +264,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     );
 
     /**
-     * ✅ NUEVO: Verifica si el usuario tiene una invitación PENDIENTE.
+     * NUEVO: Verifica si el usuario tiene una invitación PENDIENTE.
      */
     @Query("""
             SELECT COUNT(m) > 0 FROM MiembroGrupo m
@@ -282,7 +282,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Buscar miembros por nombre de usuario.
+     *NUEVO: Buscar miembros por nombre de usuario.
      */
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -302,7 +302,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: IDs de usuarios que NO son miembros del grupo.
+     * NUEVO: IDs de usuarios que NO son miembros del grupo.
      * Útil para el modal de invitar usuarios.
      */
     @Query("""
@@ -325,7 +325,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Expulsa a varios miembros en 1 query.
+     * NUEVO: Expulsa a varios miembros en 1 query.
      */
     @Modifying
     @Query("""
@@ -342,7 +342,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     );
 
     /**
-     * ✅ NUEVO: Cambia el rol de un miembro.
+     * NUEVO: Cambia el rol de un miembro.
      */
     @Modifying
     @Query("""
@@ -363,7 +363,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina físicamente miembros con estado final
+     * NUEVO: Elimina físicamente miembros con estado final
      * (EXPULSADO, SALIO, RECHAZADO) hace más de N días.
      */
     @Modifying
@@ -379,7 +379,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta total de miembros activos en el sistema.
+     * NUEVO: Cuenta total de miembros activos en el sistema.
      */
     @Query("""
             SELECT COUNT(m) FROM MiembroGrupo m
@@ -388,7 +388,7 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
     long countActivosGlobales();
 
     /**
-     * ✅ NUEVO: Top grupos con más miembros.
+     *NUEVO: Top grupos con más miembros.
      */
     @Query("""
             SELECT m.grupo.id, COUNT(m) as total

@@ -146,13 +146,13 @@ public class ReaccionService {
     // ============================================================
     @Cacheable(value = CACHE_REACCIONES_POST, key = "#postId")
     public Map<String, Long> obtenerReaccionesPost(Long postId) {
-        log.debug("🔍 [DB] Calculando reacciones del post: {}", postId);
+        log.debug("[DB] Calculando reacciones del post: {}", postId);
         return calcularReaccionesPostDesdeDB(postId);
     }
 
     @Cacheable(value = CACHE_REACCIONES_COMENTARIO, key = "#comentarioId")
     public Map<String, Long> obtenerReaccionesComentario(Long comentarioId) {
-        log.debug("🔍 [DB] Calculando reacciones del comentario: {}", comentarioId);
+        log.debug("[DB] Calculando reacciones del comentario: {}", comentarioId);
         return calcularReaccionesComentarioDesdeDB(comentarioId);
     }
 
@@ -209,7 +209,7 @@ public class ReaccionService {
             key = "#usuarioId + ':' + #postId"
     )
     public boolean usuarioReaccionoPost(Long usuarioId, Long postId) {
-        log.debug("🔍 [DB] Verificando si usuario {} reaccionó al post {}", usuarioId, postId);
+        log.debug("[DB] Verificando si usuario {} reaccionó al post {}", usuarioId, postId);
         return reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId).isPresent();
     }
 
@@ -218,7 +218,7 @@ public class ReaccionService {
             key = "#usuarioId + ':' + #comentarioId"
     )
     public boolean usuarioReaccionoComentario(Long usuarioId, Long comentarioId) {
-        log.debug("🔍 [DB] Verificando si usuario {} reaccionó al comentario {}", usuarioId, comentarioId);
+        log.debug("[DB] Verificando si usuario {} reaccionó al comentario {}", usuarioId, comentarioId);
         return reaccionRepository.findByUsuarioIdAndComentarioId(usuarioId, comentarioId).isPresent();
     }
 }

@@ -23,7 +23,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
 
     /**
      * Lista los grupos donde el usuario es creador O miembro ACTIVO.
-     * ✅ MEJORA: incluye JOIN FETCH del creador para evitar N+1.
+     *  MEJORA: incluye JOIN FETCH del creador para evitar N+1.
      */
     @Query("""
             SELECT DISTINCT g FROM GrupoChat g
@@ -43,7 +43,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     List<GrupoChat> findGruposDeUsuario(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Versión paginada de grupos del usuario.
+     *  NUEVO: Versión paginada de grupos del usuario.
      */
     @Query("""
             SELECT DISTINCT g FROM GrupoChat g
@@ -66,7 +66,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     );
 
     /**
-     * ✅ NUEVO: Grupos donde el usuario es ADMIN.
+     *  NUEVO: Grupos donde el usuario es ADMIN.
      */
     @Query("""
             SELECT DISTINCT g FROM GrupoChat g
@@ -84,7 +84,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     List<GrupoChat> findGruposDondeEsAdmin(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Cuenta los grupos activos de un usuario.
+     *  NUEVO: Cuenta los grupos activos de un usuario.
      */
     @Query("""
             SELECT COUNT(DISTINCT g) FROM GrupoChat g
@@ -106,7 +106,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     // ============================================================
 
     /**
-     * ✅ MEJORA: usa `NOT EXISTS` en lugar de `NOT IN` (más rápido).
+     *  MEJORA: usa `NOT EXISTS` en lugar de `NOT IN` (más rápido).
      * `NOT IN` con subqueries grandes es lento; `NOT EXISTS` usa índices.
      */
     @Query("""
@@ -125,7 +125,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     List<GrupoChat> findGruposPublicosDisponibles(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     *  NUEVO: Versión paginada.
      */
     @Query("""
             SELECT g FROM GrupoChat g
@@ -162,7 +162,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     List<GrupoChat> buscarPorNombre(@Param("query") String query);
 
     /**
-     * ✅ NUEVO: Búsqueda avanzada (nombre + descripción).
+     *  NUEVO: Búsqueda avanzada (nombre + descripción).
      */
     @Query("""
             SELECT g FROM GrupoChat g
@@ -180,7 +180,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     );
 
     /**
-     * ✅ NUEVO: Busca grupos donde el usuario es miembro.
+     * NUEVO: Busca grupos donde el usuario es miembro.
      */
     @Query("""
             SELECT DISTINCT g FROM GrupoChat g
@@ -205,7 +205,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top N grupos públicos con más miembros activos.
+     *  NUEVO: Top N grupos públicos con más miembros activos.
      */
     @Query("""
             SELECT g FROM GrupoChat g
@@ -220,7 +220,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     List<GrupoChat> findGruposPopulares(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Grupos recientes (últimos creados).
+     *  NUEVO: Grupos recientes (últimos creados).
      */
     @Query("""
             SELECT g FROM GrupoChat g
@@ -236,7 +236,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Obtiene un grupo activo con su creador cargado.
+     * NUEVO: Obtiene un grupo activo con su creador cargado.
      */
     @Query("""
             SELECT g FROM GrupoChat g
@@ -265,7 +265,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta miembros activos de un grupo.
+     *  NUEVO: Cuenta miembros activos de un grupo.
      */
     @Query("""
             SELECT COUNT(m) FROM MiembroGrupo m
@@ -275,7 +275,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     long countMiembrosActivos(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Cuenta miembros activos agrupados por grupos.
+     *  NUEVO: Cuenta miembros activos agrupados por grupos.
      * Devuelve [grupoId, count].
      * Útil para el listado sin N+1.
      */
@@ -289,13 +289,13 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     List<Object[]> contarMiembrosPorGrupos(@Param("grupoIds") List<Long> grupoIds);
 
     /**
-     * ✅ NUEVO: Total de grupos activos.
+     *  NUEVO: Total de grupos activos.
      */
     @Query("SELECT COUNT(g) FROM GrupoChat g WHERE g.activo = true")
     long countActivos();
 
     /**
-     * ✅ NUEVO: Total de grupos públicos activos.
+     *  NUEVO: Total de grupos públicos activos.
      */
     @Query("""
             SELECT COUNT(g) FROM GrupoChat g
@@ -309,7 +309,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Verifica si ya existe un grupo con ese nombre
+     *  NUEVO: Verifica si ya existe un grupo con ese nombre
      * creado por el mismo usuario.
      */
     @Query("""
@@ -328,7 +328,7 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Desactiva varios grupos en 1 query.
+     *  NUEVO: Desactiva varios grupos en 1 query.
      */
     @Modifying
     @Query("""

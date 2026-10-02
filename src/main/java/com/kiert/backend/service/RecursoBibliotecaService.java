@@ -47,7 +47,7 @@ public class RecursoBibliotecaService {
             key = "'usuario:' + (#usuarioId != null ? #usuarioId : 'anon')"
     )
     public List<RecursoBibliotecaDTO> listarTodos(Long usuarioId) {
-        log.info("📋 [DB] Listando recursos visibles para usuario {}", usuarioId);
+        log.info("[DB] Listando recursos visibles para usuario {}", usuarioId);
         List<RecursoBiblioteca> recursos = (usuarioId != null)
                 ? recursoRepository.findVisiblesParaUsuario(usuarioId)
                 : recursoRepository.findAllActiveOrderByFechaAgregadoDesc();
@@ -60,7 +60,7 @@ public class RecursoBibliotecaService {
             key = "'usuario:' + (#usuarioId != null ? #usuarioId : 'anon') + ':cat:' + #categoria"
     )
     public List<RecursoBibliotecaDTO> listarPorCategoria(Long usuarioId, String categoria) {
-        log.info("📋 [DB] Listando recursos categoría={} para usuario {}", categoria, usuarioId);
+        log.info("[DB] Listando recursos categoría={} para usuario {}", categoria, usuarioId);
         List<RecursoBiblioteca> recursos = (usuarioId != null)
                 ? recursoRepository.findVisiblesPorCategoria(usuarioId, categoria)
                 : recursoRepository.findByCategoriaOrderByFechaAgregadoDesc(categoria);
@@ -70,7 +70,7 @@ public class RecursoBibliotecaService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_DESTACADOS, key = "'all'")
     public List<RecursoBibliotecaDTO> listarDestacados() {
-        log.info("⭐ [DB] Listando recursos destacados");
+        log.info("[DB] Listando recursos destacados");
         return recursoRepository.findDestacados()
                 .stream()
                 .map(this::toDTO)
@@ -80,22 +80,22 @@ public class RecursoBibliotecaService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_CATEGORIAS, key = "'all'")
     public List<String> obtenerCategorias() {
-        log.info("📋 [DB] Obteniendo categorías de la biblioteca");
+        log.info("[DB] Obteniendo categorías de la biblioteca");
         return recursoRepository.findDistinctCategorias();
     }
 
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_NIVELES, key = "'all'")
     public List<String> obtenerNiveles() {
-        log.info("📋 [DB] Obteniendo niveles de la biblioteca");
+        log.info("[DB] Obteniendo niveles de la biblioteca");
         return recursoRepository.findDistinctNiveles();
     }
 
     @Transactional(readOnly = true)
     public List<RecursoBibliotecaDTO> buscar(Long usuarioId, String query) {
-        log.info("🔍 Buscando recursos query={} para usuario {}", query, usuarioId);
+        log.info("Buscando recursos query={} para usuario {}", query, usuarioId);
         if (query == null || query.trim().isEmpty()) {
-            return listarTodos(usuarioId);  // ✅ usa caché
+            return listarTodos(usuarioId);  // usa caché
         }
         // Búsqueda de texto libre — NO se cachea (muchas variantes)
         List<RecursoBiblioteca> recursos = (usuarioId != null)
@@ -106,7 +106,7 @@ public class RecursoBibliotecaService {
 
     @Transactional(readOnly = true)
     public List<RecursoBibliotecaDTO> buscarPorCategoria(String categoria, String query) {
-        log.info("🔍 Buscando recursos en categoría {}: {}", categoria, query);
+        log.info("Buscando recursos en categoría {}: {}", categoria, query);
         if (query == null || query.trim().isEmpty()) {
             return recursoRepository.findByCategoriaOrderByFechaAgregadoDesc(categoria)
                     .stream()
@@ -123,7 +123,7 @@ public class RecursoBibliotecaService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_RECURSO, key = "#id")
     public RecursoBibliotecaDTO obtenerPorId(Long id) {
-        log.info("🔍 [DB] Obteniendo recurso: {}", id);
+        log.info("[DB] Obteniendo recurso: {}", id);
         RecursoBiblioteca recurso = recursoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Recurso no encontrado"));
         return toDTO(recurso);
@@ -141,7 +141,7 @@ public class RecursoBibliotecaService {
             @CacheEvict(value = CACHE_NIVELES, allEntries = true)
     })
     public RecursoBibliotecaDTO crear(Long usuarioId, RecursoUsuarioRequest request) {
-        log.info("➕ Creando recurso para usuario {}", usuarioId);
+        log.info("Creando recurso para usuario {}", usuarioId);
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
@@ -165,7 +165,7 @@ public class RecursoBibliotecaService {
                 .build();
 
         RecursoBiblioteca guardado = recursoRepository.save(recurso);
-        log.info("✅ Recurso {} creado por usuario {}", guardado.getId(), usuarioId);
+        log.info("Recurso {} creado por usuario {}", guardado.getId(), usuarioId);
         return toDTO(guardado);
     }
 
@@ -178,7 +178,7 @@ public class RecursoBibliotecaService {
             @CacheEvict(value = CACHE_NIVELES, allEntries = true)
     })
     public RecursoBibliotecaDTO actualizar(Long usuarioId, Long recursoId, RecursoUsuarioRequest request) {
-        log.info("✏️ Actualizando recurso {} del usuario {}", recursoId, usuarioId);
+        log.info("Actualizando recurso {} del usuario {}", recursoId, usuarioId);
 
         RecursoBiblioteca recurso = recursoRepository.findById(recursoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
@@ -199,7 +199,7 @@ public class RecursoBibliotecaService {
         recurso.setTags(tagsToString(request.getTags()));
 
         RecursoBiblioteca actualizado = recursoRepository.save(recurso);
-        log.info("✅ Recurso {} actualizado", recursoId);
+        log.info("Recurso {} actualizado", recursoId);
         return toDTO(actualizado);
     }
 
@@ -212,7 +212,7 @@ public class RecursoBibliotecaService {
             @CacheEvict(value = CACHE_NIVELES, allEntries = true)
     })
     public void eliminar(Long usuarioId, Long recursoId) {
-        log.info("🗑️ Eliminando recurso {} del usuario {}", recursoId, usuarioId);
+        log.info("Eliminando recurso {} del usuario {}", recursoId, usuarioId);
 
         RecursoBiblioteca recurso = recursoRepository.findById(recursoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
@@ -222,7 +222,7 @@ public class RecursoBibliotecaService {
 
         recurso.setActivo(false); // borrado lógico
         recursoRepository.save(recurso);
-        log.info("✅ Recurso {} eliminado (lógico)", recursoId);
+        log.info("Recurso {} eliminado (lógico)", recursoId);
     }
 
     // ============================================================

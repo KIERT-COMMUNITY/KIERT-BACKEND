@@ -46,7 +46,7 @@ public class BloqueoController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("❌ Error al bloquear usuario: {}", e.getMessage(), e);
+            log.error(" Error al bloquear usuario: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al bloquear usuario"));
         }
@@ -69,7 +69,7 @@ public class BloqueoController {
                     "mensaje", "Usuario desbloqueado correctamente. Ya pueden volver a comunicarse."
             ));
         } catch (Exception e) {
-            log.error("❌ Error al desbloquear usuario: {}", e.getMessage(), e);
+            log.error(" Error al desbloquear usuario: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", e.getMessage()));
         }

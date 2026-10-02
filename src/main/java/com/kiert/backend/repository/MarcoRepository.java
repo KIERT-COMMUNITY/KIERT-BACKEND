@@ -96,12 +96,12 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
     );
 
     // ============================================================
-    // MARCOS POR USUARIO (✅ CORREGIDO: usa m.usuario.id)
+    // MARCOS POR USUARIO (CORREGIDO: usa m.usuario.id)
     // ============================================================
 
     /**
      * Lista marcos creados por un usuario específico.
-     * ✅ Usa `m.usuario.id` en lugar de `m.usuarioId`.
+     * Usa `m.usuario.id` en lugar de `m.usuarioId`.
      */
     @Query("""
             SELECT m FROM MarcoPersonalizado m

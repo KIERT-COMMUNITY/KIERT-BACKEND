@@ -33,7 +33,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     List<CompraUsuario> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Versión paginada.
+     * NUEVO: Versión paginada.
      */
     @Query("""
             SELECT c FROM CompraUsuario c
@@ -46,7 +46,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     );
 
     /**
-     * ✅ NUEVO: Compras por tipo (MARCOS, FONDOS, TEMAS, etc).
+     *  NUEVO: Compras por tipo (MARCOS, FONDOS, TEMAS, etc).
      */
     @Query("""
             SELECT c FROM CompraUsuario c
@@ -60,7 +60,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     );
 
     /**
-     * ✅ NUEVO: IDs de items comprados por tipo (para el catálogo).
+     * NUEVO: IDs de items comprados por tipo (para el catálogo).
      * Uso típico: saber qué marcos ya tiene el usuario para marcarlos como "comprados".
      */
     @Query("""
@@ -84,7 +84,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     boolean existsByUsuarioIdAndTipoAndItemId(Long usuarioId, String tipo, String itemId);
 
     /**
-     * ✅ NUEVO: Devuelve la compra específica si existe.
+     * NUEVO: Devuelve la compra específica si existe.
      * Uso: para mostrar detalles de la compra, o para auditoría.
      */
     @Query("""
@@ -105,7 +105,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total gastado por un usuario.
+     *  NUEVO: Total gastado por un usuario.
      */
     @Query("""
             SELECT COALESCE(SUM(c.precio), 0)
@@ -115,7 +115,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     BigDecimal totalGastadoPorUsuario(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Total gastado agrupado por tipo.
+     * NUEVO: Total gastado agrupado por tipo.
      * Devuelve [tipo, total].
      */
     @Query("""
@@ -127,7 +127,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     List<Object[]> totalGastadoPorTipo(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Cuántas compras tiene un usuario.
+     * NUEVO: Cuántas compras tiene un usuario.
      */
     @Query("""
             SELECT COUNT(c) FROM CompraUsuario c
@@ -136,7 +136,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     long contarComprasDeUsuario(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Cuántas veces se ha comprado un item específico.
+     *  NUEVO: Cuántas veces se ha comprado un item específico.
      * Útil para saber qué marcos/fondos son más populares.
      */
     @Query("""
@@ -154,7 +154,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top N items más comprados por tipo.
+     * NUEVO: Top N items más comprados por tipo.
      * Devuelve [itemId, count].
      */
     @Query("""
@@ -174,7 +174,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Compras recientes en un rango de fechas.
+     *  NUEVO: Compras recientes en un rango de fechas.
      * Útil para reportes admin.
      */
     @Query("""
@@ -189,7 +189,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     );
 
     /**
-     * ✅ NUEVO: Usuarios que compraron un item específico.
+     *  NUEVO: Usuarios que compraron un item específico.
      */
     @Query("""
             SELECT c.usuario.id FROM CompraUsuario c
@@ -206,7 +206,7 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Verifica si un usuario puede comprar un item.
+     *  NUEVO: Verifica si un usuario puede comprar un item.
      * Devuelve true si NO lo ha comprado antes (puede comprar).
      */
     @Query("""

@@ -34,7 +34,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<Documento> findAllActiveOrderByFechaCreacionDesc();
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada).
+     *  NUEVO: Versión paginada (recomendada).
      */
     @Query("""
             SELECT d FROM Documento d
@@ -58,7 +58,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<Documento> findByCategoriaOrderByFechaCreacionDesc(@Param("categoria") String categoria);
 
     /**
-     * ✅ NUEVO: Versión paginada por categoría.
+     *  NUEVO: Versión paginada por categoría.
      */
     @Query("""
             SELECT d FROM Documento d
@@ -78,7 +78,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
 
     /**
      * Obtiene las categorías distintas (estándar + personalizadas).
-     * ✅ MEJORA: incluye `categoriaPersonalizada` cuando no es null.
+     *  MEJORA: incluye `categoriaPersonalizada` cuando no es null.
      */
     @Query("""
             SELECT DISTINCT d.categoria FROM Documento d
@@ -106,7 +106,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<Documento> findByUsuarioIdOrderByFechaCreacionDesc(@Param("usuarioId") Long usuarioId);
 
     /**
-     * ✅ NUEVO: Versión paginada de documentos por usuario.
+     *  NUEVO: Versión paginada de documentos por usuario.
      */
     @Query("""
             SELECT d FROM Documento d
@@ -121,7 +121,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     );
 
     /**
-     * ✅ NUEVO: Contar documentos de un usuario.
+     * NUEVO: Contar documentos de un usuario.
      */
     @Query("""
             SELECT COUNT(d) FROM Documento d
@@ -144,7 +144,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<Documento> searchByTitulo(@Param("query") String query);
 
     /**
-     * ✅ NUEVO: Búsqueda avanzada (título + descripción).
+     * NUEVO: Búsqueda avanzada (título + descripción).
      */
     @Query("""
             SELECT d FROM Documento d
@@ -175,7 +175,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     );
 
     /**
-     * ✅ NUEVO: Búsqueda por autor (nombre de usuario).
+     *  NUEVO: Búsqueda por autor (nombre de usuario).
      */
     @Query("""
             SELECT d FROM Documento d
@@ -194,7 +194,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Obtiene un documento activo con su autor cargado.
+     *  NUEVO: Obtiene un documento activo con su autor cargado.
      */
     @Query("""
             SELECT d FROM Documento d
@@ -209,7 +209,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top N documentos más descargados.
+     * NUEVO: Top N documentos más descargados.
      */
     @Query("""
             SELECT d FROM Documento d
@@ -220,7 +220,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<Documento> findTopMasDescargados(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Top N documentos más vistos.
+     *  NUEVO: Top N documentos más vistos.
      */
     @Query("""
             SELECT d FROM Documento d
@@ -231,7 +231,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<Documento> findTopMasVistos(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Documentos recientes (para home).
+     *  NUEVO: Documentos recientes (para home).
      */
     @Query("""
             SELECT d FROM Documento d
@@ -246,7 +246,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta documentos agrupados por categoría.
+     *  NUEVO: Cuenta documentos agrupados por categoría.
      * Devuelve [categoria, count].
      *
      * Útil para mostrar el número de documentos por filtro sin N+1.
@@ -260,7 +260,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<Object[]> contarDocumentosPorCategoria();
 
     /**
-     * ✅ NUEVO: Cuenta documentos agrupados por usuario.
+     *  NUEVO: Cuenta documentos agrupados por usuario.
      * Devuelve [usuarioId, count].
      */
     @Query("""
@@ -277,7 +277,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Incrementa el contador de descargas en 1 (bulk).
+     *  NUEVO: Incrementa el contador de descargas en 1 (bulk).
      */
     @Modifying
     @Query("""
@@ -288,7 +288,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     int incrementarDescargas(@Param("id") Long id);
 
     /**
-     * ✅ NUEVO: Incrementa el contador de visitas en 1 (bulk).
+     *  NUEVO: Incrementa el contador de visitas en 1 (bulk).
      */
     @Modifying
     @Query("""
@@ -303,7 +303,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Verifica si existe un documento activo con el mismo título
+     *  NUEVO: Verifica si existe un documento activo con el mismo título
      * para el mismo usuario (anti-duplicados).
      */
     @Query("""
@@ -322,25 +322,25 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de documentos activos.
+     *  NUEVO: Total de documentos activos.
      */
     @Query("SELECT COUNT(d) FROM Documento d WHERE d.activo = true")
     long countActivos();
 
     /**
-     * ✅ NUEVO: Total de descargas en todos los documentos.
+     *  NUEVO: Total de descargas en todos los documentos.
      */
     @Query("SELECT COALESCE(SUM(d.descargas), 0) FROM Documento d WHERE d.activo = true")
     long totalDescargas();
 
     /**
-     * ✅ NUEVO: Total de visitas en todos los documentos.
+     *  NUEVO: Total de visitas en todos los documentos.
      */
     @Query("SELECT COALESCE(SUM(d.visitas), 0) FROM Documento d WHERE d.activo = true")
     long totalVisitas();
 
     /**
-     * ✅ NUEVO: Documentos creados en un rango de fechas (para reportes).
+     *  NUEVO: Documentos creados en un rango de fechas (para reportes).
      */
     @Query("""
             SELECT d FROM Documento d

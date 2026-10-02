@@ -21,7 +21,7 @@ public class ArchivoController {
 
     @PostMapping("/url-firmada")
     public ResponseEntity<UrlFirmadaResponseDTO> urlFirmada(@Valid @RequestBody UrlFirmadaRequestDTO datos) {
-        log.info("🔑 Generando URL firmada para: {}", datos.nombreArchivo());
+        log.info("Generando URL firmada para: {}", datos.nombreArchivo());
         return ResponseEntity.ok(uploadService.generarUrlFirmada(datos));
     }
 
@@ -29,11 +29,11 @@ public class ArchivoController {
     public ResponseEntity<String> testConexion() {
         try {
             String testUrl = storageService.urlPublica("test.txt");
-            log.info("✅ URL de prueba: {}", testUrl);
-            return ResponseEntity.ok("✅ Conexión a Cloudinary exitosa. URL: " + testUrl);
+            log.info("URL de prueba: {}", testUrl);
+            return ResponseEntity.ok("Conexión a Cloudinary exitosa. URL: " + testUrl);
         } catch (Exception e) {
-            log.error("❌ Error: {}", e.getMessage());
-            return ResponseEntity.status(500).body("❌ Error: " + e.getMessage());
+            log.error("Error: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Error: " + e.getMessage());
         }
     }
 }

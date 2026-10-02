@@ -21,40 +21,40 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, Object>> manejarBadRequest(BadRequestException ex) {
-        log.warn("⚠️ BadRequest: {}", ex.getMessage());
+        log.warn("BadRequest: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(RecursoNoEncontradoException.class)
     public ResponseEntity<Map<String, Object>> manejarNoEncontrado(RecursoNoEncontradoException ex) {
-        log.warn("🔍 No encontrado: {}", ex.getMessage());
+        log.warn("No encontrado: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(AccesoDenegadoException.class)
     public ResponseEntity<Map<String, Object>> manejarAccesoDenegado(AccesoDenegadoException ex) {
-        log.warn("🚫 Acceso denegado: {}", ex.getMessage());
+        log.warn("Acceso denegado: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
-    // 🔥 NUEVO: Manejar IllegalStateException (solicitudes duplicadas, etc.)
+    // NUEVO: Manejar IllegalStateException (solicitudes duplicadas, etc.)
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> manejarIllegalState(IllegalStateException ex) {
-        log.warn("⚠️ IllegalState: {}", ex.getMessage());
+        log.warn("IllegalState: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.CONFLICT, ex.getMessage());
     }
 
-    // 🔥 NUEVO: Manejar IllegalArgumentException
+    // NUEVO: Manejar IllegalArgumentException
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> manejarIllegalArgument(IllegalArgumentException ex) {
-        log.warn("⚠️ IllegalArgument: {}", ex.getMessage());
+        log.warn("IllegalArgument: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    // 🔥 NUEVO: Manejar SecurityException
+    // NUEVO: Manejar SecurityException
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<Map<String, Object>> manejarSecurity(SecurityException ex) {
-        log.warn("🔒 Security: {}", ex.getMessage());
+        log.warn("Security: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
@@ -80,7 +80,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> manejarGenerico(Exception ex) {
-        log.error("❌ ERROR INESPERADO: {}", ex.getMessage(), ex);
+        log.error("ERROR INESPERADO: {}", ex.getMessage(), ex);
         return construirRespuesta(HttpStatus.INTERNAL_SERVER_ERROR,
                 ex.getMessage() != null ? ex.getMessage() : "Error interno del servidor");
     }

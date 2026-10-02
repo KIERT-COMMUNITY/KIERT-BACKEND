@@ -22,8 +22,8 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
 
     /**
      * Lista el historial completo de un grupo ordenado por fecha DESC.
-     * ✅ MEJORA: incluye JOIN FETCH del usuario para evitar N+1.
-     * ⚠️ Para grupos con muchas acciones, usa `findByGrupoIdPaginado`.
+     * MEJORA: incluye JOIN FETCH del usuario para evitar N+1.
+     * Para grupos con muchas acciones, usa `findByGrupoIdPaginado`.
      */
     @Query("""
             SELECT h FROM GrupoHistorial h
@@ -34,7 +34,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     List<GrupoHistorial> findByGrupoIdOrderByFechaDesc(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para grupos activos).
+     *  NUEVO: Versión paginada (recomendada para grupos activos).
      */
     @Query("""
             SELECT h FROM GrupoHistorial h
@@ -52,7 +52,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Historial filtrado por tipo de acción.
+     *  NUEVO: Historial filtrado por tipo de acción.
      * Ej: "EXPULSAR", "INVITAR", "EDITAR_NOMBRE", etc.
      */
     @Query("""
@@ -68,7 +68,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     );
 
     /**
-     * ✅ NUEVO: Contar acciones por tipo en un grupo.
+     *  NUEVO: Contar acciones por tipo en un grupo.
      * Devuelve [accion, count].
      */
     @Query("""
@@ -85,7 +85,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Historial de acciones hechas por un usuario específico en un grupo.
+     *  NUEVO: Historial de acciones hechas por un usuario específico en un grupo.
      */
     @Query("""
             SELECT h FROM GrupoHistorial h
@@ -100,7 +100,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     );
 
     /**
-     * ✅ NUEVO: Todas las acciones hechas por un usuario (en todos los grupos).
+     *  NUEVO: Todas las acciones hechas por un usuario (en todos los grupos).
      */
     @Query("""
             SELECT h FROM GrupoHistorial h
@@ -118,7 +118,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Historial de un grupo en un rango de fechas.
+     *  NUEVO: Historial de un grupo en un rango de fechas.
      * Útil para auditorías o reportes.
      */
     @Query("""
@@ -136,7 +136,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     );
 
     /**
-     * ✅ NUEVO: Últimas N acciones de un grupo (para el resumen rápido).
+     *  NUEVO: Últimas N acciones de un grupo (para el resumen rápido).
      */
     @Query("""
             SELECT h FROM GrupoHistorial h
@@ -154,7 +154,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Búsqueda por detalle (texto).
+     *  NUEVO: Búsqueda por detalle (texto).
      * Ej: buscar "expulsó a juan" o "cambió el nombre".
      */
     @Query("""
@@ -175,7 +175,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de acciones registradas en un grupo.
+     *  NUEVO: Total de acciones registradas en un grupo.
      */
     @Query("""
             SELECT COUNT(h) FROM GrupoHistorial h
@@ -184,7 +184,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     long countAccionesDeGrupo(@Param("grupoId") Long grupoId);
 
     /**
-     * ✅ NUEVO: Total de acciones hechas por un usuario en un grupo.
+     *  NUEVO: Total de acciones hechas por un usuario en un grupo.
      */
     @Query("""
             SELECT COUNT(h) FROM GrupoHistorial h
@@ -197,7 +197,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     );
 
     /**
-     * ✅ NUEVO: Acciones más recientes en todos los grupos (para admin).
+     * NUEVO: Acciones más recientes en todos los grupos (para admin).
      */
     @Query("""
             SELECT h FROM GrupoHistorial h
@@ -212,7 +212,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina acciones antiguas (por ejemplo, > 1 año).
+     *  NUEVO: Elimina acciones antiguas (por ejemplo, > 1 año).
      * Se ejecuta con un @Scheduled para mantener la tabla pequeña.
      */
     @Modifying
@@ -223,7 +223,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     int eliminarAccionesAntiguas(@Param("limite") Instant limite);
 
     /**
-     * ✅ NUEVO: Cuenta cuántas acciones antiguas se eliminarán.
+     *  NUEVO: Cuenta cuántas acciones antiguas se eliminarán.
      * Útil para saber el impacto antes de borrar.
      */
     @Query("""
@@ -237,7 +237,7 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     // ============================================================
 
     /**
-     * ✅ NUEVO: Verifica si existe alguna acción de un tipo específico en un grupo.
+     *  NUEVO: Verifica si existe alguna acción de un tipo específico en un grupo.
      */
     @Query("""
             SELECT COUNT(h) > 0 FROM GrupoHistorial h

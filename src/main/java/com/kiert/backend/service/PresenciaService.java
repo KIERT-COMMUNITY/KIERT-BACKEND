@@ -36,9 +36,9 @@ public class PresenciaService {
             // Última conexión con TTL de 7 días
             redis.opsForValue().set(keyUltima, Instant.now().toString(), TTL_ULTIMA);
 
-            log.debug("🟢 Usuario {} EN LÍNEA (Redis)", usuarioId);
+            log.debug("Usuario {} EN LÍNEA (Redis)", usuarioId);
         } catch (Exception e) {
-            log.error("⚠️ Error marcando en línea a {} en Redis: {}", usuarioId, e.getMessage());
+            log.error("Error marcando en línea a {} en Redis: {}", usuarioId, e.getMessage());
         }
     }
 
@@ -58,9 +58,9 @@ public class PresenciaService {
                     TTL_ULTIMA
             );
 
-            log.debug("🔴 Usuario {} DESCONECTADO (Redis)", usuarioId);
+            log.debug("Usuario {} DESCONECTADO (Redis)", usuarioId);
         } catch (Exception e) {
-            log.error("⚠️ Error marcando desconectado a {} en Redis: {}", usuarioId, e.getMessage());
+            log.error("Error marcando desconectado a {} en Redis: {}", usuarioId, e.getMessage());
         }
     }
 
@@ -72,7 +72,7 @@ public class PresenciaService {
         try {
             return Boolean.TRUE.equals(redis.hasKey(KEY_ONLINE + usuarioId));
         } catch (Exception e) {
-            log.error("⚠️ Error consultando presencia de {}: {}", usuarioId, e.getMessage());
+            log.error("Error consultando presencia de {}: {}", usuarioId, e.getMessage());
             return false;
         }
     }
@@ -83,7 +83,7 @@ public class PresenciaService {
             String valor = redis.opsForValue().get(KEY_ULTIMA + usuarioId);
             return valor != null ? Instant.parse(valor) : null;
         } catch (Exception e) {
-            log.error("⚠️ Error consultando última conexión de {}: {}", usuarioId, e.getMessage());
+            log.error("Error consultando última conexión de {}: {}", usuarioId, e.getMessage());
             return null;
         }
     }

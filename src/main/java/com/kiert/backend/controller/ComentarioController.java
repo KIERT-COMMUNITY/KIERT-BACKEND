@@ -25,23 +25,23 @@ public class ComentarioController {
 
     @GetMapping("/post/{postId}")
     public ResponseEntity<List<ComentarioDTO>> listarPorPost(@PathVariable Long postId) {
-        log.info("📋 Listando comentarios del post: {}", postId);
+        log.info("Listando comentarios del post: {}", postId);
         return ResponseEntity.ok(comentarioService.listarPorPost(postId));
     }
 
-    // ✅ Endpoint para crear comentario SOLO CON TEXTO (sin imagen)
+    // Endpoint para crear comentario SOLO CON TEXTO (sin imagen)
     @PostMapping("/post/{postId}")
     public ResponseEntity<ComentarioDTO> crearComentario(
             @PathVariable Long postId,
             @RequestBody Map<String, String> body) {
         String contenido = body.get("contenido");
-        log.info("📝 Creando comentario en post: {}, usuario: {}, contenido: {}", postId, usuarioActual.id(), contenido);
+        log.info("Creando comentario en post: {}, usuario: {}, contenido: {}", postId, usuarioActual.id(), contenido);
         return ResponseEntity.ok(comentarioService.crearComentario(postId, usuarioActual.id(), contenido));
     }
 
     @DeleteMapping("/{comentarioId}")
     public ResponseEntity<Void> eliminarComentario(@PathVariable Long comentarioId) {
-        log.info("🗑️ Eliminando comentario: {}", comentarioId);
+        log.info("Eliminando comentario: {}", comentarioId);
         comentarioService.eliminarComentario(comentarioId, usuarioActual.id());
         return ResponseEntity.ok().build();
     }
@@ -50,23 +50,23 @@ public class ComentarioController {
 
     @GetMapping("/{comentarioId}/respuestas")
     public ResponseEntity<List<RespuestaDTO>> listarRespuestas(@PathVariable Long comentarioId) {
-        log.info("📋 Listando respuestas del comentario: {}", comentarioId);
+        log.info("Listando respuestas del comentario: {}", comentarioId);
         return ResponseEntity.ok(comentarioService.listarRespuestas(comentarioId));
     }
 
-    // ✅ Endpoint para crear respuesta SOLO CON TEXTO (sin imagen)
+    // Endpoint para crear respuesta SOLO CON TEXTO (sin imagen)
     @PostMapping("/{comentarioId}/respuestas")
     public ResponseEntity<RespuestaDTO> crearRespuesta(
             @PathVariable Long comentarioId,
             @RequestBody Map<String, String> body) {
         String contenido = body.get("contenido");
-        log.info("📝 Creando respuesta al comentario: {}, usuario: {}", comentarioId, usuarioActual.id());
+        log.info("Creando respuesta al comentario: {}, usuario: {}", comentarioId, usuarioActual.id());
         return ResponseEntity.ok(comentarioService.crearRespuesta(comentarioId, usuarioActual.id(), contenido));
     }
 
     @DeleteMapping("/respuestas/{respuestaId}")
     public ResponseEntity<Void> eliminarRespuesta(@PathVariable Long respuestaId) {
-        log.info("🗑️ Eliminando respuesta: {}", respuestaId);
+        log.info("Eliminando respuesta: {}", respuestaId);
         comentarioService.eliminarRespuesta(respuestaId, usuarioActual.id());
         return ResponseEntity.ok().build();
     }
@@ -78,7 +78,7 @@ public class ComentarioController {
             @PathVariable Long comentarioId,
             @RequestBody Map<String, String> body) {
         String tipo = body.get("tipo");
-        log.info("❤️ Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioActual.id());
+        log.info("Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioActual.id());
         return ResponseEntity.ok(comentarioService.reaccionarComentario(comentarioId, usuarioActual.id(), tipo));
     }
 
@@ -87,7 +87,7 @@ public class ComentarioController {
             @PathVariable Long respuestaId,
             @RequestBody Map<String, String> body) {
         String tipo = body.get("tipo");
-        log.info("❤️ Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioActual.id());
+        log.info("Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioActual.id());
         return ResponseEntity.ok(comentarioService.reaccionarRespuesta(respuestaId, usuarioActual.id(), tipo));
     }
 }

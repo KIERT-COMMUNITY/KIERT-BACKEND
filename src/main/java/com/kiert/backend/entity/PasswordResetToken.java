@@ -36,7 +36,7 @@ public class PasswordResetToken {
     @Builder.Default
     private boolean usado = false;
 
-    // ✅ NUEVOS: campos que tenía la tabla SQL
+    // NUEVOS: campos que tenía la tabla SQL
     @Column(name = "fecha_uso")
     private Instant fechaUso;
 

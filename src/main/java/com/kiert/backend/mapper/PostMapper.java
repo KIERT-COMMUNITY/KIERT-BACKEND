@@ -21,14 +21,14 @@ public class PostMapper {
 
     /**
      * Mapeo básico. Usa las colecciones lazy del post.
-     * ⚠️ Puede generar N+1 si no están precargadas.
+     * Puede generar N+1 si no están precargadas.
      */
     public PostDTO aDTO(Post post) {
         return aDTO(post, null, null);
     }
 
     /**
-     * ✅ Sobrecarga optimizada: permite pasar adjuntos y contador de comentarios
+     * Sobrecarga optimizada: permite pasar adjuntos y contador de comentarios
      * precargados en queries separadas, evitando N+1 y el bug HHH000104.
      *
      * @param post             entidad Post (debe tener autor y personalización precargados)
@@ -76,7 +76,7 @@ public class PostMapper {
             );
 
         } catch (Exception e) {
-            System.err.println("❌ Error en PostMapper.aDTO para post ID: " + post.getId());
+            System.err.println("Error en PostMapper.aDTO para post ID: " + post.getId());
             e.printStackTrace();
             throw new RuntimeException("Error al mapear post: " + e.getMessage());
         }
@@ -108,14 +108,14 @@ public class PostMapper {
 
     /**
      * Mapeo básico. Cuenta reacciones desde la colección lazy.
-     * ⚠️ Puede generar N+1.
+     * Puede generar N+1.
      */
     public ComentarioDTO aDTO(Comentario comentario) {
         return aDTO(comentario, null);
     }
 
     /**
-     * ✅ Sobrecarga optimizada: permite pasar el conteo de reacciones
+     * Sobrecarga optimizada: permite pasar el conteo de reacciones
      * ya calculado (en lugar de contarlas desde la colección lazy).
      *
      * @param comentario       entidad Comentario
@@ -179,7 +179,7 @@ public class PostMapper {
             );
 
         } catch (Exception e) {
-            System.err.println("❌ Error al obtener marco del usuario ID: " + usuario.getId());
+            System.err.println("Error al obtener marco del usuario ID: " + usuario.getId());
             return new AutorResumenDTO(
                     usuario.getId(),
                     usuario.getNombreUsuario() != null ? usuario.getNombreUsuario() : "Usuario",

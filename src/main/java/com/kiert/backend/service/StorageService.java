@@ -16,38 +16,38 @@ public class StorageService {
 
     // ========== SUBIR ARCHIVO (DETECCIÓN AUTOMÁTICA) ==========
     public String subirArchivo(MultipartFile archivo) {
-        log.info("📤 StorageService - Subiendo archivo a Cloudinary");
+        log.info("StorageService - Subiendo archivo a Cloudinary");
         return cloudinaryService.subirArchivo(archivo);
     }
 
     // ========== SUBIR ARCHIVO CON CARPETA ==========
     public String subirArchivo(MultipartFile archivo, String carpeta) {
-        log.info("📤 StorageService - Subiendo archivo a Cloudinary en carpeta: {}", carpeta);
+        log.info("StorageService - Subiendo archivo a Cloudinary en carpeta: {}", carpeta);
         return cloudinaryService.subirArchivo(archivo, carpeta);
     }
 
     // ========== SUBIR VIDEO ==========
     public String subirVideo(MultipartFile video, String carpeta) {
-        log.info("🎥 StorageService - Subiendo video a Cloudinary en carpeta: {}", carpeta);
+        log.info("StorageService - Subiendo video a Cloudinary en carpeta: {}", carpeta);
         Map<String, Object> result = cloudinaryService.subirVideo(video, carpeta);
         return result.get("secure_url").toString();
     }
 
     // ========== SUBIR GIF ==========
     public String subirGif(MultipartFile gif, String carpeta) {
-        log.info("🎬 StorageService - Subiendo GIF a Cloudinary en carpeta: {}", carpeta);
+        log.info("StorageService - Subiendo GIF a Cloudinary en carpeta: {}", carpeta);
         return cloudinaryService.subirGif(gif, carpeta);
     }
 
     // ========== SUBIR IMAGEN ==========
     public String subirImagen(MultipartFile imagen, String carpeta) {
-        log.info("🖼️ StorageService - Subiendo imagen a Cloudinary en carpeta: {}", carpeta);
+        log.info("StorageService - Subiendo imagen a Cloudinary en carpeta: {}", carpeta);
         return cloudinaryService.subirImagen(imagen, carpeta);
     }
 
     // ========== SUBIR MARCO ==========
     public String subirMarco(MultipartFile archivo, String nombre) {
-        log.info("🖼️ StorageService - Subiendo marco a Cloudinary: {}", nombre);
+        log.info("StorageService - Subiendo marco a Cloudinary: {}", nombre);
         return cloudinaryService.subirMarco(archivo, nombre);
     }
 
@@ -70,13 +70,13 @@ public class StorageService {
 
     // ========== GENERAR URL FIRMADA ==========
     public String generarUrlFirmadaSubida(String nombreArchivo) {
-        log.info("🔑 StorageService - Generando URL firmada para: {}", nombreArchivo);
+        log.info("StorageService - Generando URL firmada para: {}", nombreArchivo);
         return cloudinaryService.generarUrlFirmadaSubida(nombreArchivo);
     }
 
     // ========== URL PÚBLICA ==========
     public String urlPublica(String nombreArchivo) {
-        log.info("🌐 StorageService - URL pública para: {}", nombreArchivo);
+        log.info("StorageService - URL pública para: {}", nombreArchivo);
         return cloudinaryService.urlPublica(nombreArchivo);
     }
 

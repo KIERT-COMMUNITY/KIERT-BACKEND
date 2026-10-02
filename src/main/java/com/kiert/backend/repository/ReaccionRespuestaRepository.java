@@ -54,11 +54,11 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     long countByRespuestaId(Long respuestaId);
 
     // ============================================================
-    // 🔥 OPTIMIZACIÓN CRÍTICA: CONTAR REACCIONES POR MÚLTIPLES RESPUESTAS
+    //  OPTIMIZACIÓN CRÍTICA: CONTAR REACCIONES POR MÚLTIPLES RESPUESTAS
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta reacciones de VARIAS respuestas en 1 query.
+     * NUEVO: Cuenta reacciones de VARIAS respuestas en 1 query.
      * Devuelve [respuestaId, tipo, count].
      *
      * Elimina el N+1 al listar un comentario con todas sus respuestas.
@@ -79,7 +79,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     // ============================================================
 
     /**
-     * ✅ NUEVO: Reacciones de un usuario a respuestas (paginado).
+     *  NUEVO: Reacciones de un usuario a respuestas (paginado).
      */
     @Query("""
             SELECT r FROM ReaccionRespuesta r
@@ -98,7 +98,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     // ============================================================
 
     /**
-     * ✅ NUEVO: Devuelve los IDs de respuestas donde el usuario reaccionó.
+     * NUEVO: Devuelve los IDs de respuestas donde el usuario reaccionó.
      * Útil para marcar "ya reaccioné" en un hilo de respuestas.
      */
     @Query("""
@@ -117,7 +117,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
 
     /**
      * Elimina la reacción de un usuario a una respuesta.
-     * ✅ MEJORA: usa @Modifying para evitar el SELECT + DELETE.
+     *  MEJORA: usa @Modifying para evitar el SELECT + DELETE.
      */
     @Modifying
     @Query("""
@@ -131,7 +131,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     );
 
     /**
-     * ✅ NUEVO: Elimina TODAS las reacciones de una respuesta (bulk).
+     *  NUEVO: Elimina TODAS las reacciones de una respuesta (bulk).
      * Útil cuando se elimina una respuesta.
      */
     @Modifying
@@ -139,7 +139,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     int deleteByRespuestaId(@Param("respuestaId") Long respuestaId);
 
     /**
-     * ✅ NUEVO: Elimina TODAS las reacciones de múltiples respuestas en 1 query.
+     *  NUEVO: Elimina TODAS las reacciones de múltiples respuestas en 1 query.
      * Útil cuando se elimina un comentario con todas sus respuestas.
      */
     @Modifying
@@ -151,7 +151,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top N respuestas con más reacciones.
+     *  NUEVO: Top N respuestas con más reacciones.
      * Devuelve [respuestaId, totalReacciones].
      */
     @Query("""
@@ -167,7 +167,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     // ============================================================
 
     /**
-     * ✅ NUEVO: Tipos de reacción distintos que existen.
+     *  NUEVO: Tipos de reacción distintos que existen.
      */
     @Query("""
             SELECT DISTINCT r.tipo FROM ReaccionRespuesta r
@@ -180,13 +180,13 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de reacciones a respuestas en el sistema.
+     *  NUEVO: Total de reacciones a respuestas en el sistema.
      */
     @Query("SELECT COUNT(r) FROM ReaccionRespuesta r")
     long countTotal();
 
     /**
-     * ✅ NUEVO: Cuenta reacciones agrupadas por tipo (global).
+     *  NUEVO: Cuenta reacciones agrupadas por tipo (global).
      * Devuelve [tipo, count].
      */
     @Query("""
@@ -198,7 +198,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     List<Object[]> contarGlobalPorTipo();
 
     /**
-     * ✅ NUEVO: Reacciones creadas en un rango de fechas.
+     *  NUEVO: Reacciones creadas en un rango de fechas.
      */
     @Query("""
             SELECT COUNT(r) FROM ReaccionRespuesta r
@@ -215,7 +215,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     // ============================================================
 
     /**
-     * ✅ NUEVO: Elimina reacciones huérfanas
+     *  NUEVO: Elimina reacciones huérfanas
      * (respuesta eliminada o inexistente).
      */
     @Modifying
@@ -226,7 +226,7 @@ public interface ReaccionRespuestaRepository extends JpaRepository<ReaccionRespu
     int eliminarHuerfanas();
 
     /**
-     * ✅ NUEVO: Elimina reacciones de respuestas que fueron soft-deleted.
+     * NUEVO: Elimina reacciones de respuestas que fueron soft-deleted.
      */
     @Modifying
     @Query("""

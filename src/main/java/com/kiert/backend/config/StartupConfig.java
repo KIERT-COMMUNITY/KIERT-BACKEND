@@ -14,6 +14,6 @@ public class StartupConfig {
 
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
-        log.info("🚀 Servidor iniciado");
+        log.info("Servidor iniciado");
     }
 }

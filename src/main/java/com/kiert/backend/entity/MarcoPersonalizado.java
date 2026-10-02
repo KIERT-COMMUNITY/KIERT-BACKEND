@@ -49,7 +49,7 @@ public class MarcoPersonalizado {
     @Builder.Default
     private Instant fechaCreacion = Instant.now();
 
-    // ✅ CORREGIDO: era Long usuarioId, ahora es relación
+    // CORREGIDO: era Long usuarioId, ahora es relación
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")
     @JsonIgnore

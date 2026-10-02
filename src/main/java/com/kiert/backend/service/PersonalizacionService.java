@@ -41,21 +41,21 @@ public class PersonalizacionService {
             unless = "#result == null"
     )
     public PersonalizacionDTO obtenerPersonalizacion(Long usuarioId) {
-        log.info("📋 [DB] Obteniendo personalización para usuario: {}", usuarioId);
+        log.info("[DB] Obteniendo personalización para usuario: {}", usuarioId);
 
         if (usuarioId == null) {
-            log.error("❌ usuarioId es null");
+            log.error("usuarioId es null");
             throw new IllegalArgumentException("Usuario ID no puede ser null");
         }
 
         try {
             PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
                     .orElseGet(() -> {
-                        log.info("🆕 No existe personalización, creando default para usuario: {}", usuarioId);
+                        log.info("No existe personalización, creando default para usuario: {}", usuarioId);
                         return crearPersonalizacionDefault(usuarioId);
                     });
 
-            log.info("✅ Personalización encontrada: ID={}, tema={}, marco={}, fondo={}",
+            log.info("Personalización encontrada: ID={}, tema={}, marco={}, fondo={}",
                     personalizacion.getId(),
                     personalizacion.getTemaId(),
                     personalizacion.getMarcoId(),
@@ -63,7 +63,7 @@ public class PersonalizacionService {
 
             return toDTO(personalizacion);
         } catch (Exception e) {
-            log.error("❌ Error al obtener personalización: {}", e.getMessage(), e);
+            log.error("Error al obtener personalización: {}", e.getMessage(), e);
             throw e;
         }
     }
@@ -84,40 +84,40 @@ public class PersonalizacionService {
             @CacheEvict(value = "documentos", allEntries = true)
     })
     public PersonalizacionDTO guardarPersonalizacion(Long usuarioId, String temaId, String marcoId, String fondoId) {
-        log.info("💾 Guardando personalización para usuario: {} con parámetros: tema={}, marco={}, fondo={}",
+        log.info("Guardando personalización para usuario: {} con parámetros: tema={}, marco={}, fondo={}",
                 usuarioId, temaId, marcoId, fondoId);
 
         if (usuarioId == null) {
-            log.error("❌ usuarioId es null");
+            log.error("usuarioId es null");
             throw new IllegalArgumentException("Usuario ID no puede ser null");
         }
 
         try {
             PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
                     .orElseGet(() -> {
-                        log.info("🆕 No existe personalización, creando nueva para usuario: {}", usuarioId);
+                        log.info("No existe personalización, creando nueva para usuario: {}", usuarioId);
                         return crearPersonalizacionDefault(usuarioId);
                     });
 
             if (temaId != null && !temaId.isEmpty() && !temaId.equals(personalizacion.getTemaId())) {
-                log.info("📝 Actualizando tema: {} → {}", personalizacion.getTemaId(), temaId);
+                log.info("Actualizando tema: {} -> {}", personalizacion.getTemaId(), temaId);
                 personalizacion.setTemaId(temaId);
             }
             if (marcoId != null && !marcoId.isEmpty() && !marcoId.equals(personalizacion.getMarcoId())) {
-                log.info("📝 Actualizando marco: {} → {}", personalizacion.getMarcoId(), marcoId);
+                log.info("Actualizando marco: {} -> {}", personalizacion.getMarcoId(), marcoId);
                 personalizacion.setMarcoId(marcoId);
             }
             if (fondoId != null && !fondoId.isEmpty() && !fondoId.equals(personalizacion.getFondoId())) {
-                log.info("📝 Actualizando fondo: {} → {}", personalizacion.getFondoId(), fondoId);
+                log.info("Actualizando fondo: {} -> {}", personalizacion.getFondoId(), fondoId);
                 personalizacion.setFondoId(fondoId);
             }
 
             personalizacion = personalizacionRepository.save(personalizacion);
-            log.info("✅ Personalización guardada para usuario: {} con ID: {}", usuarioId, personalizacion.getId());
+            log.info("Personalización guardada para usuario: {} con ID: {}", usuarioId, personalizacion.getId());
 
             return toDTO(personalizacion);
         } catch (Exception e) {
-            log.error("❌ Error al guardar personalización: {}", e.getMessage(), e);
+            log.error("Error al guardar personalización: {}", e.getMessage(), e);
             throw e;
         }
     }
@@ -139,7 +139,7 @@ public class PersonalizacionService {
             @CacheEvict(value = "gruposUsuario", allEntries = true)
     })
     public PersonalizacionDTO subirFotoPerfil(Long usuarioId, MultipartFile archivo) {
-        log.info("📸 Subiendo foto de perfil para usuario: {}", usuarioId);
+        log.info("Subiendo foto de perfil para usuario: {}", usuarioId);
 
         String url = cloudinaryService.subirArchivo(archivo, "perfiles");
 
@@ -166,7 +166,7 @@ public class PersonalizacionService {
             @CacheEvict(value = "perfil", key = "#usuarioId")
     })
     public PersonalizacionDTO subirFotoPortada(Long usuarioId, MultipartFile archivo) {
-        log.info("📸 Subiendo foto de portada para usuario: {}", usuarioId);
+        log.info("Subiendo foto de portada para usuario: {}", usuarioId);
 
         String url = cloudinaryService.subirArchivo(archivo, "portadas");
 
@@ -184,7 +184,7 @@ public class PersonalizacionService {
     // ============================================================
     @Cacheable(value = CACHE_MARCOS, key = "'all'")
     public List<MarcoDTO> obtenerMarcos(Long usuarioId) {
-        log.info("📋 [CACHE] Obteniendo marcos para usuario: {}", usuarioId);
+        log.info("[CACHE] Obteniendo marcos para usuario: {}", usuarioId);
         return getMarcosDefault();
     }
 
@@ -193,7 +193,7 @@ public class PersonalizacionService {
     // ============================================================
     @Cacheable(value = CACHE_FONDOS, key = "'all'")
     public List<FondoDTO> obtenerFondos(Long usuarioId) {
-        log.info("📋 [CACHE] Obteniendo fondos para usuario: {}", usuarioId);
+        log.info("[CACHE] Obteniendo fondos para usuario: {}", usuarioId);
         return getFondosDefault();
     }
 
@@ -207,7 +207,7 @@ public class PersonalizacionService {
             @CacheEvict(value = "perfil", allEntries = true)
     })
     public void limpiarCache() {
-        log.info("🧹 Limpiando toda la caché de personalización");
+        log.info("Limpiando toda la caché de personalización");
     }
 
     // ============================================================
@@ -259,11 +259,11 @@ public class PersonalizacionService {
     }
 
     private PersonalizacionUsuario crearPersonalizacionDefault(Long usuarioId) {
-        log.info("🆕 Creando personalización default para usuario: {}", usuarioId);
+        log.info("Creando personalización default para usuario: {}", usuarioId);
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> {
-                    log.error("❌ Usuario no encontrado con ID: {}", usuarioId);
+                    log.error("Usuario no encontrado con ID: {}", usuarioId);
                     return new RecursoNoEncontradoException("Usuario no encontrado con ID: " + usuarioId);
                 });
 
@@ -275,13 +275,13 @@ public class PersonalizacionService {
                 .fotoPerfilUrl(usuario.getFotoPerfilUrl())
                 .build();
 
-        log.info("✅ Personalización default creada para usuario: {}", usuarioId);
+        log.info("Personalización default creada para usuario: {}", usuarioId);
         return personalizacionRepository.save(personalizacion);
     }
 
     private PersonalizacionDTO toDTO(PersonalizacionUsuario entity) {
         if (entity == null) {
-            log.warn("⚠️ Entity es null en toDTO");
+            log.warn("Entity es null en toDTO");
             return null;
         }
 

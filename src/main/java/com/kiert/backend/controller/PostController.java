@@ -30,13 +30,13 @@ public class PostController {
     private final PostRepository postRepository;
     private final UsuarioActual usuarioActual;
 
-    // ✅ ENDPOINT DE DIAGNÓSTICO - OBTENER POSTS CRUDOS
+    // ENDPOINT DE DIAGNÓSTICO - OBTENER POSTS CRUDOS
     @GetMapping("/diagnostico")
     public ResponseEntity<?> diagnosticar() {
         try {
-            log.info("🔍 Diagnóstico: Obteniendo posts crudos");
+            log.info("Diagnóstico: Obteniendo posts crudos");
             List<Post> posts = postRepository.findAll();
-            log.info("📊 Total posts en BD: {}", posts.size());
+            log.info("Total posts en BD: {}", posts.size());
 
             List<Map<String, Object>> resultado = new ArrayList<>();
             for (Post p : posts) {
@@ -52,19 +52,19 @@ public class PostController {
             return ResponseEntity.ok(resultado);
 
         } catch (Exception e) {
-            log.error("❌ Error en diagnóstico: {}", e.getMessage(), e);
+            log.error("Error en diagnóstico: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error en diagnóstico: " + e.getMessage());
         }
     }
 
-    // ✅ ENDPOINT DE PRUEBA - POSTS ACTIVOS SIMPLES
+    // ENDPOINT DE PRUEBA - POSTS ACTIVOS SIMPLES
     @GetMapping("/activos")
     public ResponseEntity<?> listarActivos() {
         try {
-            log.info("📋 Listando posts activos (sin DTO)");
+            log.info("Listando posts activos (sin DTO)");
             List<Post> posts = postRepository.findAllActiveOrderByFechaCreacionDesc();
-            log.info("✅ Se encontraron {} posts activos", posts.size());
+            log.info("Se encontraron {} posts activos", posts.size());
 
             List<Map<String, Object>> resultado = new ArrayList<>();
             for (Post p : posts) {
@@ -80,32 +80,32 @@ public class PostController {
             return ResponseEntity.ok(resultado);
 
         } catch (Exception e) {
-            log.error("❌ Error al listar posts activos: {}", e.getMessage(), e);
+            log.error("Error al listar posts activos: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error: " + e.getMessage());
         }
     }
 
-    // ✅ ENDPOINT ORIGINAL CON LOGS MEJORADOS
+    // ENDPOINT ORIGINAL CON LOGS MEJORADOS
     @GetMapping
     public ResponseEntity<?> listar() {
         try {
-            log.info("📋 Recibiendo solicitud para listar posts");
+            log.info("Recibiendo solicitud para listar posts");
 
             long count = postRepository.count();
-            log.info("📊 Total posts en BD: {}", count);
+            log.info("Total posts en BD: {}", count);
 
             List<PostDTO> posts = postService.listar();
-            log.info("✅ Se devolvieron {} posts", posts.size());
+            log.info("Se devolvieron {} posts", posts.size());
 
             if (!posts.isEmpty()) {
-                posts.forEach(p -> log.info("📌 Post ID: {}, Categoría: {}", p.id(), p.categoria()));
+                posts.forEach(p -> log.info("Post ID: {}, Categoría: {}", p.id(), p.categoria()));
             }
 
             return ResponseEntity.ok(posts);
 
         } catch (Exception e) {
-            log.error("❌ Error al listar posts: {}", e.getMessage(), e);
+            log.error("Error al listar posts: {}", e.getMessage(), e);
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al cargar publicaciones: " + e.getMessage());
@@ -115,19 +115,19 @@ public class PostController {
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerPorId(@PathVariable Long id) {
         try {
-            log.info("🔍 Obteniendo post: {}", id);
+            log.info("Obteniendo post: {}", id);
 
             if (id == null || id <= 0) {
-                log.warn("⚠️ ID inválido: {}", id);
+                log.warn("ID inválido: {}", id);
                 return ResponseEntity.badRequest().body("ID de publicación inválido");
             }
 
             PostDTO post = postService.obtenerPorId(id);
-            log.info("✅ Post encontrado: ID={}, Categoría={}", post.id(), post.categoria());
+            log.info("Post encontrado: ID={}, Categoría={}", post.id(), post.categoria());
             return ResponseEntity.ok(post);
 
         } catch (Exception e) {
-            log.error("❌ Error al obtener post {}: {}", id, e.getMessage(), e);
+            log.error("Error al obtener post {}: {}", id, e.getMessage(), e);
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al obtener publicación: " + e.getMessage());
@@ -146,25 +146,25 @@ public class PostController {
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) {
-                log.error("❌ Usuario no autenticado en crearPost");
+                log.error("Usuario no autenticado en crearPost");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
 
-            log.info("📝 Creando post para usuario: {}", usuarioId);
-            log.info("📄 Título: {}", titulo);
-            log.info("📂 Categoría: '{}'", categoria);
-            log.info("📝 Descripción: {}", descripcion);
-            log.info("🔗 Link: {}", link);
-            log.info("📎 Archivos: {}", archivos != null ? archivos.size() : 0);
+            log.info("Creando post para usuario: {}", usuarioId);
+            log.info("Título: {}", titulo);
+            log.info("Categoría: '{}'", categoria);
+            log.info("Descripción: {}", descripcion);
+            log.info("Link: {}", link);
+            log.info("Archivos: {}", archivos != null ? archivos.size() : 0);
 
             CrearPostDTO datos = new CrearPostDTO(titulo, categoria, descripcion, link);
             PostDTO creado = postService.crear(usuarioId, datos, archivos);
 
-            log.info("✅ Post creado exitosamente con ID: {}, Categoría: '{}'", creado.id(), creado.categoria());
+            log.info("Post creado exitosamente con ID: {}, Categoría: '{}'", creado.id(), creado.categoria());
             return ResponseEntity.status(HttpStatus.CREATED).body(creado);
 
         } catch (Exception e) {
-            log.error("❌ Error al crear post: {}", e.getMessage(), e);
+            log.error("Error al crear post: {}", e.getMessage(), e);
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al crear publicación: " + e.getMessage());
@@ -177,15 +177,15 @@ public class PostController {
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) {
-                log.error("❌ Usuario no autenticado en eliminarPost");
+                log.error("Usuario no autenticado en eliminarPost");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
-            log.info("🗑️ Eliminando post: {} por usuario {}", id, usuarioId);
+            log.info("Eliminando post: {} por usuario {}", id, usuarioId);
             postService.eliminarPost(id, usuarioId);
             return ResponseEntity.noContent().build();
 
         } catch (Exception e) {
-            log.error("❌ Error al eliminar post {}: {}", id, e.getMessage(), e);
+            log.error("Error al eliminar post {}: {}", id, e.getMessage(), e);
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al eliminar publicación: " + e.getMessage());

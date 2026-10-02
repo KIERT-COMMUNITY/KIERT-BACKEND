@@ -26,21 +26,21 @@ public class RecursoBibliotecaController {
     private final JwtService jwtService;
 
     // ============================================================
-    // 🔥 HELPER: extrae el usuarioId del token JWT
+    // HELPER: extrae el usuarioId del token JWT
     // ============================================================
     private Long obtenerUsuarioId(HttpServletRequest request) {
         String header = request.getHeader("Authorization");
         if (header == null || !header.startsWith("Bearer ")) {
-            log.debug("⚠️ No hay header Authorization");
+            log.debug("No hay header Authorization");
             return null;
         }
         try {
             String token = header.substring(7);
             Long id = jwtService.extraerUsuarioId(token);
-            log.debug("🔑 usuarioId extraído del token: {}", id);
+            log.debug("usuarioId extraído del token: {}", id);
             return id;
         } catch (Exception e) {
-            log.warn("⚠️ Error extrayendo usuarioId: {}", e.getMessage());
+            log.warn("Error extrayendo usuarioId: {}", e.getMessage());
             return null;
         }
     }
@@ -52,7 +52,7 @@ public class RecursoBibliotecaController {
     @GetMapping
     public ResponseEntity<List<RecursoBibliotecaDTO>> listarTodos(HttpServletRequest request) {
         Long usuarioId = obtenerUsuarioId(request);
-        log.info("📋 GET /api/biblioteca - usuario={}", usuarioId);
+        log.info("GET /api/biblioteca - usuario={}", usuarioId);
         return ResponseEntity.ok(bibliotecaService.listarTodos(usuarioId));
     }
 
@@ -61,25 +61,25 @@ public class RecursoBibliotecaController {
             HttpServletRequest request,
             @PathVariable String categoria) {
         Long usuarioId = obtenerUsuarioId(request);
-        log.info("📋 GET /api/biblioteca/categoria/{} - usuario={}", categoria, usuarioId);
+        log.info("GET /api/biblioteca/categoria/{} - usuario={}", categoria, usuarioId);
         return ResponseEntity.ok(bibliotecaService.listarPorCategoria(usuarioId, categoria));
     }
 
     @GetMapping("/destacados")
     public ResponseEntity<List<RecursoBibliotecaDTO>> listarDestacados() {
-        log.info("⭐ GET /api/biblioteca/destacados");
+        log.info("GET /api/biblioteca/destacados");
         return ResponseEntity.ok(bibliotecaService.listarDestacados());
     }
 
     @GetMapping("/categorias")
     public ResponseEntity<List<String>> obtenerCategorias() {
-        log.info("📋 GET /api/biblioteca/categorias");
+        log.info("GET /api/biblioteca/categorias");
         return ResponseEntity.ok(bibliotecaService.obtenerCategorias());
     }
 
     @GetMapping("/niveles")
     public ResponseEntity<List<String>> obtenerNiveles() {
-        log.info("📋 GET /api/biblioteca/niveles");
+        log.info("GET /api/biblioteca/niveles");
         return ResponseEntity.ok(bibliotecaService.obtenerNiveles());
     }
 
@@ -88,7 +88,7 @@ public class RecursoBibliotecaController {
             HttpServletRequest request,
             @RequestParam(required = false) String query) {
         Long usuarioId = obtenerUsuarioId(request);
-        log.info("🔍 GET /api/biblioteca/buscar?query={} - usuario={}", query, usuarioId);
+        log.info("GET /api/biblioteca/buscar?query={} - usuario={}", query, usuarioId);
         return ResponseEntity.ok(bibliotecaService.buscar(usuarioId, query));
     }
 
@@ -96,18 +96,18 @@ public class RecursoBibliotecaController {
     public ResponseEntity<List<RecursoBibliotecaDTO>> buscarPorCategoria(
             @PathVariable String categoria,
             @RequestParam(required = false) String query) {
-        log.info("🔍 GET /api/biblioteca/buscar/{}?query={}", categoria, query);
+        log.info("GET /api/biblioteca/buscar/{}?query={}", categoria, query);
         return ResponseEntity.ok(bibliotecaService.buscarPorCategoria(categoria, query));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<RecursoBibliotecaDTO> obtenerPorId(@PathVariable Long id) {
-        log.info("🔍 GET /api/biblioteca/{}", id);
+        log.info("GET /api/biblioteca/{}", id);
         return ResponseEntity.ok(bibliotecaService.obtenerPorId(id));
     }
 
     // ============================================================
-    // 🔥 CRUD DEL USUARIO (requiere autenticación)
+    // CRUD DEL USUARIO (requiere autenticación)
     // ============================================================
 
     @PostMapping("/usuario")
@@ -116,7 +116,7 @@ public class RecursoBibliotecaController {
             @Valid @RequestBody RecursoUsuarioRequest req) {
 
         Long usuarioId = obtenerUsuarioId(request);
-        log.info("➕ POST /api/biblioteca/usuario - usuario={}", usuarioId);
+        log.info("POST /api/biblioteca/usuario - usuario={}", usuarioId);
         log.info("   payload: titulo='{}', categoria='{}', url='{}'",
                 req.getTitulo(), req.getCategoria(), req.getUrl());
 
@@ -125,7 +125,7 @@ public class RecursoBibliotecaController {
         }
 
         RecursoBibliotecaDTO creado = bibliotecaService.crear(usuarioId, req);
-        log.info("✅ Recurso creado con id={}", creado.id());
+        log.info("Recurso creado con id={}", creado.id());
         return ResponseEntity.ok(creado);
     }
 
@@ -136,7 +136,7 @@ public class RecursoBibliotecaController {
             @Valid @RequestBody RecursoUsuarioRequest req) {
 
         Long usuarioId = obtenerUsuarioId(request);
-        log.info("✏️ PUT /api/biblioteca/usuario/{} - usuario={}", id, usuarioId);
+        log.info("PUT /api/biblioteca/usuario/{} - usuario={}", id, usuarioId);
 
         if (usuarioId == null) {
             throw new AccesoDenegadoException("Debes iniciar sesión");
@@ -151,7 +151,7 @@ public class RecursoBibliotecaController {
             @PathVariable Long id) {
 
         Long usuarioId = obtenerUsuarioId(request);
-        log.info("🗑️ DELETE /api/biblioteca/usuario/{} - usuario={}", id, usuarioId);
+        log.info("DELETE /api/biblioteca/usuario/{} - usuario={}", id, usuarioId);
 
         if (usuarioId == null) {
             throw new AccesoDenegadoException("Debes iniciar sesión");

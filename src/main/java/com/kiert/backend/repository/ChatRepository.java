@@ -39,7 +39,7 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
     );
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para chats largos).
+     * NUEVO: Versión paginada (recomendada para chats largos).
      * Trae los últimos N mensajes de una conversación.
      * El frontend puede pedir "cargar más" con page=1, 2, ...
      */
@@ -83,7 +83,7 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
     long countByEmisorIdAndReceptorIdAndLeidoFalse(Long emisorId, Long receptorId);
 
     /**
-     * ✅ NUEVO: Contar TODOS los mensajes no leídos del usuario (para el badge).
+     * NUEVO: Contar TODOS los mensajes no leídos del usuario (para el badge).
      */
     @Query("""
             SELECT COUNT(m) FROM Mensaje m
@@ -134,7 +134,7 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
     // MARCAR COMO LEÍDOS (bulk update)
     // ============================================================
     /**
-     * ✅ NUEVO: Marca como leídos todos los mensajes de una conversación
+     *NUEVO: Marca como leídos todos los mensajes de una conversación
      * en UNA sola query. Mucho más eficiente que iterar con save().
      */
     @Modifying
@@ -156,7 +156,7 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
     // ÚLTIMO MENSAJE POR CONTACTO (optimización N+1)
     // ============================================================
     /**
-     * ✅ NUEVO: Obtiene solo el último mensaje por cada contacto.
+     * NUEVO: Obtiene solo el último mensaje por cada contacto.
      * Reemplaza la lógica de `listarConversaciones()` que trae TODOS
      * los mensajes y agrupa en memoria.
      *
@@ -192,7 +192,7 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
     // CONTAR NO LEÍDOS POR CONTACTO (optimización N+1)
     // ============================================================
     /**
-     * ✅ NUEVO: Cuenta los mensajes no leídos agrupados por emisor.
+     *  NUEVO: Cuenta los mensajes no leídos agrupados por emisor.
      * Devuelve [emisorId, count] para todos los contactos.
      *
      * Reemplaza el `stream().filter()` de `listarConversaciones()`.
@@ -211,7 +211,7 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
     // BÚSQUEDA EN CONVERSACIÓN (opcional)
     // ============================================================
     /**
-     * ✅ NUEVO: Buscar mensajes dentro de una conversación.
+     *  NUEVO: Buscar mensajes dentro de una conversación.
      * Útil para la funcionalidad "buscar en este chat".
      */
     @Query("""

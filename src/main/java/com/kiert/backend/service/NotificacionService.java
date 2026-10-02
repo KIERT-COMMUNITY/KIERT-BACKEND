@@ -38,7 +38,7 @@ public class NotificacionService {
     // ============================================================
 
     /**
-     * ⚠️ NOTA: Se usa `allEntries = true` porque no podemos garantizar
+     * NOTA: Se usa `allEntries = true` porque no podemos garantizar
      * que `#result` esté disponible en el `@CacheEvict` en todas las versiones
      * de Spring. Como las notificaciones se crean con baja frecuencia,
      * invalidar todos los contadores es aceptable.
@@ -46,13 +46,13 @@ public class NotificacionService {
     @Transactional
     @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionLike(Long usuarioOrigenId, Long postId) {
-        log.info("🔔 Notificación LIKE post={}", postId);
+        log.info("Notificación LIKE post={}", postId);
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
         if (usuarioOrigenId.equals(post.getAutor().getId())) {
-            log.info("⏭️ Like propio, sin notificación");
+            log.info("Like propio, sin notificación");
             return null;
         }
 
@@ -78,7 +78,7 @@ public class NotificacionService {
     @Transactional
     @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionComentario(Long usuarioOrigenId, Long postId, Long comentarioId) {
-        log.info("🔔 Notificación COMENTARIO post={}", postId);
+        log.info("Notificación COMENTARIO post={}", postId);
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
@@ -115,7 +115,7 @@ public class NotificacionService {
     @Transactional
     @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionRespuesta(Long usuarioOrigenId, Long comentarioId, Long respuestaId) {
-        log.info("🔔 Notificación RESPUESTA comentario={}", comentarioId);
+        log.info("Notificación RESPUESTA comentario={}", comentarioId);
 
         Comentario comentario = comentarioRepository.findById(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
@@ -146,7 +146,7 @@ public class NotificacionService {
     @Transactional
     @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionSolicitud(Long usuarioOrigenId, Long usuarioDestinoId) {
-        log.info("🔔 Notificación SOLICITUD de {} a {}", usuarioOrigenId, usuarioDestinoId);
+        log.info("Notificación SOLICITUD de {} a {}", usuarioOrigenId, usuarioDestinoId);
 
         Usuario origen = usuarioRepository.findById(usuarioOrigenId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario origen no encontrado"));
@@ -177,7 +177,7 @@ public class NotificacionService {
             Long grupoId,
             String url) {
 
-        log.info("📩 Notificación INVITACION_GRUPO para {} (grupo {})", usuarioDestinoId, grupoId);
+        log.info("Notificación INVITACION_GRUPO para {} (grupo {})", usuarioDestinoId, grupoId);
 
         Usuario destino = usuarioRepository.findById(usuarioDestinoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario destino no encontrado"));
@@ -201,7 +201,7 @@ public class NotificacionService {
                 .build();
 
         Notificacion guardada = notificacionRepository.save(notif);
-        log.info("✅ Notificación de grupo creada ID={}", guardada.getId());
+        log.info("Notificación de grupo creada ID={}", guardada.getId());
         return guardada;
     }
 
@@ -215,7 +215,7 @@ public class NotificacionService {
             key = "'usuario:' + #usuarioId"
     )
     public List<NotificacionDTO> obtenerNotificaciones(Long usuarioId) {
-        log.info("📋 [DB] Obteniendo notificaciones del usuario: {}", usuarioId);
+        log.info("[DB] Obteniendo notificaciones del usuario: {}", usuarioId);
         return notificacionRepository
                 .findByUsuarioDestinoIdOrderByFechaCreacionDesc(usuarioId)
                 .stream()
@@ -229,7 +229,7 @@ public class NotificacionService {
             key = "'usuario:' + #usuarioId"
     )
     public long contarNoLeidas(Long usuarioId) {
-        log.debug("🔔 [DB] Contando notificaciones no leídas del usuario: {}", usuarioId);
+        log.debug("[DB] Contando notificaciones no leídas del usuario: {}", usuarioId);
         return notificacionRepository.countNoLeidasByUsuario(usuarioId);
     }
 
@@ -244,9 +244,9 @@ public class NotificacionService {
     })
     public void marcarComoLeidas(List<Long> ids, Long usuarioId) {
         if (ids == null || ids.isEmpty()) return;
-        log.info("✅ Marcando {} como leídas (usuario {})", ids.size(), usuarioId);
+        log.info("Marcando {} como leídas (usuario {})", ids.size(), usuarioId);
 
-        // ✅ CORREGIDO: pasar el 3er argumento (Instant)
+        // CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarComoLeidas(ids, usuarioId, Instant.now());
     }
 
@@ -256,9 +256,9 @@ public class NotificacionService {
             @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, key = "'usuario:' + #usuarioId")
     })
     public void marcarTodasComoLeidas(Long usuarioId) {
-        log.info("✅ Marcando todas como leídas (usuario {})", usuarioId);
+        log.info("Marcando todas como leídas (usuario {})", usuarioId);
 
-        // ✅ CORREGIDO: pasar el 2do argumento (Instant)
+        // CORREGIDO: pasar el 2do argumento (Instant)
         notificacionRepository.marcarTodasComoLeidas(usuarioId, Instant.now());
     }
 

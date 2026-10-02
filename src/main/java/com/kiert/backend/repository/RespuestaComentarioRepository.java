@@ -23,7 +23,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
 
     /**
      * Lista respuestas activas de un comentario con su autor cargado.
-     * ✅ MEJORA: incluye JOIN FETCH para eliminar N+1.
+     *  MEJORA: incluye JOIN FETCH para eliminar N+1.
      */
     @Query("""
             SELECT r FROM RespuestaComentario r
@@ -45,7 +45,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     }
 
     /**
-     * ✅ NUEVO: Versión paginada (recomendada para comentarios virales).
+     * NUEVO: Versión paginada (recomendada para comentarios virales).
      */
     @Query("""
             SELECT r FROM RespuestaComentario r
@@ -60,11 +60,11 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     );
 
     // ============================================================
-    // 🔥 CARGA MASIVA POR MÚLTIPLES COMENTARIOS (elimina N+1)
+    // CARGA MASIVA POR MÚLTIPLES COMENTARIOS (elimina N+1)
     // ============================================================
 
     /**
-     * ✅ CRÍTICO: Carga las respuestas de VARIOS comentarios en 1 query.
+     * CRÍTICO: Carga las respuestas de VARIOS comentarios en 1 query.
      *
      * Uso: al listar un post con 50 comentarios, en lugar de hacer 50 queries
      * (una por comentario), haces 1 query que trae las respuestas de los 50.
@@ -97,7 +97,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     long countActiveByComentarioId(@Param("comentarioId") Long comentarioId);
 
     /**
-     * ✅ NUEVO: Cuenta respuestas agrupadas por comentario.
+     * NUEVO: Cuenta respuestas agrupadas por comentario.
      * Devuelve [comentarioId, count].
      *
      * Uso: al listar un post, contar las respuestas de todos sus comentarios
@@ -113,7 +113,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     List<Object[]> contarPorComentarios(@Param("comentarioIds") List<Long> comentarioIds);
 
     /**
-     * ✅ NUEVO: Cuenta TODAS las respuestas de un usuario (para el perfil).
+     * NUEVO: Cuenta TODAS las respuestas de un usuario (para el perfil).
      */
     @Query("""
             SELECT COUNT(r) FROM RespuestaComentario r
@@ -127,7 +127,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     // ============================================================
 
     /**
-     * ✅ NUEVO: Últimas respuestas de un usuario (para el perfil).
+     * NUEVO: Últimas respuestas de un usuario (para el perfil).
      */
     @Query("""
             SELECT r FROM RespuestaComentario r
@@ -148,7 +148,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     // ============================================================
 
     /**
-     * ✅ NUEVO: Obtiene una respuesta activa con su autor y comentario cargados.
+     * NUEVO: Obtiene una respuesta activa con su autor y comentario cargados.
      */
     @Query("""
             SELECT r FROM RespuestaComentario r
@@ -165,7 +165,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     // ============================================================
 
     /**
-     * ✅ NUEVO: Buscar respuestas por texto en un comentario.
+     * NUEVO: Buscar respuestas por texto en un comentario.
      */
     @Query("""
             SELECT r FROM RespuestaComentario r
@@ -186,7 +186,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     // ============================================================
 
     /**
-     * ✅ NUEVO: Soft-delete de TODAS las respuestas de un comentario.
+     * NUEVO: Soft-delete de TODAS las respuestas de un comentario.
      * Útil cuando se elimina un comentario.
      */
     @Modifying
@@ -203,7 +203,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     );
 
     /**
-     * ✅ NUEVO: Soft-delete de TODAS las respuestas de varios comentarios.
+     * NUEVO: Soft-delete de TODAS las respuestas de varios comentarios.
      * Útil cuando se elimina un post completo.
      */
     @Modifying
@@ -224,7 +224,7 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     // ============================================================
 
     /**
-     * ✅ NUEVO: Hard-delete de respuestas con soft-delete hace más de N días.
+     * NUEVO: Hard-delete de respuestas con soft-delete hace más de N días.
      */
     @Modifying
     @Query(value = """
@@ -239,13 +239,13 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
     // ============================================================
 
     /**
-     * ✅ NUEVO: Total de respuestas activas en el sistema.
+     *NUEVO: Total de respuestas activas en el sistema.
      */
     @Query("SELECT COUNT(r) FROM RespuestaComentario r WHERE r.eliminado = false")
     long countActivas();
 
     /**
-     * ✅ NUEVO: Top comentarios con más respuestas.
+     * NUEVO: Top comentarios con más respuestas.
      * Devuelve [comentarioId, count].
      */
     @Query("""

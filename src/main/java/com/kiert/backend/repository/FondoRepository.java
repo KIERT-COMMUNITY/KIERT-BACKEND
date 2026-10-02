@@ -33,7 +33,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     List<FondoPersonalizado> findByActivoTrue();
 
     /**
-     * ✅ NUEVO: Versión paginada del catálogo.
+     *  NUEVO: Versión paginada del catálogo.
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -47,7 +47,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Solo fondos gratuitos (para usuarios sin premium).
+     *  NUEVO: Solo fondos gratuitos (para usuarios sin premium).
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -58,7 +58,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     List<FondoPersonalizado> findGratuitos();
 
     /**
-     * ✅ NUEVO: Solo fondos de pago (para el catálogo premium).
+     *  NUEVO: Solo fondos de pago (para el catálogo premium).
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -73,7 +73,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Fondos por tipo (gradiente, imagen, video, patrón).
+     *  NUEVO: Fondos por tipo (gradiente, imagen, video, patrón).
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -84,7 +84,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     List<FondoPersonalizado> findByTipo(@Param("tipo") String tipo);
 
     /**
-     * ✅ NUEVO: Fondos por tipo + gratis (para filtro combinado).
+     *  NUEVO: Fondos por tipo + gratis (para filtro combinado).
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -103,7 +103,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Fondos en rango de precio (para filtros de tienda).
+     *  NUEVO: Fondos en rango de precio (para filtros de tienda).
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -122,7 +122,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Obtiene un fondo activo por ID.
+     * NUEVO: Obtiene un fondo activo por ID.
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -132,7 +132,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     Optional<FondoPersonalizado> findActivoById(@Param("id") Long id);
 
     /**
-     * ✅ NUEVO: Obtiene un fondo activo por nombre (case-insensitive).
+     * NUEVO: Obtiene un fondo activo por nombre (case-insensitive).
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -146,7 +146,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Búsqueda por nombre o descripción.
+     *  NUEVO: Búsqueda por nombre o descripción.
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -167,7 +167,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Top N fondos más recientes.
+     *  NUEVO: Top N fondos más recientes.
      * Útil para el home.
      */
     @Query("""
@@ -178,7 +178,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     List<FondoPersonalizado> findRecientes(Pageable pageable);
 
     /**
-     * ✅ NUEVO: Top N fondos gratuitos (para nuevos usuarios).
+     *  NUEVO: Top N fondos gratuitos (para nuevos usuarios).
      */
     @Query("""
             SELECT f FROM FondoPersonalizado f
@@ -193,13 +193,13 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Cuenta fondos activos.
+     *  NUEVO: Cuenta fondos activos.
      */
     @Query("SELECT COUNT(f) FROM FondoPersonalizado f WHERE f.activo = true")
     long countActivos();
 
     /**
-     * ✅ NUEVO: Cuenta fondos agrupados por tipo.
+     *  NUEVO: Cuenta fondos agrupados por tipo.
      * Devuelve [tipo, count].
      */
     @Query("""
@@ -211,7 +211,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     List<Object[]> contarPorTipo();
 
     /**
-     * ✅ NUEVO: Cuenta fondos agrupados por gratis/pago.
+     *  NUEVO: Cuenta fondos agrupados por gratis/pago.
      * Devuelve [gratis, count].
      */
     @Query("""
@@ -223,7 +223,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     List<Object[]> contarPorGratis();
 
     /**
-     * ✅ NUEVO: Tipos distintos disponibles (para filtros del frontend).
+     *  NUEVO: Tipos distintos disponibles (para filtros del frontend).
      */
     @Query("""
             SELECT DISTINCT f.tipo FROM FondoPersonalizado f
@@ -237,7 +237,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Verifica si existe un fondo activo con ese nombre.
+     * NUEVO: Verifica si existe un fondo activo con ese nombre.
      */
     @Query("""
             SELECT COUNT(f) > 0 FROM FondoPersonalizado f
@@ -251,7 +251,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     // ============================================================
 
     /**
-     * ✅ NUEVO: Desactiva varios fondos en 1 query (bulk).
+     *  NUEVO: Desactiva varios fondos en 1 query (bulk).
      * Útil para el panel admin.
      */
     @Modifying
@@ -263,7 +263,7 @@ public interface FondoRepository extends JpaRepository<FondoPersonalizado, Long>
     int desactivarEnLote(@Param("ids") List<Long> ids);
 
     /**
-     * ✅ NUEVO: Activa varios fondos en 1 query (bulk).
+     *  NUEVO: Activa varios fondos en 1 query (bulk).
      */
     @Modifying
     @Query("""

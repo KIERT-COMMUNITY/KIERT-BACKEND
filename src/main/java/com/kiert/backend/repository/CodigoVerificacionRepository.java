@@ -24,7 +24,7 @@ public interface CodigoVerificacionRepository extends JpaRepository<CodigoVerifi
      * Busca el código más reciente que coincida con email, código y tipo,
      * que NO esté usado y que NO esté expirado.
      *
-     * ✅ AÑADIDO: filtro `fechaExpiracion > NOW()` para evitar traer
+     *  AÑADIDO: filtro `fechaExpiracion > NOW()` para evitar traer
      * códigos expirados. Ahora el service no necesita verificar la expiración
      * por separado.
      *
@@ -97,7 +97,7 @@ public interface CodigoVerificacionRepository extends JpaRepository<CodigoVerifi
     // INVALIDAR TODOS LOS CÓDIGOS DE UN EMAIL (todos los tipos)
     // ============================================================
     /**
-     * ✅ NUEVO: Invalida TODOS los códigos vigentes del email,
+     * NUEVO: Invalida TODOS los códigos vigentes del email,
      * independientemente del tipo. Útil cuando el usuario cambia de
      * email, resetea password, o cuando sospechas de abuso.
      */
@@ -118,7 +118,7 @@ public interface CodigoVerificacionRepository extends JpaRepository<CodigoVerifi
     // MARCAR UN CÓDIGO COMO USADO
     // ============================================================
     /**
-     * ✅ NUEVO: Marca un código específico como usado.
+     * NUEVO: Marca un código específico como usado.
      * Útil cuando ya tienes la entidad cargada y solo quieres consumirla.
      */
     @Modifying
@@ -137,7 +137,7 @@ public interface CodigoVerificacionRepository extends JpaRepository<CodigoVerifi
     // CONTAR CÓDIGOS RECIENTES (rate limiting adicional)
     // ============================================================
     /**
-     * ✅ NUEVO: Cuenta cuántos códigos se han generado para un email
+     * NUEVO: Cuenta cuántos códigos se han generado para un email
      * en las últimas N horas. Se usa como rate limiting adicional a
      * nivel de BD (complementa el rate limiting de Redis).
      */
@@ -157,7 +157,7 @@ public interface CodigoVerificacionRepository extends JpaRepository<CodigoVerifi
     // BUSCAR ÚLTIMO CÓDIGO VIGENTE POR EMAIL
     // ============================================================
     /**
-     * ✅ NUEVO: Obtiene el código vigente más reciente de un email+tipo.
+     * NUEVO: Obtiene el código vigente más reciente de un email+tipo.
      * Útil para debugging o para saber si hay un código activo.
      */
     @Query("""
@@ -178,7 +178,7 @@ public interface CodigoVerificacionRepository extends JpaRepository<CodigoVerifi
     // LIMPIEZA (para @Scheduled job)
     // ============================================================
     /**
-     * ✅ NUEVO: Elimina códigos expirados hace más de N días.
+     * NUEVO: Elimina códigos expirados hace más de N días.
      * Se ejecuta con un @Scheduled cada noche para mantener la tabla limpia.
      *
      * ⚠️ Devuelve el número de filas eliminadas.
@@ -195,7 +195,7 @@ public interface CodigoVerificacionRepository extends JpaRepository<CodigoVerifi
     // VERIFICAR SI EXISTE CÓDIGO VIGENTE
     // ============================================================
     /**
-     * ✅ NUEVO: Verifica si el usuario tiene algún código vigente.
+     *  NUEVO: Verifica si el usuario tiene algún código vigente.
      * Útil para evitar generar otro si ya hay uno activo.
      */
     @Query("""

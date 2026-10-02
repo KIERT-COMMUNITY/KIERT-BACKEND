@@ -49,7 +49,7 @@ public class CodigoVerificacion {
     private Instant fechaExpiracion;
 
     @Column(name = "fecha_uso")
-    private Instant fechaUso;                    // ✅ NUEVO: cuándo se consumió
+    private Instant fechaUso;                    //NUEVO: cuándo se consumió
 
     // ============================================================
     // ESTADO
@@ -64,10 +64,10 @@ public class CodigoVerificacion {
     // ============================================================
 
     @Column(name = "ip_solicitante", length = 45)
-    private String ipSolicitante;                // ✅ NUEVO: IPv4 o IPv6
+    private String ipSolicitante;                //NUEVO: IPv4 o IPv6
 
     @Column(name = "user_agent", length = 500)
-    private String userAgent;                    // ✅ NUEVO: navegador/cliente
+    private String userAgent;                    //NUEVO: navegador/cliente
 
     // ============================================================
     // CICLO DE VIDA
