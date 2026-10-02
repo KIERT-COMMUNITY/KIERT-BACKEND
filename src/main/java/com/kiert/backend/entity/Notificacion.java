@@ -1,21 +1,17 @@
-// src/main/java/com/kiert/backend/entity/Notificacion.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
+import lombok.*;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "notificaciones")
-@Data
-@Builder
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Notificacion {
 
     @Id
@@ -31,7 +27,7 @@ public class Notificacion {
     private Usuario usuarioOrigen;
 
     @Column(nullable = false, length = 30)
-    private String tipo; // like, comentario, respuesta, solicitud, sistema, INVITACION_GRUPO
+    private String tipo;
 
     @Column(nullable = false, length = 500)
     private String mensaje;
@@ -59,10 +55,16 @@ public class Notificacion {
     @Column(name = "url", length = 500)
     private String url;
 
-    @CreationTimestamp
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
-    private Instant fechaCreacion;
+    @Builder.Default
+    private Instant fechaCreacion = Instant.now();
 
     @Column(name = "fecha_leida")
     private Instant fechaLeida;
+
+    @PrePersist
+    public void prePersist() {
+        if (fechaCreacion == null) fechaCreacion = Instant.now();
+        if (leida == null) leida = false;
+    }
 }

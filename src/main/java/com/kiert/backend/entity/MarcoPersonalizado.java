@@ -1,5 +1,7 @@
+// src/main/java/com/kiert/backend/entity/MarcoPersonalizado.java
 package com.kiert.backend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -47,6 +49,9 @@ public class MarcoPersonalizado {
     @Builder.Default
     private Instant fechaCreacion = Instant.now();
 
-    @Column(name = "usuario_id")
-    private Long usuarioId; // ID del usuario que lo subió
+    // ✅ CORREGIDO: era Long usuarioId, ahora es relación
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    @JsonIgnore
+    private Usuario usuario;
 }

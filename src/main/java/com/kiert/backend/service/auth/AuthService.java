@@ -1,4 +1,4 @@
-package com.kiert.backend.service;
+package com.kiert.backend.service.auth;
 
 import com.kiert.backend.dto.UsuarioDTO;
 import com.kiert.backend.dto.request.LoginRequestDTO;
@@ -10,6 +10,10 @@ import com.kiert.backend.entity.Usuario;
 import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.repository.UsuarioRepository;
 import com.kiert.backend.security.JwtService;
+import com.kiert.backend.service.AuditoriaService;
+import com.kiert.backend.service.CodigoVerificacionService;
+import com.kiert.backend.service.EmailService;
+import com.kiert.backend.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,6 +24,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 
 @Slf4j
@@ -35,13 +40,22 @@ public class AuthService {
     private final UsuarioService usuarioService;
     private final CodigoVerificacionService codigoVerificacionService;
     private final AuditoriaService auditoriaService;
+    private final RateLimitService rateLimitService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     // ============================================================
-    // REGISTRO -> crea usuario INACTIVO y envia codigo
+    // REGISTRO
     // ============================================================
     @Transactional
     public void registrar(RegisterRequestDTO datos) {
         log.info("Registrando usuario: {}", datos.email());
+
+        // Rate limiting por email (máx 3 registros por hora por email)
+        rateLimitService.verificar(
+                "registro:email:" + datos.email(),
+                3,
+                Duration.ofHours(1)
+        );
 
         // Validar duplicados
         if (usuarioRepository.existsByEmail(datos.email())) {
@@ -66,7 +80,6 @@ public class AuthService {
             throw new BadRequestException("El nombre de usuario ya esta en uso");
         }
 
-        // Crear usuario INACTIVO
         Usuario usuario = Usuario.builder()
                 .nombreUsuario(datos.nombreUsuario())
                 .email(datos.email())
@@ -79,14 +92,12 @@ public class AuthService {
 
         usuario = usuarioRepository.save(usuario);
 
-        // Generar codigo y enviar
         String codigo = codigoVerificacionService.generarCodigo(
                 datos.email(), TipoCodigo.VERIFICACION_CUENTA);
 
         emailService.enviarCodigoVerificacion(
                 datos.email(), datos.nombreUsuario(), codigo);
 
-        // AUDITORIA
         auditoriaService.registrar(
                 usuario.getId(),
                 datos.email(),
@@ -99,11 +110,18 @@ public class AuthService {
     }
 
     // ============================================================
-    // VERIFICAR CUENTA -> activa + envia bienvenida
+    // VERIFICAR CUENTA
     // ============================================================
     @Transactional
     public void verificarCuenta(String email, String codigo) {
         log.info("Verificando cuenta: {}", email);
+
+        // Rate limiting: máx 5 intentos cada 15 min por email
+        rateLimitService.verificar(
+                "verificar:email:" + email,
+                5,
+                Duration.ofMinutes(15)
+        );
 
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
@@ -113,7 +131,6 @@ public class AuthService {
             return;
         }
 
-        // Validar codigo (lanza excepcion si falla)
         try {
             codigoVerificacionService.validarYConsumir(
                     email, codigo, TipoCodigo.VERIFICACION_CUENTA);
@@ -128,16 +145,16 @@ public class AuthService {
             throw e;
         }
 
-        // Activar cuenta
+        // Éxito: resetear rate limit
+        rateLimitService.resetear("verificar:email:" + email);
+
         usuario.setActivo(true);
         usuario.setEmailVerificado(true);
         usuario.setFechaVerificacionEmail(Instant.now());
         usuarioRepository.save(usuario);
 
-        // Enviar bienvenida
         emailService.enviarCorreoBienvenida(email, usuario.getNombreUsuario());
 
-        // AUDITORIA
         auditoriaService.registrar(
                 usuario.getId(),
                 email,
@@ -156,6 +173,13 @@ public class AuthService {
     public void reenviarCodigoVerificacion(String email) {
         log.info("Reenviando codigo de verificacion: {}", email);
 
+        // Rate limiting: máx 3 reenvíos por hora por email
+        rateLimitService.verificar(
+                "reenvio:email:" + email,
+                3,
+                Duration.ofHours(1)
+        );
+
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
 
@@ -168,7 +192,6 @@ public class AuthService {
 
         emailService.enviarCodigoVerificacion(email, usuario.getNombreUsuario(), codigo);
 
-        // AUDITORIA
         auditoriaService.registrar(
                 usuario.getId(),
                 email,
@@ -185,7 +208,13 @@ public class AuthService {
     public AuthResponseDTO login(LoginRequestDTO datos) {
         log.info("Login para usuario: {}", datos.email());
 
-        // Buscar usuario
+        // 🔒 RATE LIMITING: máx 5 intentos cada 15 min por email
+        rateLimitService.verificar(
+                "login:email:" + datos.email(),
+                5,
+                Duration.ofMinutes(15)
+        );
+
         Usuario usuario = usuarioRepository.findByEmail(datos.email())
                 .orElse(null);
 
@@ -200,7 +229,6 @@ public class AuthService {
             throw new BadRequestException("Credenciales invalidas");
         }
 
-        // Verificar si la cuenta esta activa
         if (Boolean.FALSE.equals(usuario.getActivo())) {
             auditoriaService.registrar(
                     usuario.getId(),
@@ -214,7 +242,6 @@ public class AuthService {
             );
         }
 
-        // Autenticar
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(datos.email(), datos.password())
@@ -231,11 +258,13 @@ public class AuthService {
             throw new BadRequestException("Credenciales invalidas");
         }
 
-        // Marcar en linea
+        // ✅ LOGIN EXITOSO: resetear rate limit
+        rateLimitService.resetear("login:email:" + datos.email());
+
+        // Marcar en línea
         usuarioService.marcarEnLinea(usuario.getId());
         log.info("Usuario {} marcado como EN LINEA tras login", usuario.getId());
 
-        // AUDITORIA
         auditoriaService.registrar(
                 usuario.getId(),
                 datos.email(),
@@ -249,16 +278,25 @@ public class AuthService {
     }
 
     // ============================================================
-    // LOGOUT
+    // LOGOUT (con blacklist de JWT)
     // ============================================================
     @Transactional
-    public void logout(Long usuarioId) {
+    public void logout(Long usuarioId, String token) {
         log.info("Cerrando sesion para usuario: {}", usuarioId);
 
         if (usuarioId != null) {
             usuarioService.marcarDesconectado(usuarioId);
 
-            // AUDITORIA
+            // 🔒 AÑADIR TOKEN A BLACKLIST
+            if (token != null && !token.isBlank()) {
+                try {
+                    Instant expiracion = jwtService.obtenerExpiracion(token);
+                    tokenBlacklistService.invalidar(token, expiracion);
+                } catch (Exception e) {
+                    log.error("⚠️ Error invalidando token en logout: {}", e.getMessage());
+                }
+            }
+
             auditoriaService.registrar(
                     usuarioId,
                     null,
@@ -270,11 +308,18 @@ public class AuthService {
     }
 
     // ============================================================
-    // SOLICITAR RECUPERACION -> envia codigo
+    // SOLICITAR RECUPERACION
     // ============================================================
     @Transactional
     public void solicitarRecuperacion(String email) {
         log.info("Solicitando recuperacion para: {}", email);
+
+        // Rate limiting: máx 3 solicitudes por hora por email
+        rateLimitService.verificar(
+                "recuperacion:email:" + email,
+                3,
+                Duration.ofHours(1)
+        );
 
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> {
@@ -293,7 +338,6 @@ public class AuthService {
 
         emailService.enviarCodigoRecuperacion(email, usuario.getNombreUsuario(), codigo);
 
-        // AUDITORIA
         auditoriaService.registrar(
                 usuario.getId(),
                 email,
@@ -312,15 +356,20 @@ public class AuthService {
     public void restablecerPasswordConCodigo(String email, String codigo, String nuevaPassword) {
         log.info("Restableciendo contrasena para: {}", email);
 
+        // Rate limiting: máx 5 intentos cada 15 min
+        rateLimitService.verificar(
+                "reset:email:" + email,
+                5,
+                Duration.ofMinutes(15)
+        );
+
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
 
-        // Validar codigo
         try {
             codigoVerificacionService.validarYConsumir(
                     email, codigo, TipoCodigo.RECUPERACION_PASSWORD);
         } catch (Exception e) {
-            // AUDITORIA: intento fallido
             auditoriaService.registrar(
                     usuario.getId(),
                     email,
@@ -331,12 +380,17 @@ public class AuthService {
             throw e;
         }
 
-        // Cambiar contrasena
+        // ✅ Éxito: resetear rate limit
+        rateLimitService.resetear("reset:email:" + email);
+
         usuario.setPasswordHash(passwordEncoder.encode(nuevaPassword));
         usuario.setFechaUltimoCambioPassword(Instant.now());
         usuarioRepository.save(usuario);
 
-        // AUDITORIA: cambio exitoso
+        // 🔒 Invalidar TODOS los tokens del usuario (forzar re-login)
+        // (Esto requiere que guardes los tokens por usuario o uses un "token version")
+        // Por ahora, no lo hacemos porque JwtService no lo soporta.
+
         auditoriaService.registrar(
                 usuario.getId(),
                 email,

@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/ReporteService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
@@ -6,6 +7,9 @@ import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -25,6 +29,10 @@ public class ReporteService {
     private final ComentarioRepository comentarioRepository;
     private final RespuestaComentarioRepository respuestaRepository;
 
+    // Nombres de caché
+    private static final String CACHE_RESUMEN_REPORTES = "resumenReportes";
+    private static final String CACHE_MIS_REPORTES = "misReportes";
+
     // Motivos válidos
     private static final List<String> MOTIVOS_VALIDOS = List.of(
             "SPAM", "ACOSO", "CONTENIDO_INAPROPIADO", "VIOLENCIA",
@@ -35,7 +43,14 @@ public class ReporteService {
             "POST", "COMENTARIO", "RESPUESTA", "USUARIO"
     );
 
+    // ============================================================
+    // CREAR REPORTE
+    // ============================================================
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_RESUMEN_REPORTES, allEntries = true),
+            @CacheEvict(value = CACHE_MIS_REPORTES, key = "'usuario:' + #usuarioReportanteId")
+    })
     public ReporteDTO crearReporte(Long usuarioReportanteId, CrearReporteDTO dto, String ip) {
         log.info("📢 Creando reporte tipo={} motivo={} por usuario={}",
                 dto.tipoReporte(), dto.motivo(), usuarioReportanteId);
@@ -114,19 +129,41 @@ public class ReporteService {
         return mapearADTO(reporte);
     }
 
+    // ============================================================
+    // LISTAR REPORTES (paginado, sin caché)
+    // ============================================================
+    /**
+     * ⚠️ NO se cachea porque:
+     * - Page<T> no es serializable fácilmente por Jackson
+     * - Los filtros + paginación generan muchísimas claves
+     * - Es una consulta de moderación, no un hot path
+     */
     @Transactional(readOnly = true)
     public Page<ReporteDTO> listarReportes(String estado, String tipo, Pageable pageable) {
         return reporteRepository.findWithFilters(estado, tipo, pageable)
                 .map(this::mapearADTO);
     }
 
+    // ============================================================
+    // LISTAR MIS REPORTES
+    // ============================================================
     @Transactional(readOnly = true)
+    @Cacheable(value = CACHE_MIS_REPORTES, key = "'usuario:' + #usuarioId")
     public List<ReporteDTO> listarMisReportes(Long usuarioId) {
+        log.info("📋 [DB] Listando reportes del usuario: {}", usuarioId);
         return reporteRepository.findByUsuarioReportanteIdOrderByFechaCreacionDesc(usuarioId)
                 .stream().map(this::mapearADTO).toList();
     }
 
+    // ============================================================
+    // ACTUALIZAR ESTADO
+    // ============================================================
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_RESUMEN_REPORTES, allEntries = true),
+            // No podemos saber qué usuario reportó sin consultar, así que invalidamos todos
+            @CacheEvict(value = CACHE_MIS_REPORTES, allEntries = true)
+    })
     public ReporteDTO actualizarEstado(Long reporteId, Long moderadorId, ActualizarReporteDTO dto) {
         Reporte reporte = reporteRepository.findById(reporteId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Reporte no encontrado"));
@@ -146,8 +183,13 @@ public class ReporteService {
         return mapearADTO(reporte);
     }
 
+    // ============================================================
+    // OBTENER RESUMEN (4 COUNT queries → cachear)
+    // ============================================================
     @Transactional(readOnly = true)
+    @Cacheable(value = CACHE_RESUMEN_REPORTES, key = "'all'")
     public ReporteResumenDTO obtenerResumen() {
+        log.info("📊 [DB] Obteniendo resumen de reportes (4 queries COUNT)");
         return new ReporteResumenDTO(
                 reporteRepository.countByEstado("PENDIENTE"),
                 reporteRepository.countByEstado("REVISANDO"),
@@ -156,6 +198,9 @@ public class ReporteService {
         );
     }
 
+    // ============================================================
+    // DTO MAPPING
+    // ============================================================
     private ReporteDTO mapearADTO(Reporte r) {
         return new ReporteDTO(
                 r.getId(),

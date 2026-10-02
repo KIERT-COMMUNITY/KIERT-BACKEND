@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/entity/MensajeGrupo.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
@@ -18,6 +19,10 @@ public class MensajeGrupo {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // ============================================================
+    // RELACIONES
+    // ============================================================
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "grupo_id", nullable = false)
     private GrupoChat grupo;
@@ -25,6 +30,10 @@ public class MensajeGrupo {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "emisor_id", nullable = false)
     private Usuario emisor;
+
+    // ============================================================
+    // CONTENIDO
+    // ============================================================
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String contenido;
@@ -39,11 +48,27 @@ public class MensajeGrupo {
     @Column(name = "nombre_archivo", length = 255)
     private String nombreArchivo;
 
-    @Column(name = "fecha_envio", nullable = false)
+    // ============================================================
+    // FECHAS
+    // ============================================================
+
+    @Column(name = "fecha_envio", nullable = false, updatable = false)
     @Builder.Default
     private Instant fechaEnvio = Instant.now();
 
+    // ============================================================
+    // SOFT DELETE
+    // ============================================================
+
     @Column(nullable = false)
     @Builder.Default
-    private boolean eliminado = false;
+    private boolean eliminado = false;            // ✅ Ya lo tenías
+
+    // ============================================================
+    // MÉTODOS AUXILIARES
+    // ============================================================
+
+    public void marcarComoEliminado() {
+        this.eliminado = true;
+    }
 }

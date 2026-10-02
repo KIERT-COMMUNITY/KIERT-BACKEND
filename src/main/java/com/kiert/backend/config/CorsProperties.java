@@ -6,5 +6,5 @@ import java.util.List;
 
 @ConfigurationProperties(prefix = "kiert.cors")
 public record CorsProperties(List<String> allowedOrigins) {
-    // ✅ Cambiado de String a List<String>
+    // Cambiado de String a List<String>
 }

@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/PersonalizacionService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,12 +26,22 @@ public class PersonalizacionService {
     private final UsuarioRepository usuarioRepository;
     private final CloudinaryService cloudinaryService;
 
-    // ========== OBTENER PERSONALIZACIÓN ==========
+    // Nombres de caché
+    private static final String CACHE_PERSONALIZACION = "personalizacion";
+    private static final String CACHE_MARCOS = "marcos";
+    private static final String CACHE_FONDOS = "fondos";
+
+    // ============================================================
+    // OBTENER PERSONALIZACIÓN
+    // ============================================================
     @Transactional
-    // ✅ QUITAR CACHÉ TEMPORALMENTE PARA EVITAR ClassCastException
-    // @Cacheable(value = "personalizacion", key = "#usuarioId", unless = "#result == null")
+    @Cacheable(
+            value = CACHE_PERSONALIZACION,
+            key = "#usuarioId",
+            unless = "#result == null"
+    )
     public PersonalizacionDTO obtenerPersonalizacion(Long usuarioId) {
-        log.info("📋 Obteniendo personalización para usuario: {} (desde BD)", usuarioId);
+        log.info("📋 [DB] Obteniendo personalización para usuario: {}", usuarioId);
 
         if (usuarioId == null) {
             log.error("❌ usuarioId es null");
@@ -56,9 +68,21 @@ public class PersonalizacionService {
         }
     }
 
-    // ========== GUARDAR PERSONALIZACIÓN ==========
+    // ============================================================
+    // GUARDAR PERSONALIZACIÓN
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"personalizacion", "perfil", "usuarios"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_PERSONALIZACION, key = "#usuarioId"),
+            // Invalidar caches donde aparece la personalización
+            @CacheEvict(value = "perfil", key = "#usuarioId"),
+            @CacheEvict(value = "posts", allEntries = true),
+            @CacheEvict(value = "post", allEntries = true),
+            @CacheEvict(value = "comentarios", allEntries = true),
+            @CacheEvict(value = "conversaciones", allEntries = true),
+            @CacheEvict(value = "miembrosGrupo", allEntries = true),
+            @CacheEvict(value = "documentos", allEntries = true)
+    })
     public PersonalizacionDTO guardarPersonalizacion(Long usuarioId, String temaId, String marcoId, String fondoId) {
         log.info("💾 Guardando personalización para usuario: {} con parámetros: tema={}, marco={}, fondo={}",
                 usuarioId, temaId, marcoId, fondoId);
@@ -75,7 +99,6 @@ public class PersonalizacionService {
                         return crearPersonalizacionDefault(usuarioId);
                     });
 
-            // ✅ ACTUALIZAR SOLO SI LOS VALORES SON DIFERENTES
             if (temaId != null && !temaId.isEmpty() && !temaId.equals(personalizacion.getTemaId())) {
                 log.info("📝 Actualizando tema: {} → {}", personalizacion.getTemaId(), temaId);
                 personalizacion.setTemaId(temaId);
@@ -91,8 +114,6 @@ public class PersonalizacionService {
 
             personalizacion = personalizacionRepository.save(personalizacion);
             log.info("✅ Personalización guardada para usuario: {} con ID: {}", usuarioId, personalizacion.getId());
-            log.info("📌 Valores guardados: tema={}, marco={}, fondo={}",
-                    personalizacion.getTemaId(), personalizacion.getMarcoId(), personalizacion.getFondoId());
 
             return toDTO(personalizacion);
         } catch (Exception e) {
@@ -101,9 +122,22 @@ public class PersonalizacionService {
         }
     }
 
-    // ========== SUBIR FOTO DE PERFIL ==========
+    // ============================================================
+    // SUBIR FOTO DE PERFIL
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"personalizacion", "perfil", "usuarios"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_PERSONALIZACION, key = "#usuarioId"),
+            @CacheEvict(value = "perfil", key = "#usuarioId"),
+            @CacheEvict(value = "posts", allEntries = true),
+            @CacheEvict(value = "post", allEntries = true),
+            @CacheEvict(value = "comentarios", allEntries = true),
+            @CacheEvict(value = "respuestas", allEntries = true),
+            @CacheEvict(value = "documentos", allEntries = true),
+            @CacheEvict(value = "conversaciones", allEntries = true),
+            @CacheEvict(value = "miembrosGrupo", allEntries = true),
+            @CacheEvict(value = "gruposUsuario", allEntries = true)
+    })
     public PersonalizacionDTO subirFotoPerfil(Long usuarioId, MultipartFile archivo) {
         log.info("📸 Subiendo foto de perfil para usuario: {}", usuarioId);
 
@@ -123,9 +157,14 @@ public class PersonalizacionService {
         return toDTO(personalizacion);
     }
 
-    // ========== SUBIR FOTO DE PORTADA ==========
+    // ============================================================
+    // SUBIR FOTO DE PORTADA
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"personalizacion", "perfil"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_PERSONALIZACION, key = "#usuarioId"),
+            @CacheEvict(value = "perfil", key = "#usuarioId")
+    })
     public PersonalizacionDTO subirFotoPortada(Long usuarioId, MultipartFile archivo) {
         log.info("📸 Subiendo foto de portada para usuario: {}", usuarioId);
 
@@ -140,26 +179,40 @@ public class PersonalizacionService {
         return toDTO(personalizacion);
     }
 
-    // ========== OBTENER MARCOS ==========
+    // ============================================================
+    // OBTENER MARCOS (hardcodeado, pero cacheado)
+    // ============================================================
+    @Cacheable(value = CACHE_MARCOS, key = "'all'")
     public List<MarcoDTO> obtenerMarcos(Long usuarioId) {
-        log.info("📋 Obteniendo marcos para usuario: {}", usuarioId);
+        log.info("📋 [CACHE] Obteniendo marcos para usuario: {}", usuarioId);
         return getMarcosDefault();
     }
 
-    // ========== OBTENER FONDOS ==========
+    // ============================================================
+    // OBTENER FONDOS (hardcodeado, pero cacheado)
+    // ============================================================
+    @Cacheable(value = CACHE_FONDOS, key = "'all'")
     public List<FondoDTO> obtenerFondos(Long usuarioId) {
-        log.info("📋 Obteniendo fondos para usuario: {}", usuarioId);
+        log.info("📋 [CACHE] Obteniendo fondos para usuario: {}", usuarioId);
         return getFondosDefault();
     }
 
-    // ========== LIMPIAR CACHÉ ==========
-    @CacheEvict(value = {"personalizacion", "perfil", "usuarios", "marcos", "fondos", "busquedaUsuarios"}, allEntries = true)
+    // ============================================================
+    // LIMPIAR CACHÉ
+    // ============================================================
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_PERSONALIZACION, allEntries = true),
+            @CacheEvict(value = CACHE_MARCOS, allEntries = true),
+            @CacheEvict(value = CACHE_FONDOS, allEntries = true),
+            @CacheEvict(value = "perfil", allEntries = true)
+    })
     public void limpiarCache() {
         log.info("🧹 Limpiando toda la caché de personalización");
     }
 
-    // ========== MÉTODOS PRIVADOS ==========
-
+    // ============================================================
+    // MÉTODOS PRIVADOS
+    // ============================================================
     private List<MarcoDTO> getMarcosDefault() {
         List<MarcoDTO> marcos = new ArrayList<>();
         marcos.add(new MarcoDTO("none", "Sin marco", null, "circulo", 0.0, true));

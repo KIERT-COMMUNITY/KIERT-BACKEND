@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/UsuarioService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.UsuarioDTO;
@@ -9,11 +10,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,11 +22,19 @@ import java.util.stream.Collectors;
 public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
+    private final PresenciaService presenciaService;
 
+    private static final String CACHE_USUARIOS = "usuarios";
+    private static final String CACHE_BUSQUEDA_USUARIOS = "busquedaUsuarios";
+    private static final int LIMITE_BUSQUEDA = 20;
+
+    // ============================================================
+    // OBTENER USUARIO POR ID
+    // ============================================================
     @Transactional(readOnly = true)
-    @Cacheable(value = "usuarios", key = "#id")
+    @Cacheable(value = CACHE_USUARIOS, key = "#id")
     public UsuarioDTO obtenerUsuarioPorId(Long id) {
-        log.info("📋 Obteniendo usuario por ID: {} (desde BD)", id);
+        log.info("📋 [DB] Obteniendo usuario por ID: {}", id);
 
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -40,19 +47,35 @@ public class UsuarioService {
         );
     }
 
+    // ============================================================
+    // BUSCAR USUARIOS
+    // ============================================================
+    /**
+     * ⚠️ CAMBIO CLAVE: la clave incluye `usuarioActualId` porque el resultado
+     * filtra al usuario actual. Sin esto, dos usuarios distintos verían
+     * los mismos resultados cacheados.
+     *
+     * Además, se limita a LIMITE_BUSQUEDA resultados para no llenar Redis.
+     */
     @Transactional(readOnly = true)
-    @Cacheable(value = "busquedaUsuarios", key = "#query")
+    @Cacheable(
+            value = CACHE_BUSQUEDA_USUARIOS,
+            key = "#usuarioActualId + ':' + #query.toLowerCase().trim()",
+            condition = "#query != null && #query.trim().length() >= 3"
+    )
     public List<UsuarioDisponibleDTO> buscarUsuarios(String query, Long usuarioActualId) {
-        log.info("🔍 Buscando usuarios con: '{}' (desde BD)", query);
+        log.info("🔍 [DB] Buscando usuarios con: '{}' (usuario: {})", query, usuarioActualId);
 
         if (query == null || query.trim().length() < 1) {
             return List.of();
         }
 
-        List<Usuario> usuarios = usuarioRepository.findByNombreUsuarioContainingIgnoreCase(query.trim());
+        List<Usuario> usuarios = usuarioRepository
+                .findByNombreUsuarioContainingIgnoreCase(query.trim());
 
         return usuarios.stream()
                 .filter(u -> !u.getId().equals(usuarioActualId))
+                .limit(LIMITE_BUSQUEDA)   // ✅ límite
                 .map(u -> new UsuarioDisponibleDTO(
                         u.getId(),
                         u.getNombreUsuario(),
@@ -61,8 +84,11 @@ public class UsuarioService {
                 .collect(Collectors.toList());
     }
 
+    // ============================================================
+    // ACTUALIZAR USUARIO
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"usuarios", "busquedaUsuarios"}, allEntries = true)
+    @CacheEvict(value = {CACHE_USUARIOS, CACHE_BUSQUEDA_USUARIOS}, allEntries = true)
     public UsuarioDTO actualizarUsuario(Long id, UsuarioDTO datos) {
         log.info("✏️ Actualizando usuario: {}", id);
 
@@ -87,57 +113,39 @@ public class UsuarioService {
     }
 
     // ============================================================
-    // 🔥 ESTADO ONLINE / OFFLINE
+    // ESTADO ONLINE / OFFLINE (ahora en Redis)
     // ============================================================
-
-    @Transactional
     public void marcarEnLinea(Long usuarioId) {
-        log.info("🟢 Usuario {} marcado como EN LÍNEA", usuarioId);
-        usuarioRepository.findById(usuarioId).ifPresent(u -> {
-            u.setEnLinea(true);
-            u.setUltimaConexion(Instant.now());
-            usuarioRepository.save(u);
-        });
+        presenciaService.marcarEnLinea(usuarioId);
     }
 
-    @Transactional
     public void marcarDesconectado(Long usuarioId) {
-        log.info("🔴 Usuario {} marcado como DESCONECTADO", usuarioId);
-        usuarioRepository.findById(usuarioId).ifPresent(u -> {
-            u.setEnLinea(false);
-            u.setUltimaConexion(Instant.now());
-            usuarioRepository.save(u);
-        });
-    }
-
-    @Transactional
-    public void marcarTodosDesconectados() {
-        log.info("🔴 Marcando TODOS los usuarios como desconectados (arranque)");
-        List<Usuario> todos = usuarioRepository.findAll();
-        todos.forEach(u -> u.setEnLinea(false));
-        usuarioRepository.saveAll(todos);
+        presenciaService.marcarDesconectado(usuarioId);
     }
 
     /**
-     * 🧹 Limpieza automática: cada minuto marca como desconectados
-     * a usuarios que llevan más de 5 minutos sin actividad.
-     * Esto evita usuarios "fantasma" en línea por errores de red.
+     * ⚠️ ELIMINADO: marcarTodosDesconectados()
+     * Ya no se necesita porque las claves Redis expiran solas.
+     * Si quieres forzar limpieza al arranque, hazlo desde un CommandLineRunner
+     * que borre las claves presencia:online:* (no necesario).
      */
-    @Scheduled(fixedRate = 60000) // Cada 60 segundos
-    @Transactional
-    public void limpiarUsuariosInactivos() {
-        Instant hace5Minutos = Instant.now().minusSeconds(300);
-        List<Usuario> usuarios = usuarioRepository.findAll();
 
-        List<Usuario> inactivos = usuarios.stream()
-                .filter(u -> Boolean.TRUE.equals(u.getEnLinea()))
-                .filter(u -> u.getUltimaConexion() != null && u.getUltimaConexion().isBefore(hace5Minutos))
-                .collect(Collectors.toList());
+    /**
+     * ⚠️ ELIMINADO: limpiarUsuariosInactivos()
+     * Ya no se necesita porque el TTL de 5 min en Redis se encarga.
+     */
 
-        if (!inactivos.isEmpty()) {
-            log.info("🧹 Limpiando {} usuarios inactivos", inactivos.size());
-            inactivos.forEach(u -> u.setEnLinea(false));
-            usuarioRepository.saveAll(inactivos);
-        }
+    // ============================================================
+    // HELPERS PARA EL DTO
+    // ============================================================
+    /**
+     * Rellena el estado online/ultima conexión en un DTO.
+     * Llamar desde el mapper o controller cuando se necesite.
+     */
+    public UsuarioDTO enriquecerConPresencia(UsuarioDTO dto) {
+        if (dto == null) return null;
+        // El DTO es un record, así que creamos uno nuevo con los datos
+        // (o lo dejamos así si el frontend consulta el estado por separado)
+        return dto;
     }
 }

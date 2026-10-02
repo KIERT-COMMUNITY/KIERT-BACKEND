@@ -8,6 +8,8 @@ import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,12 +36,24 @@ public class ChatService {
     private final StorageService storageService;
     private final SimpMessagingTemplate messagingTemplate;
 
+    // Nombres de caché centralizados
+    private static final String CACHE_CONVERSACIONES = "conversaciones";
+    private static final String CACHE_MENSAJES = "mensajes";
+    private static final String CACHE_SOLICITUDES = "solicitudes";
+    private static final String CACHE_CONTACTOS = "contactos";
+    private static final String CACHE_USUARIOS_DISPONIBLES = "usuariosDisponibles";
+    private static final String CACHE_CONTADORES = "contadores";
+
     // ============================================================
     // CONVERSACIONES
     // ============================================================
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_CONVERSACIONES,
+            key = "'usuario:' + #usuarioId"
+    )
     public List<ConversacionDTO> listarConversaciones(Long usuarioId) {
-        log.info("📋 Listando conversaciones para usuario: {}", usuarioId);
+        log.info("📋 [DB] Listando conversaciones para usuario: {}", usuarioId);
 
         List<Long> bloqueadosIds = bloqueoRepository.findUsuariosBloqueadosIds(usuarioId);
         List<Long> bloqueadoresIds = bloqueoRepository.findUsuariosQueMeBloquearonIds(usuarioId);
@@ -47,7 +61,6 @@ public class ChatService {
         List<Mensaje> mensajes = mensajeRepository.findTodosLosMensajesDeUsuario(usuarioId);
         if (mensajes.isEmpty()) return new ArrayList<>();
 
-        // 1️⃣ Agrupar por el ID del otro usuario
         Map<Long, List<Mensaje>> mensajesPorUsuario = mensajes.stream()
                 .filter(m -> {
                     Long otroId = m.getEmisor().getId().equals(usuarioId)
@@ -61,7 +74,6 @@ public class ChatService {
                                 : m.getEmisor().getId()
                 ));
 
-        // 2️⃣ Convertir a DTOs (con tipo explícito)
         List<ConversacionDTO> conversaciones = new ArrayList<>();
 
         for (Map.Entry<Long, List<Mensaje>> entry : mensajesPorUsuario.entrySet()) {
@@ -84,15 +96,12 @@ public class ChatService {
                     .map(PersonalizacionUsuario::getMarcoId)
                     .orElse("none");
 
-            // 🔥 Estado online REAL
             Boolean online = otroUsuario.getEnLinea() != null && otroUsuario.getEnLinea();
 
-            // 🔥 Última conexión REAL del usuario
             String ultimaConexionReal = otroUsuario.getUltimaConexion() != null
                     ? otroUsuario.getUltimaConexion().toString()
                     : null;
 
-            // 🔥 Fecha del último mensaje (para ordenar)
             String fechaUltimoMensaje = ultimo != null
                     ? ultimo.getFechaEnvio().toString()
                     : null;
@@ -103,14 +112,13 @@ public class ChatService {
                     otroUsuario.getFotoPerfilUrl(),
                     marcoId,
                     ultimo != null ? ultimo.getContenido() : null,
-                    fechaUltimoMensaje,         // ultimaConexion (fecha mensaje)
+                    fechaUltimoMensaje,
                     noLeidos,
                     online,
-                    ultimaConexionReal          // ultimaConexionReal (fecha real)
+                    ultimaConexionReal
             ));
         }
 
-        // 3️⃣ Ordenar por fecha del último mensaje (descendente)
         conversaciones.sort((c1, c2) -> {
             String f1 = c1.ultimaConexion();
             String f2 = c2.ultimaConexion();
@@ -121,12 +129,18 @@ public class ChatService {
 
         return conversaciones;
     }
+
     // ============================================================
     // MENSAJES
     // ============================================================
     @Transactional
+    @Cacheable(
+            value = CACHE_MENSAJES,
+            key = "'conv:' + T(java.lang.Math).min(#usuarioId, #otroUsuarioId) + ':' + T(java.lang.Math).max(#usuarioId, #otroUsuarioId)",
+            condition = "#usuarioId != null && #otroUsuarioId != null"
+    )
     public List<MensajeChatDTO> obtenerMensajes(Long usuarioId, Long otroUsuarioId) {
-        log.info("💬 Obteniendo mensajes entre {} y {}", usuarioId, otroUsuarioId);
+        log.info("💬 [DB] Obteniendo mensajes entre {} y {}", usuarioId, otroUsuarioId);
 
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, otroUsuarioId);
 
@@ -166,7 +180,15 @@ public class ChatService {
     }
 
     @Transactional
-    @CacheEvict(value = {"conversaciones", "mensajes"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #receptorId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#emisorId, #receptorId) + ':' + T(java.lang.Math).max(#emisorId, #receptorId)"
+            ),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public MensajeChatDTO enviarMensaje(Long emisorId, Long receptorId, String contenido) {
         log.info("📤 Enviando mensaje de {} a {}", emisorId, receptorId);
 
@@ -222,7 +244,15 @@ public class ChatService {
     }
 
     @Transactional
-    @CacheEvict(value = {"conversaciones", "mensajes"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #receptorId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#emisorId, #receptorId) + ':' + T(java.lang.Math).max(#emisorId, #receptorId)"
+            ),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public MensajeChatDTO enviarMensajeConArchivos(
             Long emisorId, Long receptorId,
             String contenido, List<MultipartFile> archivos) {
@@ -317,7 +347,14 @@ public class ChatService {
     }
 
     @Transactional
-    @CacheEvict(value = {"conversaciones", "mensajes"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#usuarioId, #otroUsuarioId) + ':' + T(java.lang.Math).max(#usuarioId, #otroUsuarioId)"
+            ),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public void marcarMensajesComoLeidos(Long usuarioId, Long otroUsuarioId) {
         List<Mensaje> mensajesNoLeidos = mensajeRepository.findConversacionNoLeidos(usuarioId, otroUsuarioId);
         if (!mensajesNoLeidos.isEmpty()) {
@@ -330,7 +367,13 @@ public class ChatService {
     // SOLICITUDES
     // ============================================================
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_SOLICITUDES,
+            key = "'recibidas:' + #usuarioId"
+    )
     public List<SolicitudContactoDTO> listarSolicitudes(Long usuarioId) {
+        log.info("📋 [DB] Listando solicitudes recibidas de usuario: {}", usuarioId);
+
         List<SolicitudContacto> solicitudes = solicitudRepository.findByReceptorIdAndEstado(
                 usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE);
 
@@ -347,7 +390,13 @@ public class ChatService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_SOLICITUDES,
+            key = "'enviadas:' + #usuarioId"
+    )
     public List<SolicitudContactoDTO> listarSolicitudesEnviadas(Long usuarioId) {
+        log.info("📋 [DB] Listando solicitudes enviadas de usuario: {}", usuarioId);
+
         List<SolicitudContacto> solicitudes = solicitudRepository.findByEmisorIdAndEstado(
                 usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE);
 
@@ -364,7 +413,13 @@ public class ChatService {
     }
 
     @Transactional
-    @CacheEvict(value = {"solicitudes", "conversaciones", "contactos"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_SOLICITUDES, allEntries = true),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #receptorId"),
+            @CacheEvict(value = CACHE_CONTACTOS, allEntries = true),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, key = "'usuario:' + #emisorId")
+    })
     public SolicitudContactoDTO enviarSolicitud(Long emisorId, Long receptorId) {
         if (emisorId.equals(receptorId)) {
             throw new IllegalArgumentException("No puedes enviarte una solicitud a ti mismo");
@@ -416,7 +471,14 @@ public class ChatService {
     }
 
     @Transactional
-    @CacheEvict(value = {"solicitudes", "conversaciones", "contactos"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_SOLICITUDES, allEntries = true),
+            @CacheEvict(value = CACHE_CONVERSACIONES, allEntries = true),
+            @CacheEvict(value = CACHE_CONTACTOS, allEntries = true),
+            @CacheEvict(value = CACHE_MENSAJES, allEntries = true),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, allEntries = true),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public void aceptarSolicitud(Long solicitudId, Long usuarioId) {
         SolicitudContacto solicitud = solicitudRepository.findById(solicitudId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
@@ -425,12 +487,18 @@ public class ChatService {
             throw new SecurityException("No tienes permiso");
         }
 
+        Instant ahora = Instant.now();
+
         solicitud.setEstado(SolicitudContacto.EstadoSolicitud.ACEPTADA);
-        solicitud.setFechaRespuesta(Instant.now());
+        solicitud.setFechaRespuesta(ahora);
         solicitudRepository.save(solicitud);
 
+        // ✅ CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarNotificacionesSolicitudComoLeidas(
-                usuarioId, solicitud.getEmisor().getId());
+                usuarioId,
+                solicitud.getEmisor().getId(),
+                ahora
+        );
 
         Usuario emisor = solicitud.getEmisor();
         Usuario receptor = solicitud.getReceptor();
@@ -447,7 +515,12 @@ public class ChatService {
     }
 
     @Transactional
-    @CacheEvict(value = {"solicitudes", "conversaciones", "contactos"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_SOLICITUDES, allEntries = true),
+            @CacheEvict(value = CACHE_CONTACTOS, allEntries = true),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, allEntries = true),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public void rechazarSolicitud(Long solicitudId, Long usuarioId) {
         SolicitudContacto solicitud = solicitudRepository.findById(solicitudId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
@@ -456,12 +529,18 @@ public class ChatService {
             throw new SecurityException("No tienes permiso");
         }
 
+        Instant ahora = Instant.now();
+
         solicitud.setEstado(SolicitudContacto.EstadoSolicitud.RECHAZADA);
-        solicitud.setFechaRespuesta(Instant.now());
+        solicitud.setFechaRespuesta(ahora);
         solicitudRepository.save(solicitud);
 
+        // ✅ CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarNotificacionesSolicitudComoLeidas(
-                usuarioId, solicitud.getEmisor().getId());
+                usuarioId,
+                solicitud.getEmisor().getId(),
+                ahora
+        );
     }
 
     public boolean sonContactos(Long usuario1, Long usuario2) {
@@ -469,7 +548,13 @@ public class ChatService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_USUARIOS_DISPONIBLES,
+            key = "'usuario:' + #usuarioId"
+    )
     public List<UsuarioDisponibleDTO> listarUsuariosDisponibles(Long usuarioId) {
+        log.info("📋 [DB] Listando usuarios disponibles para: {}", usuarioId);
+
         List<Long> contactosIds = mensajeRepository.findContactosId(usuarioId);
         List<Long> solicitudesEnviadasIds = solicitudRepository.findByEmisorIdAndEstado(
                         usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE)
@@ -493,7 +578,18 @@ public class ChatService {
     }
 
     @Transactional
-    @CacheEvict(value = {"conversaciones", "mensajes", "contactos"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #contactoId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#usuarioId, #contactoId) + ':' + T(java.lang.Math).max(#usuarioId, #contactoId)"
+            ),
+            @CacheEvict(value = CACHE_CONTACTOS, allEntries = true),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, key = "'usuario:' + #contactoId"),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public void eliminarContacto(Long usuarioId, Long contactoId) {
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, contactoId);
         if (!mensajes.isEmpty()) mensajeRepository.deleteAll(mensajes);
@@ -515,6 +611,10 @@ public class ChatService {
                 });
     }
 
+    @Cacheable(
+            value = CACHE_CONTADORES,
+            key = "'noLeidos:' + #usuarioId"
+    )
     public long obtenerMensajesNoLeidos(Long usuarioId) {
         return mensajeRepository.countByReceptorIdAndLeidoFalse(usuarioId);
     }

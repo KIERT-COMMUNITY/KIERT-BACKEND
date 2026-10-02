@@ -8,7 +8,7 @@ public record PostDTO(
         AutorResumenDTO autor,
         String titulo,
         String descripcion,
-        String categoria,  // ✅ String, no enum
+        String categoria,
         List<AdjuntoDTO> adjuntos,
         long totalComentarios,
         Instant fechaCreacion

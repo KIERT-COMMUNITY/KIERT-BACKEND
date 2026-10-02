@@ -3,6 +3,7 @@ package com.kiert.backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -23,13 +24,14 @@ public class CompraUsuario {
     private Usuario usuario;
 
     @Column(name = "tipo", length = 20, nullable = false)
-    private String tipo; // marco, fondo, tema
+    private String tipo;
 
     @Column(name = "item_id", length = 50, nullable = false)
     private String itemId;
 
-    @Column(name = "precio", nullable = false)
-    private Double precio;
+    // ✅ CAMBIO: BigDecimal en lugar de Double
+    @Column(name = "precio", nullable = false, precision = 10, scale = 2)
+    private BigDecimal precio;
 
     @Column(name = "fecha_compra")
     @Builder.Default

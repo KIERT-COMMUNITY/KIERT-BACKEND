@@ -1,11 +1,7 @@
-// src/main/java/com/kiert/backend/entity/Documento.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -13,10 +9,11 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "documentos")
-@Data
-@Builder
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Documento {
 
     @Id
@@ -32,32 +29,35 @@ public class Documento {
     @Column(nullable = false, length = 100)
     private String categoria;
 
-    @Column(name = "categoria_personalizada")
+    @Column(name = "categoria_personalizada", length = 100)
     private String categoriaPersonalizada;
 
-    @Column(nullable = false, length = 1000)
+    @Column(name = "url_archivo", nullable = false, length = 1000)
     private String urlArchivo;
 
-    @Column(length = 100)
+    @Column(name = "nombre_archivo", nullable = false, length = 255)
     private String nombreArchivo;
 
-    @Column(length = 50)
-    private String tipoArchivo; // pdf, doc, docx, xls, ppt, txt, etc
+    @Column(name = "tipo_archivo", nullable = false, length = 50)
+    private String tipoArchivo;
 
-    @Column(name = "tamano_kb")
+    @Column(name = "tamano_kb", nullable = false)
     private Long tamanoKb;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @Column(name = "descargas")
+    @Column(name = "descargas", nullable = false)
+    @Builder.Default
     private Long descargas = 0L;
 
-    @Column(name = "visitas")
+    @Column(name = "visitas", nullable = false)
+    @Builder.Default
     private Long visitas = 0L;
 
-    @Column(name = "activo")
+    @Column(name = "activo", nullable = false)
+    @Builder.Default
     private Boolean activo = true;
 
     @CreationTimestamp

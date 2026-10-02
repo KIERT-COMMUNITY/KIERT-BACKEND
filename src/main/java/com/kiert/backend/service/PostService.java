@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/PostService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
@@ -10,8 +11,8 @@ import com.kiert.backend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-// ❌ COMENTAR O ELIMINAR @Cacheable TEMPORALMENTE
-// import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,11 +33,18 @@ public class PostService {
     private final PostMapper postMapper;
     private final CloudinaryService cloudinaryService;
 
+    // Nombres de caché
+    private static final String CACHE_POSTS = "posts";
+    private static final String CACHE_POST = "post";
+    private static final String CACHE_COMMENTS = "comments";
+
+    // ============================================================
+    // LISTAR POSTS
+    // ============================================================
     @Transactional(readOnly = true)
-    // ❌ ELIMINAR @Cacheable TEMPORALMENTE
-    // @Cacheable(value = "posts", key = "'listar'")
+    @Cacheable(value = CACHE_POSTS, key = "'all'")
     public List<PostDTO> listar() {
-        log.info("📋 Listando posts desde BD");
+        log.info("📋 [DB] Listando posts");
         try {
             List<Post> posts = postRepository.findAllActiveOrderByFechaCreacionDesc();
             log.info("✅ Se encontraron {} posts", posts.size());
@@ -51,11 +59,13 @@ public class PostService {
         }
     }
 
+    // ============================================================
+    // OBTENER POST POR ID
+    // ============================================================
     @Transactional(readOnly = true)
-    // ❌ ELIMINAR @Cacheable TEMPORALMENTE
-    // @Cacheable(value = "post", key = "#id")
+    @Cacheable(value = CACHE_POST, key = "#id")
     public PostDTO obtenerPorId(Long id) {
-        log.info("🔍 Obteniendo post {} desde BD", id);
+        log.info("🔍 [DB] Obteniendo post {}", id);
 
         try {
             if (!postRepository.existsById(id)) {
@@ -89,8 +99,14 @@ public class PostService {
         }
     }
 
+    // ============================================================
+    // CREAR POST
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"posts", "post", "publicaciones"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_POSTS, allEntries = true),
+            @CacheEvict(value = CACHE_POST, allEntries = true)
+    })
     public PostDTO crear(Long autorId, CrearPostDTO datos, List<MultipartFile> archivos) {
         log.info("📝 Creando post para usuario: {}", autorId);
         log.info("📄 Título: {}", datos.titulo());
@@ -194,11 +210,13 @@ public class PostService {
         return postMapper.aDTO(post);
     }
 
+    // ============================================================
+    // LISTAR COMENTARIOS
+    // ============================================================
     @Transactional(readOnly = true)
-    // ❌ ELIMINAR @Cacheable TEMPORALMENTE
-    // @Cacheable(value = "comments", key = "#postId")
+    @Cacheable(value = CACHE_COMMENTS, key = "#postId")
     public List<ComentarioDTO> listarComentarios(Long postId) {
-        log.info("💬 Listando comentarios del post {} desde BD", postId);
+        log.info("💬 [DB] Listando comentarios del post {}", postId);
         if (!postRepository.existsById(postId)) {
             throw new RecursoNoEncontradoException("No se encontró la publicación.");
         }
@@ -207,8 +225,15 @@ public class PostService {
                 .toList();
     }
 
+    // ============================================================
+    // COMENTAR
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"comments", "post", "posts", "publicaciones"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_COMMENTS, key = "#postId"),
+            @CacheEvict(value = CACHE_POST, key = "#postId"),
+            @CacheEvict(value = CACHE_POSTS, allEntries = true)
+    })
     public ComentarioDTO comentar(Long postId, Long autorId, String contenido) {
         log.info("💬 Comentando en post {} por usuario {}", postId, autorId);
 
@@ -227,8 +252,15 @@ public class PostService {
         return postMapper.aDTO(comentario);
     }
 
+    // ============================================================
+    // ELIMINAR POST
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"posts", "post", "publicaciones"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_POSTS, allEntries = true),
+            @CacheEvict(value = CACHE_POST, key = "#postId"),
+            @CacheEvict(value = CACHE_COMMENTS, key = "#postId")
+    })
     public void eliminarPost(Long postId, Long autorId) {
         log.info("🗑️ Eliminando post {} por usuario {}", postId, autorId);
 

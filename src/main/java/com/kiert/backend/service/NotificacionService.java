@@ -7,6 +7,9 @@ import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,11 +29,22 @@ public class NotificacionService {
     private final RespuestaComentarioRepository respuestaRepository;
     private final GrupoChatRepository grupoChatRepository;
 
+    // Nombres de caché
+    private static final String CACHE_NOTIFICACIONES = "notificaciones";
+    private static final String CACHE_CONTADOR_NOTIFICACIONES = "contadorNotificaciones";
+
     // ============================================================
-    // CREAR NOTIFICACIONES
+    // CREAR NOTIFICACIONES (escritura + invalidación)
     // ============================================================
 
+    /**
+     * ⚠️ NOTA: Se usa `allEntries = true` porque no podemos garantizar
+     * que `#result` esté disponible en el `@CacheEvict` en todas las versiones
+     * de Spring. Como las notificaciones se crean con baja frecuencia,
+     * invalidar todos los contadores es aceptable.
+     */
     @Transactional
+    @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionLike(Long usuarioOrigenId, Long postId) {
         log.info("🔔 Notificación LIKE post={}", postId);
 
@@ -57,12 +71,12 @@ public class NotificacionService {
                 .url("/publicacion/" + postId)
                 .leida(false)
                 .build();
-        // ⚠️ fechaCreacion se llena con @CreationTimestamp
 
         return notificacionRepository.save(notif);
     }
 
     @Transactional
+    @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionComentario(Long usuarioOrigenId, Long postId, Long comentarioId) {
         log.info("🔔 Notificación COMENTARIO post={}", postId);
 
@@ -99,6 +113,7 @@ public class NotificacionService {
     }
 
     @Transactional
+    @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionRespuesta(Long usuarioOrigenId, Long comentarioId, Long respuestaId) {
         log.info("🔔 Notificación RESPUESTA comentario={}", comentarioId);
 
@@ -129,6 +144,7 @@ public class NotificacionService {
     }
 
     @Transactional
+    @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionSolicitud(Long usuarioOrigenId, Long usuarioDestinoId) {
         log.info("🔔 Notificación SOLICITUD de {} a {}", usuarioOrigenId, usuarioDestinoId);
 
@@ -153,6 +169,7 @@ public class NotificacionService {
     }
 
     @Transactional
+    @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionGrupo(
             Long usuarioDestinoId,
             Long usuarioOrigenId,
@@ -182,7 +199,6 @@ public class NotificacionService {
                 .grupo(grupo)
                 .url(url != null ? url : "/chat")
                 .build();
-        // ⚠️ SIN .fechaCreacion() — lo hace @CreationTimestamp
 
         Notificacion guardada = notificacionRepository.save(notif);
         log.info("✅ Notificación de grupo creada ID={}", guardada.getId());
@@ -190,11 +206,16 @@ public class NotificacionService {
     }
 
     // ============================================================
-    // LECTURA
+    // LECTURA (caché)
     // ============================================================
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_NOTIFICACIONES,
+            key = "'usuario:' + #usuarioId"
+    )
     public List<NotificacionDTO> obtenerNotificaciones(Long usuarioId) {
+        log.info("📋 [DB] Obteniendo notificaciones del usuario: {}", usuarioId);
         return notificacionRepository
                 .findByUsuarioDestinoIdOrderByFechaCreacionDesc(usuarioId)
                 .stream()
@@ -203,28 +224,49 @@ public class NotificacionService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_CONTADOR_NOTIFICACIONES,
+            key = "'usuario:' + #usuarioId"
+    )
     public long contarNoLeidas(Long usuarioId) {
+        log.debug("🔔 [DB] Contando notificaciones no leídas del usuario: {}", usuarioId);
         return notificacionRepository.countNoLeidasByUsuario(usuarioId);
     }
 
     // ============================================================
-    // ACTUALIZAR
+    // ACTUALIZAR (invalidación)
     // ============================================================
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_NOTIFICACIONES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, key = "'usuario:' + #usuarioId")
+    })
     public void marcarComoLeidas(List<Long> ids, Long usuarioId) {
         if (ids == null || ids.isEmpty()) return;
         log.info("✅ Marcando {} como leídas (usuario {})", ids.size(), usuarioId);
-        notificacionRepository.marcarComoLeidas(ids);
+
+        // ✅ CORREGIDO: pasar el 3er argumento (Instant)
+        notificacionRepository.marcarComoLeidas(ids, usuarioId, Instant.now());
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_NOTIFICACIONES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, key = "'usuario:' + #usuarioId")
+    })
     public void marcarTodasComoLeidas(Long usuarioId) {
         log.info("✅ Marcando todas como leídas (usuario {})", usuarioId);
-        notificacionRepository.marcarTodasComoLeidas(usuarioId);
+
+        // ✅ CORREGIDO: pasar el 2do argumento (Instant)
+        notificacionRepository.marcarTodasComoLeidas(usuarioId, Instant.now());
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_NOTIFICACIONES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, key = "'usuario:' + #usuarioId")
+    })
     public void eliminarNotificacion(Long id, Long usuarioId) {
         Notificacion n = notificacionRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Notificación no encontrada"));

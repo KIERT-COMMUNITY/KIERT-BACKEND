@@ -3,6 +3,8 @@ package com.kiert.backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "personalizacion_usuario")
 @Getter
@@ -40,4 +42,14 @@ public class PersonalizacionUsuario {
 
     @Column(name = "marco_personalizado_url", length = 500)
     private String marcoPersonalizadoUrl;
+
+    // ✅ NUEVO: campo que faltaba
+    @Column(name = "fecha_actualizacion")
+    private Instant fechaActualizacion;
+
+    @PrePersist
+    @PreUpdate
+    public void prePersist() {
+        this.fechaActualizacion = Instant.now();
+    }
 }
