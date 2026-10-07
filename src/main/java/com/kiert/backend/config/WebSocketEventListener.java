@@ -24,7 +24,7 @@ public class WebSocketEventListener {
     private final Map<Long, AtomicInteger> sesionesActivas = new ConcurrentHashMap<>();
 
     /**
-     * 🟢 Cuando se conecta un WebSocket, marcamos al usuario como en línea.
+     * Cuando se conecta un WebSocket, marcamos al usuario como en línea.
      */
     @EventListener
     public void handleWebSocketConnect(SessionConnectedEvent event) {
@@ -35,7 +35,7 @@ public class WebSocketEventListener {
 
         if (usuarioIdObj != null) {
             Long usuarioId = Long.parseLong(usuarioIdObj.toString());
-            log.info("🟢 WebSocket conectado para usuario: {}", usuarioId);
+            log.info("WebSocket conectado para usuario: {}", usuarioId);
 
             sesionesActivas.computeIfAbsent(usuarioId, k -> new AtomicInteger(0)).incrementAndGet();
             usuarioService.marcarEnLinea(usuarioId);
@@ -43,7 +43,7 @@ public class WebSocketEventListener {
     }
 
     /**
-     * 🔴 Cuando se desconecta un WebSocket, verificamos si es la última sesión.
+     * Cuando se desconecta un WebSocket, verificamos si es la última sesión.
      */
     @EventListener
     public void handleWebSocketDisconnect(SessionDisconnectEvent event) {
@@ -54,7 +54,7 @@ public class WebSocketEventListener {
 
         if (usuarioIdObj != null) {
             Long usuarioId = Long.parseLong(usuarioIdObj.toString());
-            log.info("🔌 WebSocket desconectado para usuario: {}", usuarioId);
+            log.info("WebSocket desconectado para usuario: {}", usuarioId);
 
             AtomicInteger contador = sesionesActivas.get(usuarioId);
             if (contador != null) {
@@ -62,9 +62,9 @@ public class WebSocketEventListener {
                 if (restantes <= 0) {
                     sesionesActivas.remove(usuarioId);
                     usuarioService.marcarDesconectado(usuarioId);
-                    log.info("🔴 Usuario {} sin sesiones activas, marcado como desconectado", usuarioId);
+                    log.info("Usuario {} sin sesiones activas, marcado como desconectado", usuarioId);
                 } else {
-                    log.info("🟡 Usuario {} aún tiene {} sesión(es) activa(s)", usuarioId, restantes);
+                    log.info("Usuario {} aún tiene {} sesión(es) activa(s)", usuarioId, restantes);
                 }
             }
         }

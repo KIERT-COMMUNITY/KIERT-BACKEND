@@ -32,11 +32,23 @@ public class PasswordResetToken {
     @Builder.Default
     private Instant fechaCreacion = Instant.now();
 
+    @Column(nullable = false)
     @Builder.Default
     private boolean usado = false;
 
-    // ✅ MÉTODO PARA VERIFICAR SI EL TOKEN HA EXPIRADO
+    // NUEVOS: campos que tenía la tabla SQL
+    @Column(name = "fecha_uso")
+    private Instant fechaUso;
+
+    @Column(name = "ip_solicitante", length = 45)
+    private String ipSolicitante;
+
     public boolean isExpirado() {
         return Instant.now().isAfter(fechaExpiracion);
+    }
+
+    @PrePersist
+    public void prePersist() {
+        if (fechaCreacion == null) fechaCreacion = Instant.now();
     }
 }

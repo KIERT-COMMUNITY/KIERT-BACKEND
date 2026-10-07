@@ -36,7 +36,7 @@ public class UsuarioController {
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerUsuario(@PathVariable Long id) {
         try {
-            log.info("📋 Obteniendo usuario con ID: {}", id);
+            log.info("Obteniendo usuario con ID: {}", id);
 
             Usuario usuario = usuarioRepository.findById(id)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -50,38 +50,38 @@ public class UsuarioController {
 
             return ResponseEntity.ok(dto);
         } catch (Exception e) {
-            log.error("❌ Error al obtener usuario {}: {}", id, e.getMessage(), e);
+            log.error("Error al obtener usuario {}: {}", id, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al obtener usuario: " + e.getMessage());
         }
     }
 
-    // ✅ BÚSQUEDA DE USUARIOS - CORREGIDA
+    // BÚSQUEDA DE USUARIOS - CORREGIDA
     @GetMapping("/buscar")
     public ResponseEntity<?> buscarUsuarios(@RequestParam String q) {
         try {
-            log.info("🔍 Buscando usuarios con: '{}'", q);
+            log.info("Buscando usuarios con: '{}'", q);
 
             Long usuarioActualId = usuarioActual.id();
-            log.info("👤 Usuario actual ID: {}", usuarioActualId);
+            log.info("Usuario actual ID: {}", usuarioActualId);
 
             if (usuarioActualId == null) {
-                log.warn("⚠️ Usuario no autenticado para búsqueda");
+                log.warn("Usuario no autenticado para búsqueda");
                 return ResponseEntity.ok(List.of());
             }
 
-            // ✅ BUSCAR USUARIOS POR NOMBRE
+            // BUSCAR USUARIOS POR NOMBRE
             List<Usuario> usuarios = usuarioRepository.findByNombreUsuarioContainingIgnoreCase(q.trim());
-            log.info("📊 Usuarios encontrados en BD: {}", usuarios.size());
+            log.info("Usuarios encontrados en BD: {}", usuarios.size());
 
-            // ✅ FILTRAR PARA NO MOSTRAR AL USUARIO ACTUAL
+            // FILTRAR PARA NO MOSTRAR AL USUARIO ACTUAL
             List<Usuario> usuariosFiltrados = usuarios.stream()
                     .filter(u -> !u.getId().equals(usuarioActualId))
                     .collect(Collectors.toList());
 
-            log.info("✅ Usuarios filtrados (excluyendo actual): {}", usuariosFiltrados.size());
+            log.info("Usuarios filtrados (excluyendo actual): {}", usuariosFiltrados.size());
 
-            // ✅ CONVERTIR A DTO
+            // CONVERTIR A DTO
             List<UsuarioDisponibleDTO> resultado = usuariosFiltrados.stream()
                     .map(u -> new UsuarioDisponibleDTO(
                             u.getId(),
@@ -90,27 +90,27 @@ public class UsuarioController {
                     ))
                     .collect(Collectors.toList());
 
-            log.info("📤 Enviando {} usuarios", resultado.size());
+            log.info("Enviando {} usuarios", resultado.size());
             return ResponseEntity.ok(resultado);
 
         } catch (Exception e) {
-            log.error("❌ Error en buscarUsuarios: {}", e.getMessage(), e);
+            log.error("Error en buscarUsuarios: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al buscar usuarios: " + e.getMessage());
         }
     }
 
-    // ✅ ENVIAR SOLICITUD DE CONTACTO
+    // ENVIAR SOLICITUD DE CONTACTO
     @PostMapping("/solicitud/{usuarioId}")
     public ResponseEntity<?> enviarSolicitud(@PathVariable Long usuarioId) {
         try {
             Long emisorId = usuarioActual.id();
             if (emisorId == null) {
-                log.error("❌ Usuario no autenticado en enviarSolicitud");
+                log.error("Usuario no autenticado en enviarSolicitud");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
 
-            log.info("📨 Enviando solicitud de {} a {}", emisorId, usuarioId);
+            log.info("Enviando solicitud de {} a {}", emisorId, usuarioId);
 
             if (emisorId.equals(usuarioId)) {
                 return ResponseEntity.badRequest().body("No puedes enviarte solicitud a ti mismo");
@@ -143,7 +143,7 @@ public class UsuarioController {
                     .build();
 
             solicitud = solicitudContactoRepository.save(solicitud);
-            log.info("✅ Solicitud creada con ID: {}", solicitud.getId());
+            log.info("Solicitud creada con ID: {}", solicitud.getId());
 
             SolicitudContactoDTO dto = new SolicitudContactoDTO(
                     solicitud.getId(),
@@ -157,7 +157,7 @@ public class UsuarioController {
             return ResponseEntity.ok(dto);
 
         } catch (Exception e) {
-            log.error("❌ Error en enviarSolicitud: {}", e.getMessage(), e);
+            log.error("Error en enviarSolicitud: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al enviar solicitud: " + e.getMessage());
         }
@@ -168,11 +168,11 @@ public class UsuarioController {
         try {
             Long receptorId = usuarioActual.id();
             if (receptorId == null) {
-                log.error("❌ Usuario no autenticado en aceptarSolicitud");
+                log.error("Usuario no autenticado en aceptarSolicitud");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
 
-            log.info("✅ Aceptando solicitud {} para usuario {}", solicitudId, receptorId);
+            log.info("Aceptando solicitud {} para usuario {}", solicitudId, receptorId);
 
             SolicitudContacto solicitud = solicitudContactoRepository.findById(solicitudId)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
@@ -188,7 +188,7 @@ public class UsuarioController {
             solicitud.setEstado(EstadoSolicitud.ACEPTADA);
             solicitud.setFechaRespuesta(Instant.now());
             solicitud = solicitudContactoRepository.save(solicitud);
-            log.info("✅ Solicitud aceptada");
+            log.info("Solicitud aceptada");
 
             SolicitudContactoDTO dto = new SolicitudContactoDTO(
                     solicitud.getId(),
@@ -202,7 +202,7 @@ public class UsuarioController {
             return ResponseEntity.ok(dto);
 
         } catch (Exception e) {
-            log.error("❌ Error en aceptarSolicitud: {}", e.getMessage(), e);
+            log.error("Error en aceptarSolicitud: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al aceptar solicitud: " + e.getMessage());
         }
@@ -213,11 +213,11 @@ public class UsuarioController {
         try {
             Long receptorId = usuarioActual.id();
             if (receptorId == null) {
-                log.error("❌ Usuario no autenticado en rechazarSolicitud");
+                log.error("Usuario no autenticado en rechazarSolicitud");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
 
-            log.info("❌ Rechazando solicitud {} para usuario {}", solicitudId, receptorId);
+            log.info("Rechazando solicitud {} para usuario {}", solicitudId, receptorId);
 
             SolicitudContacto solicitud = solicitudContactoRepository.findById(solicitudId)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
@@ -229,12 +229,12 @@ public class UsuarioController {
             solicitud.setEstado(EstadoSolicitud.RECHAZADA);
             solicitud.setFechaRespuesta(Instant.now());
             solicitudContactoRepository.save(solicitud);
-            log.info("✅ Solicitud rechazada");
+            log.info("Solicitud rechazada");
 
             return ResponseEntity.ok().build();
 
         } catch (Exception e) {
-            log.error("❌ Error en rechazarSolicitud: {}", e.getMessage(), e);
+            log.error("Error en rechazarSolicitud: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al rechazar solicitud: " + e.getMessage());
         }
@@ -245,11 +245,11 @@ public class UsuarioController {
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) {
-                log.error("❌ Usuario no autenticado en obtenerSolicitudesPendientes");
+                log.error("Usuario no autenticado en obtenerSolicitudesPendientes");
                 return ResponseEntity.ok(List.of());
             }
 
-            log.info("📋 Obteniendo solicitudes pendientes para usuario: {}", usuarioId);
+            log.info("Obteniendo solicitudes pendientes para usuario: {}", usuarioId);
 
             List<SolicitudContacto> solicitudes = solicitudContactoRepository
                     .findByReceptorIdAndEstado(usuarioId, EstadoSolicitud.PENDIENTE);
@@ -268,7 +268,7 @@ public class UsuarioController {
             return ResponseEntity.ok(resultado);
 
         } catch (Exception e) {
-            log.error("❌ Error en obtenerSolicitudesPendientes: {}", e.getMessage(), e);
+            log.error("Error en obtenerSolicitudesPendientes: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al obtener solicitudes: " + e.getMessage());
         }
@@ -279,11 +279,11 @@ public class UsuarioController {
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) {
-                log.error("❌ Usuario no autenticado en obtenerContactos");
+                log.error("Usuario no autenticado en obtenerContactos");
                 return ResponseEntity.ok(List.of());
             }
 
-            log.info("👥 Obteniendo contactos de usuario: {}", usuarioId);
+            log.info("Obteniendo contactos de usuario: {}", usuarioId);
 
             List<SolicitudContacto> solicitudes = solicitudContactoRepository
                     .findAllByUsuarioIdAndEstado(usuarioId, EstadoSolicitud.ACEPTADA);
@@ -306,7 +306,7 @@ public class UsuarioController {
             return ResponseEntity.ok(contactos);
 
         } catch (Exception e) {
-            log.error("❌ Error en obtenerContactos: {}", e.getMessage(), e);
+            log.error("Error en obtenerContactos: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al obtener contactos: " + e.getMessage());
         }

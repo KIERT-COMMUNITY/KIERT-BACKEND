@@ -102,3 +102,10 @@ src/main/java/com/kiert/backend/
 ├── config/       Security, CORS, WebSocket, WebClient
 └── exception/    manejo global de errores (404/401/409/400)
 ```
+
+
+## REBASEO DE GIT 
+
+git add src/main/resources/bootstrap.yml
+
+git reset --soft HEAD~1

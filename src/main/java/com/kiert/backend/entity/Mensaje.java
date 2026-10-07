@@ -1,11 +1,10 @@
+// src/main/java/com/kiert/backend/entity/Mensaje.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "mensajes")
@@ -20,6 +19,10 @@ public class Mensaje {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // ============================================================
+    // RELACIONES
+    // ============================================================
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "emisor_id", nullable = false)
     private Usuario emisor;
@@ -28,21 +31,14 @@ public class Mensaje {
     @JoinColumn(name = "receptor_id", nullable = false)
     private Usuario receptor;
 
-    @Column(columnDefinition = "TEXT")
+    // ============================================================
+    // CONTENIDO
+    // ============================================================
+
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String contenido;
 
-    @Column(name = "fecha_envio", nullable = false, updatable = false)
-    @Builder.Default
-    private Instant fechaEnvio = Instant.now();
-
-    @Column(nullable = false)
-    @Builder.Default
-    private boolean leido = false;
-
-    @Column(name = "fecha_leido")
-    private Instant fechaLeido;
-
-    @Column(name = "tipo_mensaje", nullable = false, length = 20)
+    @Column(name = "tipo_mensaje", length = 20)
     @Builder.Default
     private String tipoMensaje = "TEXTO";
 
@@ -52,60 +48,47 @@ public class Mensaje {
     @Column(name = "nombre_archivo", length = 255)
     private String nombreArchivo;
 
-    @Column(name = "fecha_eliminacion")
-    private Instant fechaEliminacion;
+    // ============================================================
+    // ESTADO DE LECTURA
+    // ============================================================
 
     @Column(nullable = false)
     @Builder.Default
-    private boolean eliminado = false;
+    private boolean leido = false;
 
-    @OneToMany(
-            mappedBy = "mensaje",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
-    @OrderBy("id ASC")
+    @Column(name = "fecha_leido")
+    private Instant fechaLeido;                   // NUEVO: cuándo se leyó
+
+    // ============================================================
+    // FECHAS
+    // ============================================================
+
+    @Column(name = "fecha_envio", nullable = false, updatable = false)
     @Builder.Default
-    private List<MensajeArchivo> archivos = new ArrayList<>();
+    private Instant fechaEnvio = Instant.now();
 
-    @PrePersist
-    private void prePersist() {
-        if (fechaEnvio == null) {
-            fechaEnvio = Instant.now();
-        }
+    // ============================================================
+    // SOFT DELETE (faltaban)
+    // ============================================================
 
-        if (tipoMensaje == null || tipoMensaje.isBlank()) {
-            tipoMensaje = "TEXTO";
-        }
+    @Column(name = "fecha_eliminacion")
+    private Instant fechaEliminacion;             // NUEVO
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean eliminado = false;            //NUEVO
+
+    // ============================================================
+    // MÉTODOS AUXILIARES
+    // ============================================================
+
+    public void marcarComoLeido() {
+        this.leido = true;
+        this.fechaLeido = Instant.now();
     }
 
-    public void agregarArchivo(MensajeArchivo archivo) {
-        if (archivo == null) {
-            return;
-        }
-
-        archivos.add(archivo);
-        archivo.setMensaje(this);
-    }
-
-    public void quitarArchivo(MensajeArchivo archivo) {
-        if (archivo == null) {
-            return;
-        }
-
-        archivos.remove(archivo);
-        archivo.setMensaje(null);
-    }
-
-    public boolean tieneContenido() {
-        return contenido != null && !contenido.isBlank();
-    }
-
-    public boolean tieneArchivos() {
-        return archivos != null && !archivos.isEmpty();
-    }
-
-    public boolean tieneContenidoValido() {
-        return tieneContenido() || tieneArchivos();
+    public void marcarComoEliminado() {
+        this.eliminado = true;
+        this.fechaEliminacion = Instant.now();
     }
 }

@@ -52,20 +52,20 @@ public class SecurityConfig {
                         // Archivos públicos
                         .requestMatchers("/api/archivos/**").permitAll()
 
-                        // ✅ PUBLICACIONES: GET público, POST/PUT/DELETE requieren auth
+                        // PUBLICACIONES: GET público, POST/PUT/DELETE requieren auth
                         .requestMatchers(HttpMethod.GET, "/api/publicaciones/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/publicaciones/**").authenticated()
 
-                        // ✅ Comentarios GET público
+                        // Comentarios GET público
                         .requestMatchers(HttpMethod.GET, "/api/comentarios/**").permitAll()
 
-                        // ✅ Reacciones GET público
+                        // Reacciones GET público
                         .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
 
-                        // ✅ WEBSOCKET - COMPLETAMENTE PÚBLICO
+                        // WEBSOCKET - COMPLETAMENTE PÚBLICO
                         .requestMatchers(
                                 "/ws",
                                 "/ws/**",

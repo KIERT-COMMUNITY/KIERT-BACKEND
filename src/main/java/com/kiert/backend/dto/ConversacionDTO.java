@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/dto/ConversacionDTO.java
 package com.kiert.backend.dto;
 
 public record ConversacionDTO(
@@ -6,32 +7,8 @@ public record ConversacionDTO(
         String fotoPerfilUrl,
         String marcoId,
         String ultimoMensaje,
-        String ultimoMensajeFecha,
-        String ultimaConexion,
+        String ultimaConexion,      // ← el que tienes
         long noLeidos,
-        Boolean online
-) {
-
-    public ConversacionDTO(
-            Long usuarioId,
-            String nombreUsuario,
-            String fotoPerfilUrl,
-            String marcoId,
-            String ultimoMensaje,
-            String ultimoMensajeFecha,
-            long noLeidos,
-            Boolean online
-    ) {
-        this(
-                usuarioId,
-                nombreUsuario,
-                fotoPerfilUrl,
-                marcoId,
-                ultimoMensaje,
-                ultimoMensajeFecha,
-                null,
-                noLeidos,
-                online
-        );
-    }
-}
+        Boolean online,
+        String ultimaConexionReal   // ← 9no campo (¡ya lo tienes añadido!)
+) {}

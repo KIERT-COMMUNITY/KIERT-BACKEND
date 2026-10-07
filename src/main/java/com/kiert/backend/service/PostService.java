@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/PostService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
@@ -10,8 +11,8 @@ import com.kiert.backend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-// ❌ COMENTAR O ELIMINAR @Cacheable TEMPORALMENTE
-// import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,75 +33,90 @@ public class PostService {
     private final PostMapper postMapper;
     private final CloudinaryService cloudinaryService;
 
+    // Nombres de caché
+    private static final String CACHE_POSTS = "posts";
+    private static final String CACHE_POST = "post";
+    private static final String CACHE_COMMENTS = "comments";
+
+    // ============================================================
+    // LISTAR POSTS
+    // ============================================================
     @Transactional(readOnly = true)
-    // ❌ ELIMINAR @Cacheable TEMPORALMENTE
-    // @Cacheable(value = "posts", key = "'listar'")
+    @Cacheable(value = CACHE_POSTS, key = "'all'")
     public List<PostDTO> listar() {
-        log.info("📋 Listando posts desde BD");
+        log.info("[DB] Listando posts");
         try {
             List<Post> posts = postRepository.findAllActiveOrderByFechaCreacionDesc();
-            log.info("✅ Se encontraron {} posts", posts.size());
+            log.info("Se encontraron {} posts", posts.size());
             List<PostDTO> result = posts.stream()
                     .map(postMapper::aDTO)
                     .toList();
-            log.info("✅ Mapeados {} posts a DTO", result.size());
+            log.info("Mapeados {} posts a DTO", result.size());
             return result;
         } catch (Exception e) {
-            log.error("❌ Error al listar posts: {}", e.getMessage(), e);
+            log.error("Error al listar posts: {}", e.getMessage(), e);
             throw new RuntimeException("Error al listar publicaciones: " + e.getMessage());
         }
     }
 
+    // ============================================================
+    // OBTENER POST POR ID
+    // ============================================================
     @Transactional(readOnly = true)
-    // ❌ ELIMINAR @Cacheable TEMPORALMENTE
-    // @Cacheable(value = "post", key = "#id")
+    @Cacheable(value = CACHE_POST, key = "#id")
     public PostDTO obtenerPorId(Long id) {
-        log.info("🔍 Obteniendo post {} desde BD", id);
+        log.info("[DB] Obteniendo post {}", id);
 
         try {
             if (!postRepository.existsById(id)) {
-                log.warn("⚠️ Post con ID {} no existe en la base de datos", id);
+                log.warn("Post con ID {} no existe en la base de datos", id);
                 throw new RecursoNoEncontradoException("No se encontró la publicación con ID: " + id);
             }
 
             Optional<Post> postOpt = postRepository.findActiveById(id);
 
             if (postOpt.isEmpty()) {
-                log.warn("⚠️ Post con ID {} está eliminado o no existe", id);
+                log.warn("Post con ID {} está eliminado o no existe", id);
                 throw new RecursoNoEncontradoException("No se encontró la publicación con ID: " + id);
             }
 
             Post post = postOpt.get();
-            log.info("✅ Post encontrado: ID={}, Título={}, Categoría={}, Autor={}",
+            log.info("Post encontrado: ID={}, Título={}, Categoría={}, Autor={}",
                     post.getId(), post.getTitulo(), post.getCategoria(),
                     post.getAutor() != null ? post.getAutor().getNombreUsuario() : "null");
 
             PostDTO dto = postMapper.aDTO(post);
-            log.info("✅ DTO mapeado: Categoría={}", dto.categoria());
+            log.info("DTO mapeado: Categoría={}", dto.categoria());
 
             return dto;
 
         } catch (RecursoNoEncontradoException e) {
-            log.warn("⚠️ Post no encontrado: {}", e.getMessage());
+            log.warn("Post no encontrado: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
-            log.error("❌ Error al obtener post {}: {}", id, e.getMessage(), e);
+            log.error("Error al obtener post {}: {}", id, e.getMessage(), e);
             throw new RuntimeException("Error al obtener publicación: " + e.getMessage());
         }
     }
 
+    // ============================================================
+    // CREAR POST
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"posts", "post", "publicaciones"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_POSTS, allEntries = true),
+            @CacheEvict(value = CACHE_POST, allEntries = true)
+    })
     public PostDTO crear(Long autorId, CrearPostDTO datos, List<MultipartFile> archivos) {
-        log.info("📝 Creando post para usuario: {}", autorId);
-        log.info("📄 Título: {}", datos.titulo());
-        log.info("📂 Categoría ingresada por el usuario: '{}'", datos.categoria());
+        log.info("Creando post para usuario: {}", autorId);
+        log.info("Título: {}", datos.titulo());
+        log.info("Categoría ingresada por el usuario: '{}'", datos.categoria());
 
         Usuario autor = usuarioRepository.findById(autorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado."));
 
         String categoriaUsuario = datos.categoria() != null ? datos.categoria().trim() : "otro";
-        log.info("📌 Guardando categoría: '{}'", categoriaUsuario);
+        log.info("Guardando categoría: '{}'", categoriaUsuario);
 
         Post post = Post.builder()
                 .autor(autor)
@@ -111,10 +127,10 @@ public class PostService {
                 .fechaCreacion(Instant.now())
                 .build();
 
-        log.info("📦 Post a guardar: Título={}, Categoría={}", post.getTitulo(), post.getCategoria());
+        log.info("Post a guardar: Título={}, Categoría={}", post.getTitulo(), post.getCategoria());
 
         if (datos.link() != null && !datos.link().isBlank()) {
-            log.info("🔗 Agregando link: {}", datos.link());
+            log.info("Agregando link: {}", datos.link());
             Adjunto adjunto = Adjunto.builder()
                     .post(post)
                     .tipo("link")
@@ -125,16 +141,16 @@ public class PostService {
         }
 
         post = postRepository.save(post);
-        log.info("✅ Post guardado con ID: {}, Categoría: '{}'", post.getId(), post.getCategoria());
+        log.info("Post guardado con ID: {}, Categoría: '{}'", post.getId(), post.getCategoria());
 
         postRepository.flush();
 
         if (archivos != null && !archivos.isEmpty()) {
-            log.info("📎 Procesando {} archivo(s)", archivos.size());
+            log.info("Procesando {} archivo(s)", archivos.size());
 
             for (MultipartFile archivo : archivos) {
                 if (archivo.isEmpty()) {
-                    log.warn("⚠️ Archivo vacío, saltando...");
+                    log.warn("Archivo vacío, saltando...");
                     continue;
                 }
 
@@ -146,7 +162,7 @@ public class PostService {
                     String formato = cloudinaryService.getFormato(archivo.getContentType());
 
                     if (cloudinaryService.esVideo(archivo)) {
-                        log.info("🎥 Subiendo video: {}", archivo.getOriginalFilename());
+                        log.info("Subiendo video: {}", archivo.getOriginalFilename());
                         Map<String, Object> result = cloudinaryService.subirVideo(archivo, carpeta + "/videos");
                         url = result.get("secure_url").toString();
                         tipo = "video";
@@ -154,15 +170,15 @@ public class PostService {
                             duracionSegundos = ((Number) result.get("duration")).intValue();
                         }
                     } else if (cloudinaryService.esGif(archivo)) {
-                        log.info("🎬 Subiendo GIF: {}", archivo.getOriginalFilename());
+                        log.info("Subiendo GIF: {}", archivo.getOriginalFilename());
                         url = cloudinaryService.subirGif(archivo, carpeta + "/gifs");
                         tipo = "gif";
                     } else if (cloudinaryService.esImagen(archivo)) {
-                        log.info("🖼️ Subiendo imagen: {}", archivo.getOriginalFilename());
+                        log.info("Subiendo imagen: {}", archivo.getOriginalFilename());
                         url = cloudinaryService.subirImagen(archivo, carpeta + "/imagenes");
                         tipo = "imagen";
                     } else {
-                        log.info("📎 Subiendo archivo: {}", archivo.getOriginalFilename());
+                        log.info("Subiendo archivo: {}", archivo.getOriginalFilename());
                         url = cloudinaryService.subirArchivo(archivo, carpeta + "/archivos");
                         tipo = "archivo";
                     }
@@ -178,27 +194,29 @@ public class PostService {
                             .build();
 
                     post.getAdjuntos().add(adjunto);
-                    log.info("✅ {} subido exitosamente", tipo);
+                    log.info("{} subido exitosamente", tipo);
 
                 } catch (Exception e) {
-                    log.error("❌ Error al subir archivo {}: {}", archivo.getOriginalFilename(), e.getMessage());
+                    log.error("Error al subir archivo {}: {}", archivo.getOriginalFilename(), e.getMessage());
                 }
             }
 
             post = postRepository.save(post);
-            log.info("✅ Post actualizado con {} adjunto(s)", post.getAdjuntos().size());
+            log.info("Post actualizado con {} adjunto(s)", post.getAdjuntos().size());
             postRepository.flush();
         }
 
-        log.info("✅ Post completado exitosamente con ID: {}, Categoría: '{}'", post.getId(), post.getCategoria());
+        log.info("Post completado exitosamente con ID: {}, Categoría: '{}'", post.getId(), post.getCategoria());
         return postMapper.aDTO(post);
     }
 
+    // ============================================================
+    // LISTAR COMENTARIOS
+    // ============================================================
     @Transactional(readOnly = true)
-    // ❌ ELIMINAR @Cacheable TEMPORALMENTE
-    // @Cacheable(value = "comments", key = "#postId")
+    @Cacheable(value = CACHE_COMMENTS, key = "#postId")
     public List<ComentarioDTO> listarComentarios(Long postId) {
-        log.info("💬 Listando comentarios del post {} desde BD", postId);
+        log.info("[DB] Listando comentarios del post {}", postId);
         if (!postRepository.existsById(postId)) {
             throw new RecursoNoEncontradoException("No se encontró la publicación.");
         }
@@ -207,10 +225,17 @@ public class PostService {
                 .toList();
     }
 
+    // ============================================================
+    // COMENTAR
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"comments", "post", "posts", "publicaciones"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_COMMENTS, key = "#postId"),
+            @CacheEvict(value = CACHE_POST, key = "#postId"),
+            @CacheEvict(value = CACHE_POSTS, allEntries = true)
+    })
     public ComentarioDTO comentar(Long postId, Long autorId, String contenido) {
-        log.info("💬 Comentando en post {} por usuario {}", postId, autorId);
+        log.info("Comentando en post {} por usuario {}", postId, autorId);
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
@@ -227,10 +252,17 @@ public class PostService {
         return postMapper.aDTO(comentario);
     }
 
+    // ============================================================
+    // ELIMINAR POST
+    // ============================================================
     @Transactional
-    @CacheEvict(value = {"posts", "post", "publicaciones"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_POSTS, allEntries = true),
+            @CacheEvict(value = CACHE_POST, key = "#postId"),
+            @CacheEvict(value = CACHE_COMMENTS, key = "#postId")
+    })
     public void eliminarPost(Long postId, Long autorId) {
-        log.info("🗑️ Eliminando post {} por usuario {}", postId, autorId);
+        log.info("Eliminando post {} por usuario {}", postId, autorId);
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
@@ -242,6 +274,6 @@ public class PostService {
         post.setEliminado(true);
         post.setFechaEliminacion(Instant.now());
         postRepository.save(post);
-        log.info("✅ Post {} eliminado exitosamente", postId);
+        log.info("Post {} eliminado exitosamente", postId);
     }
 }

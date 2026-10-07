@@ -34,10 +34,10 @@ public class RecursoBiblioteca {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 🔥 Relación con el usuario creador (NULL = recurso global del admin)
+    //Relación con el usuario creador (NULL = recurso global del admin)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")
-    @JsonIgnore // 👈 evita serializar el usuario completo (evita recursión)
+    @JsonIgnore //evita serializar el usuario completo (evita recursión)
     private Usuario usuario;
 
     @Column(name = "es_usuario", nullable = false)
@@ -47,7 +47,7 @@ public class RecursoBiblioteca {
     @Column(nullable = false, length = 200)
     private String titulo;
 
-    @Column(length = 1000) // 👈 ampliado (era 500)
+    @Column(length = 1000) // ampliado (era 500)
     private String descripcion;
 
     @Column(nullable = false, length = 1000)
@@ -62,16 +62,16 @@ public class RecursoBiblioteca {
     @Column(length = 500)
     private String imagen;
 
-    @Column(length = 150) // 👈 ampliado (era 100)
+    @Column(length = 150) //ampliado (era 100)
     private String autor;
 
-    @Column(length = 150) // 👈 ampliado (era 100)
+    @Column(length = 150) //ampliado (era 100)
     private String plataforma;
 
-    @Column(length = 80) // 👈 ampliado (era 50)
+    @Column(length = 80) //ampliado (era 50)
     private String duracion;
 
-    @Column(length = 30) // 👈 ampliado (era 20)
+    @Column(length = 30) // ampliado (era 20)
     private String nivel; // principiante, intermedio, avanzado
 
     @Column(name = "destacado")
@@ -90,7 +90,7 @@ public class RecursoBiblioteca {
     @Column(name = "fecha_actualizacion")
     private Instant fechaActualizacion;
 
-    @Column(length = 1000) // 👈 ampliado (era 500)
+    @Column(length = 1000) //ampliado (era 500)
     private String tags; // Guardar como string separado por comas
 
     // ============================================================

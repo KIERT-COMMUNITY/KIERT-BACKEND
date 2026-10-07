@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/controller/AuthController.java
 package com.kiert.backend.controller;
 
 import com.kiert.backend.dto.*;
@@ -5,8 +6,10 @@ import com.kiert.backend.dto.request.LoginRequestDTO;
 import com.kiert.backend.dto.request.RegisterRequestDTO;
 import com.kiert.backend.dto.response.AuthResponseDTO;
 import com.kiert.backend.exception.BadRequestException;
+import com.kiert.backend.security.JwtService;
 import com.kiert.backend.security.UsuarioActual;
-import com.kiert.backend.service.AuthService;
+import com.kiert.backend.service.auth.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +31,9 @@ public class AuthController {
 
     private final AuthService authService;
     private final UsuarioActual usuarioActual;
+    private final JwtService jwtService;   // ← NUEVO: para extraer el usuario del token en logout
+
+    private static final String PREFIJO_BEARER = "Bearer ";
 
     // ============================================================
     // REGISTRO -> envia codigo al email
@@ -95,20 +101,48 @@ public class AuthController {
     }
 
     // ============================================================
-    // LOGOUT
+    // LOGOUT (con blacklist de JWT)
     // ============================================================
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        Long usuarioId = usuarioActual.id();
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        // Extraer el token del header Authorization
+        String token = extraerTokenDelHeader(request);
+
+        // Extraer el usuarioId del token
+        Long usuarioId = extraerUsuarioIdDelToken(token);
+
         log.info("Logout para usuario: {}", usuarioId);
-        authService.logout(usuarioId);
+
+        // Si no hay token válido, no hay nada que invalidar
+        if (usuarioId == null) {
+            return ResponseEntity.ok().build();
+        }
+
+        authService.logout(usuarioId, token);
         return ResponseEntity.ok().build();
     }
 
+    // ============================================================
+    // LOGOUT BEACON (para navigator.sendBeacon)
+    // ============================================================
+    /**
+     * ⚠️ CAMBIO IMPORTANTE: ya NO acepta usuarioId como @RequestParam.
+     * Antes, cualquiera podía hacer logout de otro usuario.
+     *
+     * Ahora extrae el usuarioId del token (que sí es seguro).
+     */
     @PostMapping("/logout-beacon")
-    public ResponseEntity<Void> logoutBeacon(@RequestParam(required = false) Long usuarioId) {
+    public ResponseEntity<Void> logoutBeacon(HttpServletRequest request) {
+        String token = extraerTokenDelHeader(request);
+        Long usuarioId = extraerUsuarioIdDelToken(token);
+
         log.info("Logout via beacon para usuario: {}", usuarioId);
-        authService.logout(usuarioId);
+
+        if (usuarioId == null) {
+            return ResponseEntity.ok().build();
+        }
+
+        authService.logout(usuarioId, token);
         return ResponseEntity.ok().build();
     }
 
@@ -141,6 +175,38 @@ public class AuthController {
         } catch (BadRequestException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ============================================================
+    // HELPERS PRIVADOS
+    // ============================================================
+
+    /**
+     * Extrae el token JWT del header Authorization.
+     * Devuelve null si no existe o no tiene el prefijo Bearer.
+     */
+    private String extraerTokenDelHeader(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header == null || !header.startsWith(PREFIJO_BEARER)) {
+            return null;
+        }
+        return header.substring(PREFIJO_BEARER.length());
+    }
+
+    /**
+     * Extrae el usuarioId del token JWT.
+     * Devuelve null si el token es inválido o ha expirado.
+     */
+    private Long extraerUsuarioIdDelToken(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        try {
+            return jwtService.extraerUsuarioId(token);
+        } catch (Exception e) {
+            log.warn("No se pudo extraer usuarioId del token en logout: {}", e.getMessage());
+            return null;
         }
     }
 }

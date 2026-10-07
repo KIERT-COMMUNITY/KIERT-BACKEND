@@ -47,7 +47,7 @@ public class CompartidoController {
             ));
 
         } catch (Exception e) {
-            log.error("❌ Error al compartir: {}", e.getMessage(), e);
+            log.error("Error al compartir: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", e.getMessage()));
         }

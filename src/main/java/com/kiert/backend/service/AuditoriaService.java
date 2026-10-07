@@ -45,9 +45,9 @@ public class AuditoriaService {
                     .datosExtra(datosExtra)
                     .build();
             repository.save(a);
-            log.info("📋 Auditoria [{}] {} - {}", evento, email, descripcion);
+            log.info("Auditoria [{}] {} - {}", evento, email, descripcion);
         } catch (Exception e) {
-            log.error("❌ Error al guardar auditoria: {}", e.getMessage(), e);
+            log.error("Error al guardar auditoria: {}", e.getMessage(), e);
         }
     }
 

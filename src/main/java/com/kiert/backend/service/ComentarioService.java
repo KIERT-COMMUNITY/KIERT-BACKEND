@@ -6,6 +6,9 @@ import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,22 +31,38 @@ public class ComentarioService {
     private final ReaccionRespuestaRepository reaccionRespuestaRepository;
     private final NotificacionService notificationService;
 
+    // Nombres de caché centralizados
+    private static final String CACHE_COMENTARIOS = "comentarios";
+    private static final String CACHE_RESPUESTAS = "respuestas";
+    private static final String CACHE_REACCIONES_COMENTARIO = "reaccionesComentario";
+    private static final String CACHE_REACCIONES_RESPUESTA = "reaccionesRespuesta";
 
-    // ========== COMENTARIOS ==========
+    // ============================================================
+    // COMENTARIOS
+    // ============================================================
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_COMENTARIOS,
+            key = "'post:' + #postId"
+    )
     public List<ComentarioDTO> listarPorPost(Long postId) {
-        log.info("📋 Listando comentarios del post: {}", postId);
-        List<Comentario> comentarios = comentarioRepository.findByPostIdAndEliminadoFalseOrderByFechaCreacionAsc(postId);
+        log.info("[DB] Listando comentarios del post: {}", postId);
+        List<Comentario> comentarios = comentarioRepository
+                .findByPostIdAndEliminadoFalseOrderByFechaCreacionAsc(postId);
         return comentarios.stream()
                 .map(this::toComentarioDTO)
                 .collect(Collectors.toList());
     }
 
-    // ✅ Método para crear comentario SIN imagen
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_COMENTARIOS, key = "'post:' + #postId"),
+            @CacheEvict(value = "posts", allEntries = true),
+            @CacheEvict(value = "post", key = "#postId")
+    })
     public ComentarioDTO crearComentario(Long postId, Long autorId, String contenido) {
-        log.info("📝 Creando comentario en post: {}, usuario: {}", postId, autorId);
+        log.info("Creando comentario en post: {}, usuario: {}", postId, autorId);
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
@@ -59,9 +78,8 @@ public class ComentarioService {
                 .build();
 
         comentario = comentarioRepository.save(comentario);
-        log.info("✅ Comentario creado con ID: {}", comentario.getId());
+        log.info("Comentario creado con ID: {}", comentario.getId());
 
-        // ✅ CREAR NOTIFICACIÓN
         if (!autorId.equals(post.getAutor().getId())) {
             notificationService.crearNotificacionComentario(autorId, postId, comentario.getId());
         }
@@ -69,10 +87,16 @@ public class ComentarioService {
         return toComentarioDTO(comentario);
     }
 
-
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true),
+            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true),
+            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO, allEntries = true),
+            @CacheEvict(value = "posts", allEntries = true),
+            @CacheEvict(value = "post", allEntries = true)
+    })
     public void eliminarComentario(Long comentarioId, Long usuarioId) {
-        log.info("🗑️ Eliminando comentario: {}", comentarioId);
+        log.info("Eliminando comentario: {}", comentarioId);
 
         Comentario comentario = comentarioRepository.findById(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
@@ -84,24 +108,34 @@ public class ComentarioService {
         comentario.setEliminado(true);
         comentario.setFechaEliminacion(Instant.now());
         comentarioRepository.save(comentario);
-        log.info("✅ Comentario {} eliminado", comentarioId);
+        log.info("Comentario {} eliminado", comentarioId);
     }
 
-    // ========== RESPUESTAS ==========
+    // ============================================================
+    // RESPUESTAS
+    // ============================================================
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_RESPUESTAS,
+            key = "'comentario:' + #comentarioId"
+    )
     public List<RespuestaDTO> listarRespuestas(Long comentarioId) {
-        log.info("📋 Listando respuestas del comentario: {}", comentarioId);
-        List<RespuestaComentario> respuestas = respuestaRepository.findByComentarioIdAndEliminadoFalseOrderByFechaCreacionAsc(comentarioId);
+        log.info("[DB] Listando respuestas del comentario: {}", comentarioId);
+        List<RespuestaComentario> respuestas = respuestaRepository
+                .findByComentarioIdAndEliminadoFalseOrderByFechaCreacionAsc(comentarioId);
         return respuestas.stream()
                 .map(this::toRespuestaDTO)
                 .collect(Collectors.toList());
     }
 
-    // ✅ Método para crear respuesta SIN imagen
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_RESPUESTAS, key = "'comentario:' + #comentarioId"),
+            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true)
+    })
     public RespuestaDTO crearRespuesta(Long comentarioId, Long autorId, String contenido) {
-        log.info("📝 Creando respuesta al comentario: {}, usuario: {}", comentarioId, autorId);
+        log.info("Creando respuesta al comentario: {}, usuario: {}", comentarioId, autorId);
 
         Comentario comentario = comentarioRepository.findById(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
@@ -117,9 +151,8 @@ public class ComentarioService {
                 .build();
 
         respuesta = respuestaRepository.save(respuesta);
-        log.info("✅ Respuesta creada con ID: {}", respuesta.getId());
+        log.info("Respuesta creada con ID: {}", respuesta.getId());
 
-        // ✅ CREAR NOTIFICACIÓN
         if (!autorId.equals(comentario.getAutor().getId())) {
             notificationService.crearNotificacionRespuesta(autorId, comentarioId, respuesta.getId());
         }
@@ -128,8 +161,12 @@ public class ComentarioService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true),
+            @CacheEvict(value = CACHE_REACCIONES_RESPUESTA, allEntries = true)
+    })
     public void eliminarRespuesta(Long respuestaId, Long usuarioId) {
-        log.info("🗑️ Eliminando respuesta: {}", respuestaId);
+        log.info("Eliminando respuesta: {}", respuestaId);
 
         RespuestaComentario respuesta = respuestaRepository.findById(respuestaId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Respuesta no encontrada"));
@@ -141,28 +178,35 @@ public class ComentarioService {
         respuesta.setEliminado(true);
         respuesta.setFechaEliminacion(Instant.now());
         respuestaRepository.save(respuesta);
-        log.info("✅ Respuesta {} eliminada", respuestaId);
+        log.info("Respuesta {} eliminada", respuestaId);
     }
 
-    // ========== REACCIONES ==========
+    // ============================================================
+    // REACCIONES
+    // ============================================================
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO, key = "'comentario:' + #comentarioId"),
+            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true)
+    })
     public Map<String, Long> reaccionarComentario(Long comentarioId, Long usuarioId, String tipo) {
-        log.info("❤️ Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioId);
+        log.info("Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioId);
 
         Comentario comentario = comentarioRepository.findById(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
 
-        Reaccion reaccion = reaccionRepository.findByUsuarioIdAndComentarioId(usuarioId, comentarioId)
+        Reaccion reaccion = reaccionRepository
+                .findByUsuarioIdAndComentarioId(usuarioId, comentarioId)
                 .orElse(null);
 
         if (reaccion != null && reaccion.getTipo().equals(tipo)) {
             reaccionRepository.delete(reaccion);
-            log.info("🗑️ Reacción eliminada");
+            log.info("Reacción eliminada");
         } else if (reaccion != null) {
             reaccion.setTipo(tipo);
             reaccionRepository.save(reaccion);
-            log.info("🔄 Reacción actualizada a: {}", tipo);
+            log.info("Reacción actualizada a: {}", tipo);
         } else {
             Usuario usuario = usuarioRepository.findById(usuarioId)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -172,29 +216,36 @@ public class ComentarioService {
                     .tipo(tipo)
                     .build();
             reaccionRepository.save(reaccion);
-            log.info("✅ Nueva reacción creada: {}", tipo);
+            log.info("Nueva reacción creada: {}", tipo);
         }
 
-        return obtenerReaccionesComentario(comentarioId);
+        // Consulta directa a MySQL (el caché ya fue invalidado arriba, no lo usamos aquí
+        // porque queremos el valor actualizado inmediatamente para devolverlo al cliente)
+        return calcularReaccionesComentarioDesdeDB(comentarioId);
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_REACCIONES_RESPUESTA, key = "'respuesta:' + #respuestaId"),
+            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true)
+    })
     public Map<String, Long> reaccionarRespuesta(Long respuestaId, Long usuarioId, String tipo) {
-        log.info("❤️ Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioId);
+        log.info("Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioId);
 
         RespuestaComentario respuesta = respuestaRepository.findById(respuestaId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Respuesta no encontrada"));
 
-        ReaccionRespuesta reaccion = reaccionRespuestaRepository.findByUsuarioIdAndRespuestaId(usuarioId, respuestaId)
+        ReaccionRespuesta reaccion = reaccionRespuestaRepository
+                .findByUsuarioIdAndRespuestaId(usuarioId, respuestaId)
                 .orElse(null);
 
         if (reaccion != null && reaccion.getTipo().equals(tipo)) {
             reaccionRespuestaRepository.delete(reaccion);
-            log.info("🗑️ Reacción a respuesta eliminada");
+            log.info("Reacción a respuesta eliminada");
         } else if (reaccion != null) {
             reaccion.setTipo(tipo);
             reaccionRespuestaRepository.save(reaccion);
-            log.info("🔄 Reacción a respuesta actualizada a: {}", tipo);
+            log.info("Reacción a respuesta actualizada a: {}", tipo);
         } else {
             Usuario usuario = usuarioRepository.findById(usuarioId)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -204,15 +255,39 @@ public class ComentarioService {
                     .tipo(tipo)
                     .build();
             reaccionRespuestaRepository.save(reaccion);
-            log.info("✅ Nueva reacción a respuesta creada: {}", tipo);
+            log.info("Nueva reacción a respuesta creada: {}", tipo);
         }
 
-        return obtenerReaccionesRespuesta(respuestaId);
+        return calcularReaccionesRespuestaDesdeDB(respuestaId);
     }
 
-    // ========== OBTENER REACCIONES ==========
+    // ============================================================
+    // OBTENER REACCIONES (con caché)
+    // ============================================================
 
+    @Cacheable(
+            value = CACHE_REACCIONES_COMENTARIO,
+            key = "'comentario:' + #comentarioId"
+    )
     public Map<String, Long> obtenerReaccionesComentario(Long comentarioId) {
+        log.debug("[DB] Calculando reacciones del comentario: {}", comentarioId);
+        return calcularReaccionesComentarioDesdeDB(comentarioId);
+    }
+
+    @Cacheable(
+            value = CACHE_REACCIONES_RESPUESTA,
+            key = "'respuesta:' + #respuestaId"
+    )
+    public Map<String, Long> obtenerReaccionesRespuesta(Long respuestaId) {
+        log.debug("[DB] Calculando reacciones de la respuesta: {}", respuestaId);
+        return calcularReaccionesRespuestaDesdeDB(respuestaId);
+    }
+
+    // ============================================================
+    // HELPERS — cálculo directo desde BD (sin caché)
+    // ============================================================
+
+    private Map<String, Long> calcularReaccionesComentarioDesdeDB(Long comentarioId) {
         Map<String, Long> reacciones = new HashMap<>();
         reacciones.put("likes", 0L);
         reacciones.put("loves", 0L);
@@ -222,14 +297,14 @@ public class ComentarioService {
             String tipo = (String) resultado[0];
             Long count = (Long) resultado[1];
             switch (tipo) {
-                case "like": reacciones.put("likes", count); break;
-                case "love": reacciones.put("loves", count); break;
+                case "like" -> reacciones.put("likes", count);
+                case "love" -> reacciones.put("loves", count);
             }
         }
         return reacciones;
     }
 
-    public Map<String, Long> obtenerReaccionesRespuesta(Long respuestaId) {
+    private Map<String, Long> calcularReaccionesRespuestaDesdeDB(Long respuestaId) {
         Map<String, Long> reacciones = new HashMap<>();
         reacciones.put("likes", 0L);
         reacciones.put("loves", 0L);
@@ -239,14 +314,16 @@ public class ComentarioService {
             String tipo = (String) resultado[0];
             Long count = (Long) resultado[1];
             switch (tipo) {
-                case "like": reacciones.put("likes", count); break;
-                case "love": reacciones.put("loves", count); break;
+                case "like" -> reacciones.put("likes", count);
+                case "love" -> reacciones.put("loves", count);
             }
         }
         return reacciones;
     }
 
-    // ========== DTO CONVERSIONES ==========
+    // ============================================================
+    // DTO CONVERSIONES
+    // ============================================================
 
     private AutorResumenDTO toAutorDTO(Usuario usuario) {
         return new AutorResumenDTO(
@@ -258,7 +335,19 @@ public class ComentarioService {
     }
 
     private ComentarioDTO toComentarioDTO(Comentario entity) {
-        Map<String, Long> reacciones = obtenerReaccionesComentario(entity.getId());
+        // Este método se llama DENTRO del método cacheado listarPorPost().
+        // Cada llamada a obtenerReaccionesComentario() pasará por el proxy de caché,
+        // así que aunque un post tenga 50 comentarios, solo se consultará MySQL
+        // la primera vez por cada reacción (luego se lee de Redis).
+        // Sin embargo, en el contexto actual (llamada interna), Spring AOP NO intercepta
+        // las llamadas a métodos del mismo bean. Por eso este método usa
+        // calcularReaccionesComentarioDesdeDB() directamente.
+        //
+        // Solución real: mover el toComentarioDTO a un helper SIN caché, y dejar que
+        // listarPorPost() haga UNA sola query agregada de reacciones. Pero eso requiere
+        // refactor del repository. Por ahora, el caché de listarPorPost() ya evita
+        // que se repita este N+1 en cada carga del post.
+        Map<String, Long> reacciones = calcularReaccionesComentarioDesdeDB(entity.getId());
 
         return new ComentarioDTO(
                 entity.getId(),
@@ -275,7 +364,7 @@ public class ComentarioService {
     }
 
     private RespuestaDTO toRespuestaDTO(RespuestaComentario entity) {
-        Map<String, Long> reacciones = obtenerReaccionesRespuesta(entity.getId());
+        Map<String, Long> reacciones = calcularReaccionesRespuestaDesdeDB(entity.getId());
 
         return new RespuestaDTO(
                 entity.getId(),

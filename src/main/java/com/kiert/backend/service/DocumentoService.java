@@ -11,11 +11,16 @@ import com.kiert.backend.repository.DocumentoRepository;
 import com.kiert.backend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -34,26 +39,38 @@ public class DocumentoService {
             "Economía", "Derecho", "Medicina", "Arquitectura", "Diseño"
     );
 
-    // ========== OBTENER CATEGORÍAS ==========
+    // Nombres de caché centralizados
+    private static final String CACHE_DOCUMENTOS = "documentos";
+    private static final String CACHE_DOCUMENTO = "documento";
+    private static final String CACHE_CATEGORIAS = "categoriasDocumentos";
+    private static final String CACHE_DOCS_USUARIO = "documentosUsuario";
 
+    // ============================================================
+    // CATEGORÍAS (lectura muy frecuente)
+    // ============================================================
     @Transactional(readOnly = true)
+    @Cacheable(value = CACHE_CATEGORIAS, key = "'all'")
     public List<String> obtenerCategorias() {
+        log.info("[DB] Obteniendo categorías de documentos");
+
         List<String> categoriasBD = documentoRepository.findDistinctCategorias();
-        List<String> todas = new java.util.ArrayList<>(CATEGORIAS_PREDEFINIDAS);
+        List<String> todas = new ArrayList<>(CATEGORIAS_PREDEFINIDAS);
         for (String cat : categoriasBD) {
             if (!todas.contains(cat)) {
                 todas.add(cat);
             }
         }
-        java.util.Collections.sort(todas);
+        Collections.sort(todas);
         return todas;
     }
 
-    // ========== LISTAR DOCUMENTOS ==========
-
+    // ============================================================
+    // LISTAR DOCUMENTOS
+    // ============================================================
     @Transactional(readOnly = true)
+    @Cacheable(value = CACHE_DOCUMENTOS, key = "'all'")
     public List<DocumentoDTO> listarTodos() {
-        log.info("📋 Listando todos los documentos");
+        log.info("[DB] Listando todos los documentos");
         return documentoRepository.findAllActiveOrderByFechaCreacionDesc()
                 .stream()
                 .map(this::toDTO)
@@ -61,8 +78,12 @@ public class DocumentoService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_DOCUMENTOS,
+            key = "'categoria:' + #categoria"
+    )
     public List<DocumentoDTO> listarPorCategoria(String categoria) {
-        log.info("📋 Listando documentos por categoría: {}", categoria);
+        log.info("[DB] Listando documentos por categoría: {}", categoria);
         return documentoRepository.findByCategoriaOrderByFechaCreacionDesc(categoria)
                 .stream()
                 .map(this::toDTO)
@@ -70,35 +91,67 @@ public class DocumentoService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_DOCS_USUARIO,
+            key = "'usuario:' + #usuarioId"
+    )
     public List<DocumentoDTO> listarPorUsuario(Long usuarioId) {
-        log.info("📋 Listando documentos del usuario: {}", usuarioId);
+        log.info("[DB] Listando documentos del usuario: {}", usuarioId);
         return documentoRepository.findByUsuarioIdOrderByFechaCreacionDesc(usuarioId)
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
+    // ============================================================
+    // OBTENER POR ID — solo lectura (cacheable)
+    // ============================================================
+    /**
+     * CAMBIO IMPORTANTE: Este método YA NO incrementa visitas.
+     * Antes lo hacía, lo cual rompía el caché (efecto secundario en método "readOnly").
+     *
+     * El controller debe llamar a registrarVisita(id) por separado.
+     */
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_DOCUMENTO,
+            key = "#id"
+    )
     public DocumentoDTO obtenerPorId(Long id) {
-        log.info("🔍 Obteniendo documento: {}", id);
+        log.info("[DB] Obteniendo documento: {}", id);
         Documento documento = documentoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Documento no encontrado"));
-
-        // Incrementar visitas
-        documento.setVisitas(documento.getVisitas() + 1);
-        documentoRepository.save(documento);
-
         return toDTO(documento);
     }
 
-    // ========== BUSCAR ==========
+    /**
+     * Registra una visita al documento (escritura, sin caché).
+     * Llama a este método desde el controller cuando quieras contar una visita.
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_DOCUMENTO, key = "#id"),
+            @CacheEvict(value = CACHE_DOCUMENTOS, allEntries = true),
+            @CacheEvict(value = CACHE_DOCS_USUARIO, allEntries = true)
+    })
+    public void registrarVisita(Long id) {
+        log.debug("Registrando visita al documento: {}", id);
+        documentoRepository.findById(id).ifPresent(documento -> {
+            documento.setVisitas(documento.getVisitas() + 1);
+            documentoRepository.save(documento);
+        });
+    }
 
+    // ============================================================
+    // BUSCAR
+    // ============================================================
     @Transactional(readOnly = true)
     public List<DocumentoDTO> buscar(String query) {
-        log.info("🔍 Buscando documentos: {}", query);
+        log.info("Buscando documentos: {}", query);
         if (query == null || query.trim().isEmpty()) {
-            return listarTodos();
+            return listarTodos();  // usa el caché
         }
+        // Las búsquedas por texto libre NO se cachean (muchas variantes)
         return documentoRepository.searchByTitulo(query.trim())
                 .stream()
                 .map(this::toDTO)
@@ -107,42 +160,44 @@ public class DocumentoService {
 
     @Transactional(readOnly = true)
     public List<DocumentoDTO> buscarPorCategoria(String categoria, String query) {
-        log.info("🔍 Buscando documentos en categoría {}: {}", categoria, query);
+        log.info("Buscando documentos en categoría {}: {}", categoria, query);
         if (query == null || query.trim().isEmpty()) {
-            return listarPorCategoria(categoria);
+            return listarPorCategoria(categoria);  // usa el caché
         }
+        // Las búsquedas por texto libre NO se cachean
         return documentoRepository.searchByCategoriaAndTitulo(categoria, query.trim())
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
-    // ========== CREAR DOCUMENTO ==========
-
+    // ============================================================
+    // CREAR DOCUMENTO
+    // ============================================================
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_DOCUMENTOS, allEntries = true),
+            @CacheEvict(value = CACHE_DOCS_USUARIO, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_CATEGORIAS, allEntries = true)
+    })
     public DocumentoDTO crear(Long usuarioId, CrearDocumentoDTO datos, MultipartFile archivo) {
-        log.info("📝 Creando documento para usuario: {}", usuarioId);
+        log.info("Creando documento para usuario: {}", usuarioId);
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        // Validar categoría
         String categoria = datos.categoria();
         if (categoria == null || categoria.trim().isEmpty()) {
             categoria = "Otros";
         }
-
-        // Si tiene categoría personalizada, usarla
         if (datos.categoriaPersonalizada() != null && !datos.categoriaPersonalizada().trim().isEmpty()) {
             categoria = datos.categoriaPersonalizada().trim();
         }
 
-        // Validar archivo
         if (archivo == null || archivo.isEmpty()) {
             throw new RuntimeException("Debes seleccionar un archivo");
         }
 
-        // Subir archivo a Cloudinary
         String urlArchivo;
         String tipoArchivo;
         String nombreArchivo = archivo.getOriginalFilename();
@@ -152,7 +207,6 @@ public class DocumentoService {
             String extension = obtenerExtension(nombreArchivo);
             tipoArchivo = extension.toLowerCase();
 
-            // Subir según el tipo
             if (esImagen(archivo)) {
                 urlArchivo = cloudinaryService.subirImagen(archivo, carpeta + "/imagenes");
             } else if (esPdf(archivo)) {
@@ -161,13 +215,12 @@ public class DocumentoService {
                 urlArchivo = cloudinaryService.subirArchivo(archivo, carpeta + "/archivos");
             }
 
-            log.info("✅ Archivo subido exitosamente: {}", urlArchivo);
+            log.info("Archivo subido exitosamente: {}", urlArchivo);
         } catch (Exception e) {
-            log.error("❌ Error al subir archivo: {}", e.getMessage());
+            log.error("Error al subir archivo: {}", e.getMessage());
             throw new RuntimeException("Error al subir el archivo: " + e.getMessage());
         }
 
-        // Crear documento
         Documento documento = Documento.builder()
                 .titulo(datos.titulo())
                 .descripcion(datos.descripcion())
@@ -185,16 +238,23 @@ public class DocumentoService {
                 .build();
 
         documento = documentoRepository.save(documento);
-        log.info("✅ Documento creado con ID: {}", documento.getId());
+        log.info("Documento creado con ID: {}", documento.getId());
 
         return toDTO(documento);
     }
 
-    // ========== ACTUALIZAR DOCUMENTO ==========
-
+    // ============================================================
+    // ACTUALIZAR DOCUMENTO
+    // ============================================================
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_DOCUMENTO, key = "#id"),
+            @CacheEvict(value = CACHE_DOCUMENTOS, allEntries = true),
+            @CacheEvict(value = CACHE_DOCS_USUARIO, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_CATEGORIAS, allEntries = true)
+    })
     public DocumentoDTO actualizar(Long id, Long usuarioId, CrearDocumentoDTO datos) {
-        log.info("✏️ Actualizando documento: {}", id);
+        log.info("Actualizando documento: {}", id);
 
         Documento documento = documentoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Documento no encontrado"));
@@ -215,16 +275,23 @@ public class DocumentoService {
         documento.setFechaActualizacion(Instant.now());
 
         documento = documentoRepository.save(documento);
-        log.info("✅ Documento actualizado: {}", id);
+        log.info("Documento actualizado: {}", id);
 
         return toDTO(documento);
     }
 
-    // ========== ELIMINAR DOCUMENTO ==========
-
+    // ============================================================
+    // ELIMINAR DOCUMENTO
+    // ============================================================
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_DOCUMENTO, key = "#id"),
+            @CacheEvict(value = CACHE_DOCUMENTOS, allEntries = true),
+            @CacheEvict(value = CACHE_DOCS_USUARIO, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_CATEGORIAS, allEntries = true)
+    })
     public void eliminar(Long id, Long usuarioId) {
-        log.info("🗑️ Eliminando documento: {}", id);
+        log.info("Eliminando documento: {}", id);
 
         Documento documento = documentoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Documento no encontrado"));
@@ -235,21 +302,29 @@ public class DocumentoService {
 
         documento.setActivo(false);
         documentoRepository.save(documento);
-        log.info("✅ Documento eliminado: {}", id);
+        log.info("Documento eliminado: {}", id);
     }
 
-    // ========== INCREMENTAR DESCARGAS ==========
-
+    // ============================================================
+    // INCREMENTAR DESCARGAS
+    // ============================================================
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_DOCUMENTO, key = "#id"),
+            @CacheEvict(value = CACHE_DOCUMENTOS, allEntries = true)
+    })
     public void incrementarDescargas(Long id) {
+        log.debug("Incrementando descargas del documento: {}", id);
+
         Documento documento = documentoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Documento no encontrado"));
         documento.setDescargas(documento.getDescargas() + 1);
         documentoRepository.save(documento);
     }
 
-    // ========== UTILIDADES ==========
-
+    // ============================================================
+    // UTILIDADES
+    // ============================================================
     private String obtenerExtension(String nombreArchivo) {
         if (nombreArchivo == null) return "archivo";
         int lastDot = nombreArchivo.lastIndexOf('.');

@@ -2,6 +2,7 @@ package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.Instant;
 
 @Entity
@@ -69,4 +70,10 @@ public class Reporte {
 
     @Column(name = "ip_usuario", length = 45)
     private String ipUsuario;
+
+    @PrePersist
+    public void prePersist() {
+        if (fechaCreacion == null) fechaCreacion = Instant.now();
+        if (estado == null) estado = "PENDIENTE";
+    }
 }

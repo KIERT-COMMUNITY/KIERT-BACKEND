@@ -12,6 +12,9 @@ import com.kiert.backend.repository.PostRepository;
 import com.kiert.backend.repository.ComentarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@Slf4j  // ✅ IMPORTANTE: Esto permite usar 'log'
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReaccionService {
@@ -29,11 +32,27 @@ public class ReaccionService {
     private final UsuarioRepository usuarioRepository;
     private final PostRepository postRepository;
     private final ComentarioRepository comentarioRepository;
-    private final NotificacionService notificationService;  // ✅ Inyectar NotificationService
+    private final NotificacionService notificationService;
 
-    // ========== REACCIONES A POSTS ==========
+    // Nombres de caché centralizados
+    private static final String CACHE_REACCIONES_POST = "reaccionesPost";
+    private static final String CACHE_REACCIONES_COMENTARIO = "reaccionesComentario";
+    private static final String CACHE_USUARIO_REACCIONO_POST = "usuarioReaccionoPost";
+    private static final String CACHE_USUARIO_REACCIONO_COMENTARIO = "usuarioReaccionoComentario";
 
+    // ============================================================
+    // REACCIONES A POSTS (escritura)
+    // ============================================================
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_REACCIONES_POST, key = "#postId"),
+            // Invalidar el flag "usuario reaccionó" para este par (usuario, post)
+            @CacheEvict(value = CACHE_USUARIO_REACCIONO_POST,
+                    key = "#usuarioId + ':' + #postId"),
+            // Invalidar cachés de posts (contadores de reacciones)
+            @CacheEvict(value = "posts", allEntries = true),
+            @CacheEvict(value = "post", key = "#postId")
+    })
     public Map<String, Long> reaccionarPost(Long usuarioId, Long postId, String tipo) {
         log.info("Usuario {} reaccionando a post {} con tipo {}", usuarioId, postId, tipo);
 
@@ -49,18 +68,15 @@ public class ReaccionService {
         if (reaccionExistente.isPresent()) {
             Reaccion reaccion = reaccionExistente.get();
             if (reaccion.getTipo().equals(tipo)) {
-                // Si es el mismo tipo, eliminar (toggle off)
                 reaccionRepository.delete(reaccion);
                 log.info("Reacción eliminada para usuario {} en post {}", usuarioId, postId);
             } else {
-                // Si es diferente tipo, actualizar
                 reaccion.setTipo(tipo);
                 reaccionRepository.save(reaccion);
                 esNuevaReaccion = true;
                 log.info("Reacción actualizada a {} para usuario {} en post {}", tipo, usuarioId, postId);
             }
         } else {
-            // Nueva reacción
             Reaccion nuevaReaccion = Reaccion.builder()
                     .usuario(usuario)
                     .post(post)
@@ -71,17 +87,25 @@ public class ReaccionService {
             log.info("Nueva reacción {} creada para usuario {} en post {}", tipo, usuarioId, postId);
         }
 
-        // ✅ CREAR NOTIFICACIÓN DE LIKE
+        // Notificación de like
         if (esNuevaReaccion && !usuarioId.equals(post.getAutor().getId())) {
             notificationService.crearNotificacionLike(usuarioId, postId);
         }
 
-        return obtenerReaccionesPost(postId);
+        // Consultar directo a BD (el caché ya fue invalidado arriba)
+        return calcularReaccionesPostDesdeDB(postId);
     }
 
-    // ========== REACCIONES A COMENTARIOS ==========
-
+    // ============================================================
+    // REACCIONES A COMENTARIOS (escritura)
+    // ============================================================
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO, key = "#comentarioId"),
+            @CacheEvict(value = CACHE_USUARIO_REACCIONO_COMENTARIO,
+                    key = "#usuarioId + ':' + #comentarioId"),
+            @CacheEvict(value = "comments", allEntries = true)
+    })
     public Map<String, Long> reaccionarComentario(Long usuarioId, Long comentarioId, String tipo) {
         log.info("Usuario {} reaccionando a comentario {} con tipo {}", usuarioId, comentarioId, tipo);
 
@@ -91,7 +115,8 @@ public class ReaccionService {
         Comentario comentario = comentarioRepository.findById(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
 
-        Optional<Reaccion> reaccionExistente = reaccionRepository.findByUsuarioIdAndComentarioId(usuarioId, comentarioId);
+        Optional<Reaccion> reaccionExistente = reaccionRepository
+                .findByUsuarioIdAndComentarioId(usuarioId, comentarioId);
 
         if (reaccionExistente.isPresent()) {
             Reaccion reaccion = reaccionExistente.get();
@@ -113,12 +138,28 @@ public class ReaccionService {
             log.info("Nueva reacción {} creada para usuario {} en comentario {}", tipo, usuarioId, comentarioId);
         }
 
-        return obtenerReaccionesComentario(comentarioId);
+        return calcularReaccionesComentarioDesdeDB(comentarioId);
     }
 
-    // ========== OBTENER REACCIONES ==========
-
+    // ============================================================
+    // OBTENER REACCIONES (lectura cacheada)
+    // ============================================================
+    @Cacheable(value = CACHE_REACCIONES_POST, key = "#postId")
     public Map<String, Long> obtenerReaccionesPost(Long postId) {
+        log.debug("[DB] Calculando reacciones del post: {}", postId);
+        return calcularReaccionesPostDesdeDB(postId);
+    }
+
+    @Cacheable(value = CACHE_REACCIONES_COMENTARIO, key = "#comentarioId")
+    public Map<String, Long> obtenerReaccionesComentario(Long comentarioId) {
+        log.debug("[DB] Calculando reacciones del comentario: {}", comentarioId);
+        return calcularReaccionesComentarioDesdeDB(comentarioId);
+    }
+
+    // ============================================================
+    // HELPERS — cálculo directo desde BD
+    // ============================================================
+    private Map<String, Long> calcularReaccionesPostDesdeDB(Long postId) {
         Map<String, Long> reacciones = new HashMap<>();
         reacciones.put("likes", 0L);
         reacciones.put("loves", 0L);
@@ -132,18 +173,18 @@ public class ReaccionService {
             String tipo = (String) resultado[0];
             Long count = (Long) resultado[1];
             switch (tipo) {
-                case "like": reacciones.put("likes", count); break;
-                case "love": reacciones.put("loves", count); break;
-                case "haha": reacciones.put("hahas", count); break;
-                case "wow": reacciones.put("wows", count); break;
-                case "sad": reacciones.put("sads", count); break;
-                case "angry": reacciones.put("angrys", count); break;
+                case "like" -> reacciones.put("likes", count);
+                case "love" -> reacciones.put("loves", count);
+                case "haha" -> reacciones.put("hahas", count);
+                case "wow" -> reacciones.put("wows", count);
+                case "sad" -> reacciones.put("sads", count);
+                case "angry" -> reacciones.put("angrys", count);
             }
         }
         return reacciones;
     }
 
-    public Map<String, Long> obtenerReaccionesComentario(Long comentarioId) {
+    private Map<String, Long> calcularReaccionesComentarioDesdeDB(Long comentarioId) {
         Map<String, Long> reacciones = new HashMap<>();
         reacciones.put("likes", 0L);
         reacciones.put("loves", 0L);
@@ -153,20 +194,31 @@ public class ReaccionService {
             String tipo = (String) resultado[0];
             Long count = (Long) resultado[1];
             switch (tipo) {
-                case "like": reacciones.put("likes", count); break;
-                case "love": reacciones.put("loves", count); break;
+                case "like" -> reacciones.put("likes", count);
+                case "love" -> reacciones.put("loves", count);
             }
         }
         return reacciones;
     }
 
-    // ========== VERIFICAR SI USUARIO REACCIONÓ ==========
-
+    // ============================================================
+    // VERIFICAR SI USUARIO REACCIONÓ (lectura cacheada)
+    // ============================================================
+    @Cacheable(
+            value = CACHE_USUARIO_REACCIONO_POST,
+            key = "#usuarioId + ':' + #postId"
+    )
     public boolean usuarioReaccionoPost(Long usuarioId, Long postId) {
+        log.debug("[DB] Verificando si usuario {} reaccionó al post {}", usuarioId, postId);
         return reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId).isPresent();
     }
 
+    @Cacheable(
+            value = CACHE_USUARIO_REACCIONO_COMENTARIO,
+            key = "#usuarioId + ':' + #comentarioId"
+    )
     public boolean usuarioReaccionoComentario(Long usuarioId, Long comentarioId) {
+        log.debug("[DB] Verificando si usuario {} reaccionó al comentario {}", usuarioId, comentarioId);
         return reaccionRepository.findByUsuarioIdAndComentarioId(usuarioId, comentarioId).isPresent();
     }
 }

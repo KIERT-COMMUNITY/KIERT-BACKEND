@@ -1,11 +1,10 @@
+// src/main/java/com/kiert/backend/entity/MensajeGrupo.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "mensajes_grupo")
@@ -20,6 +19,10 @@ public class MensajeGrupo {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // ============================================================
+    // RELACIONES
+    // ============================================================
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "grupo_id", nullable = false)
     private GrupoChat grupo;
@@ -28,10 +31,14 @@ public class MensajeGrupo {
     @JoinColumn(name = "emisor_id", nullable = false)
     private Usuario emisor;
 
-    @Column(columnDefinition = "TEXT")
+    // ============================================================
+    // CONTENIDO
+    // ============================================================
+
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String contenido;
 
-    @Column(name = "tipo_mensaje", nullable = false, length = 20)
+    @Column(name = "tipo_mensaje", length = 20)
     @Builder.Default
     private String tipoMensaje = "TEXTO";
 
@@ -41,61 +48,27 @@ public class MensajeGrupo {
     @Column(name = "nombre_archivo", length = 255)
     private String nombreArchivo;
 
+    // ============================================================
+    // FECHAS
+    // ============================================================
+
     @Column(name = "fecha_envio", nullable = false, updatable = false)
     @Builder.Default
     private Instant fechaEnvio = Instant.now();
 
+    // ============================================================
+    // SOFT DELETE
+    // ============================================================
+
     @Column(nullable = false)
     @Builder.Default
-    private boolean eliminado = false;
+    private boolean eliminado = false;            //Ya lo tenías
 
-    @OneToMany(
-            mappedBy = "mensajeGrupo",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
-    @OrderBy("id ASC")
-    @Builder.Default
-    private List<MensajeArchivoGrupo> archivos = new ArrayList<>();
+    // ============================================================
+    // MÉTODOS AUXILIARES
+    // ============================================================
 
-    @PrePersist
-    private void prePersist() {
-        if (fechaEnvio == null) {
-            fechaEnvio = Instant.now();
-        }
-
-        if (tipoMensaje == null || tipoMensaje.isBlank()) {
-            tipoMensaje = "TEXTO";
-        }
-    }
-
-    public void agregarArchivo(MensajeArchivoGrupo archivo) {
-        if (archivo == null) {
-            return;
-        }
-
-        archivos.add(archivo);
-        archivo.setMensajeGrupo(this);
-    }
-
-    public void quitarArchivo(MensajeArchivoGrupo archivo) {
-        if (archivo == null) {
-            return;
-        }
-
-        archivos.remove(archivo);
-        archivo.setMensajeGrupo(null);
-    }
-
-    public boolean tieneContenido() {
-        return contenido != null && !contenido.isBlank();
-    }
-
-    public boolean tieneArchivos() {
-        return archivos != null && !archivos.isEmpty();
-    }
-
-    public boolean tieneContenidoValido() {
-        return tieneContenido() || tieneArchivos();
+    public void marcarComoEliminado() {
+        this.eliminado = true;
     }
 }

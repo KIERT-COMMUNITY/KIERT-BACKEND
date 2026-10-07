@@ -1,5 +1,7 @@
+// src/main/java/com/kiert/backend/security/JwtAuthFilter.java
 package com.kiert.backend.security;
 
+import com.kiert.backend.service.auth.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,28 +26,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String PREFIJO_BEARER = "Bearer ";
     private final JwtService jwtService;
     private final UsuarioDetailsService usuarioDetailsService;
+    private final TokenBlacklistService tokenBlacklistService;  // NUEVO
 
-    /**
-     * ✅ NO procesar estas rutas con JWT.
-     * Importante: solo rutas TOTALMENTE públicas.
-     * Las rutas que "a veces" requieren auth NO deben saltarse.
-     */
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getRequestURI();
         String metodo = request.getMethod();
 
-        // 1. WebSocket
-        if (path.startsWith("/ws")) {
-            return true;
-        }
+        if (path.startsWith("/ws")) return true;
+        if ("OPTIONS".equalsIgnoreCase(metodo)) return true;
 
-        // 2. OPTIONS preflight (CORS)
-        if ("OPTIONS".equalsIgnoreCase(metodo)) {
-            return true;
-        }
-
-        // 3. Rutas 100% públicas (nunca requieren auth)
         if (path.startsWith("/api/auth/")
                 || path.startsWith("/swagger")
                 || path.startsWith("/swagger-ui")
@@ -55,11 +45,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 || path.startsWith("/api/archivos/")) {
             return true;
         }
-
-        // ⚠️ IMPORTANTE: /api/publicaciones NO se salta el filtro.
-        //    Aunque sea un endpoint con partes públicas,
-        //    el filtro debe procesar el token si viene.
-        //    Si no viene token → sigue como anónimo, y Spring Security decide.
 
         return false;
     }
@@ -72,24 +57,36 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String header = request.getHeader("Authorization");
 
-        log.debug("🔍 [JWT] Procesando: {} - Header: {}",
-                path, header != null ? "✅ presente" : "❌ ausente");
+        log.debug("[JWT] Procesando: {} - Header: {}",
+                path, header != null ? "presente" : "ausente");
 
-        // Si no hay token, seguir sin autenticar.
-        // Spring Security decidirá si la ruta requiere auth.
         if (header == null || !header.startsWith(PREFIJO_BEARER)) {
-            log.debug("⛔ [JWT] No hay token para: {}", path);
+            log.debug("[JWT] No hay token para: {}", path);
             filterChain.doFilter(request, response);
             return;
         }
 
         String token = header.substring(PREFIJO_BEARER.length());
-        log.debug("🔑 [JWT] Token recibido: {}...",
+        log.debug("[JWT] Token recibido: {}...",
                 token.substring(0, Math.min(token.length(), 30)));
+
+        // VERIFICAR BLACKLIST ANTES DE CUALQUIER OTRA COSA
+        try {
+            if (tokenBlacklistService.estaInvalidado(token)) {
+                log.warn("[JWT] Token en blacklist (logout previo): {}", path);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"error\":\"Token invalidado. Inicia sesión de nuevo.\"}");
+                return;
+            }
+        } catch (Exception e) {
+            // Fail-open: si Redis cae, permitimos el token (mejor UX)
+            log.error("[JWT] Error consultando blacklist: {}", e.getMessage());
+        }
 
         try {
             String email = jwtService.extraerEmail(token);
-            log.debug("📧 [JWT] Email extraído: {}", email);
+            log.debug("[JWT] Email extraído: {}", email);
 
             if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = usuarioDetailsService.loadUserByUsername(email);
@@ -97,7 +94,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 boolean valido = jwtService.esTokenValido(token, email);
 
                 if (valido) {
-                    log.info("✅ [JWT] Autenticación exitosa para: {}", email);
+                    log.info("[JWT] Autenticación exitosa para: {}", email);
 
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
@@ -108,13 +105,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 } else {
-                    log.warn("⚠️ [JWT] Token inválido para: {}", email);
+                    log.warn("[JWT] Token inválido para: {}", email);
                     SecurityContextHolder.clearContext();
                 }
             }
         } catch (Exception ex) {
-            // ✅ NO relanzar. Solo loguear. Spring Security devolverá 401 al no haber auth.
-            log.warn("❌ [JWT] Error procesando token (se ignora): {}", ex.getMessage());
+            log.warn("[JWT] Error procesando token (se ignora): {}", ex.getMessage());
             SecurityContextHolder.clearContext();
         }
 

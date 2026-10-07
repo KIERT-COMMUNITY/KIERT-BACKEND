@@ -1,27 +1,15 @@
+// src/main/java/com/kiert/backend/service/ChatService.java
 package com.kiert.backend.service;
 
-import com.kiert.backend.dto.ArchivoSubidoDTO;
-import com.kiert.backend.dto.ConversacionDTO;
-import com.kiert.backend.dto.MensajeArchivoDTO;
-import com.kiert.backend.dto.MensajeChatDTO;
-import com.kiert.backend.dto.SolicitudContactoDTO;
-import com.kiert.backend.dto.UsuarioDisponibleDTO;
-import com.kiert.backend.entity.Mensaje;
-import com.kiert.backend.entity.MensajeArchivo;
-import com.kiert.backend.entity.PersonalizacionUsuario;
-import com.kiert.backend.entity.SolicitudContacto;
-import com.kiert.backend.entity.Usuario;
+import com.kiert.backend.dto.*;
+import com.kiert.backend.entity.*;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
-import com.kiert.backend.repository.BloqueoRepository;
-import com.kiert.backend.repository.MensajeArchivoRepository;
-import com.kiert.backend.repository.MensajeRepository;
-import com.kiert.backend.repository.NotificacionRepository;
-import com.kiert.backend.repository.PersonalizacionRepository;
-import com.kiert.backend.repository.SolicitudContactoRepository;
-import com.kiert.backend.repository.UsuarioRepository;
+import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -41,231 +29,427 @@ public class ChatService {
 
     private final UsuarioRepository usuarioRepository;
     private final MensajeRepository mensajeRepository;
-    private final MensajeArchivoRepository mensajeArchivoRepository;
     private final SolicitudContactoRepository solicitudRepository;
     private final NotificacionRepository notificacionRepository;
     private final BloqueoRepository bloqueoRepository;
     private final PersonalizacionRepository personalizacionRepository;
-    private final ArchivoChatService archivoChatService;
+    private final StorageService storageService;
     private final SimpMessagingTemplate messagingTemplate;
 
+    // Nombres de caché centralizados
+    private static final String CACHE_CONVERSACIONES = "conversaciones";
+    private static final String CACHE_MENSAJES = "mensajes";
+    private static final String CACHE_SOLICITUDES = "solicitudes";
+    private static final String CACHE_CONTACTOS = "contactos";
+    private static final String CACHE_USUARIOS_DISPONIBLES = "usuariosDisponibles";
+    private static final String CACHE_CONTADORES = "contadores";
+
+    // ============================================================
+    // CONVERSACIONES
+    // ============================================================
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_CONVERSACIONES,
+            key = "'usuario:' + #usuarioId"
+    )
     public List<ConversacionDTO> listarConversaciones(Long usuarioId) {
+        log.info("[DB] Listando conversaciones para usuario: {}", usuarioId);
+
         List<Long> bloqueadosIds = bloqueoRepository.findUsuariosBloqueadosIds(usuarioId);
         List<Long> bloqueadoresIds = bloqueoRepository.findUsuariosQueMeBloquearonIds(usuarioId);
-        List<Mensaje> mensajes = mensajeRepository.findTodosLosMensajesDeUsuario(usuarioId);
 
-        if (mensajes.isEmpty()) {
-            return new ArrayList<>();
+        List<Mensaje> mensajes = mensajeRepository.findTodosLosMensajesDeUsuario(usuarioId);
+        if (mensajes.isEmpty()) return new ArrayList<>();
+
+        Map<Long, List<Mensaje>> mensajesPorUsuario = mensajes.stream()
+                .filter(m -> {
+                    Long otroId = m.getEmisor().getId().equals(usuarioId)
+                            ? m.getReceptor().getId()
+                            : m.getEmisor().getId();
+                    return !bloqueadosIds.contains(otroId) && !bloqueadoresIds.contains(otroId);
+                })
+                .collect(Collectors.groupingBy(m ->
+                        m.getEmisor().getId().equals(usuarioId)
+                                ? m.getReceptor().getId()
+                                : m.getEmisor().getId()
+                ));
+
+        List<ConversacionDTO> conversaciones = new ArrayList<>();
+
+        for (Map.Entry<Long, List<Mensaje>> entry : mensajesPorUsuario.entrySet()) {
+            Long otroUsuarioId = entry.getKey();
+            List<Mensaje> mensajesConUsuario = entry.getValue();
+
+            Mensaje ultimo = mensajesConUsuario.stream()
+                    .max(Comparator.comparing(Mensaje::getFechaEnvio))
+                    .orElse(null);
+
+            long noLeidos = mensajesConUsuario.stream()
+                    .filter(m -> m.getReceptor().getId().equals(usuarioId) && !m.isLeido())
+                    .count();
+
+            Usuario otroUsuario = usuarioRepository.findById(otroUsuarioId)
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+
+            String marcoId = personalizacionRepository
+                    .findByUsuarioId(otroUsuarioId)
+                    .map(PersonalizacionUsuario::getMarcoId)
+                    .orElse("none");
+
+            Boolean online = otroUsuario.getEnLinea() != null && otroUsuario.getEnLinea();
+
+            String ultimaConexionReal = otroUsuario.getUltimaConexion() != null
+                    ? otroUsuario.getUltimaConexion().toString()
+                    : null;
+
+            String fechaUltimoMensaje = ultimo != null
+                    ? ultimo.getFechaEnvio().toString()
+                    : null;
+
+            conversaciones.add(new ConversacionDTO(
+                    otroUsuario.getId(),
+                    otroUsuario.getNombreUsuario(),
+                    otroUsuario.getFotoPerfilUrl(),
+                    marcoId,
+                    ultimo != null ? ultimo.getContenido() : null,
+                    fechaUltimoMensaje,
+                    noLeidos,
+                    online,
+                    ultimaConexionReal
+            ));
         }
 
-        return mensajes.stream()
-                .filter(mensaje -> {
-                    Long otroId = mensaje.getEmisor().getId().equals(usuarioId)
-                            ? mensaje.getReceptor().getId()
-                            : mensaje.getEmisor().getId();
-                    return !bloqueadosIds.contains(otroId)
-                            && !bloqueadoresIds.contains(otroId);
-                })
-                .collect(Collectors.groupingBy(mensaje ->
-                        mensaje.getEmisor().getId().equals(usuarioId)
-                                ? mensaje.getReceptor().getId()
-                                : mensaje.getEmisor().getId()
-                ))
-                .entrySet()
-                .stream()
-                .map(entry -> crearConversacionDTO(usuarioId, entry.getKey(), entry.getValue()))
-                .sorted(Comparator.comparing(
-                        ConversacionDTO::ultimoMensajeFecha,
-                        Comparator.nullsLast(Comparator.reverseOrder())
-                ))
-                .toList();
+        conversaciones.sort((c1, c2) -> {
+            String f1 = c1.ultimaConexion();
+            String f2 = c2.ultimaConexion();
+            if (f1 == null) return 1;
+            if (f2 == null) return -1;
+            return f2.compareTo(f1);
+        });
+
+        return conversaciones;
     }
 
+    // ============================================================
+    // MENSAJES
+    // ============================================================
     @Transactional
+    @Cacheable(
+            value = CACHE_MENSAJES,
+            key = "'conv:' + T(java.lang.Math).min(#usuarioId, #otroUsuarioId) + ':' + T(java.lang.Math).max(#usuarioId, #otroUsuarioId)",
+            condition = "#usuarioId != null && #otroUsuarioId != null"
+    )
     public List<MensajeChatDTO> obtenerMensajes(Long usuarioId, Long otroUsuarioId) {
+        log.info("[DB] Obteniendo mensajes entre {} y {}", usuarioId, otroUsuarioId);
+
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, otroUsuarioId);
-        Instant fechaLectura = Instant.now();
 
         List<Mensaje> noLeidos = mensajes.stream()
-                .filter(mensaje -> mensaje.getEmisor().getId().equals(otroUsuarioId))
-                .filter(mensaje -> mensaje.getReceptor().getId().equals(usuarioId))
-                .filter(mensaje -> !mensaje.isLeido())
-                .toList();
+                .filter(m -> m.getReceptor().getId().equals(usuarioId) && !m.isLeido())
+                .collect(Collectors.toList());
 
         if (!noLeidos.isEmpty()) {
-            noLeidos.forEach(mensaje -> {
-                mensaje.setLeido(true);
-                mensaje.setFechaLeido(fechaLectura);
-            });
+            noLeidos.forEach(m -> m.setLeido(true));
             mensajeRepository.saveAll(noLeidos);
         }
 
         return mensajes.stream()
-                .map(mensaje -> convertirMensajeDTO(mensaje, usuarioId))
-                .toList();
+                .map(m -> {
+                    List<MensajeArchivoDTO> archivos = new ArrayList<>();
+                    if (m.getUrlArchivo() != null) {
+                        archivos.add(new MensajeArchivoDTO(
+                                null,
+                                m.getNombreArchivo(),
+                                m.getUrlArchivo(),
+                                "imagen",
+                                null,
+                                false
+                        ));
+                    }
+
+                    return new MensajeChatDTO(
+                            m.getId(),
+                            m.getEmisor().getId(),
+                            m.getContenido(),
+                            m.getFechaEnvio(),
+                            m.getEmisor().getId().equals(usuarioId),
+                            archivos.isEmpty() ? null : archivos
+                    );
+                })
+                .collect(Collectors.toList());
     }
 
     @Transactional
-    @CacheEvict(value = {"conversaciones", "mensajes"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #receptorId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#emisorId, #receptorId) + ':' + T(java.lang.Math).max(#emisorId, #receptorId)"
+            ),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public MensajeChatDTO enviarMensaje(Long emisorId, Long receptorId, String contenido) {
-        return enviarMensajeConArchivos(emisorId, receptorId, contenido, List.of());
-    }
+        log.info("Enviando mensaje de {} a {}", emisorId, receptorId);
 
-    @Transactional
-    @CacheEvict(value = {"conversaciones", "mensajes"}, allEntries = true)
-    public MensajeChatDTO enviarMensajeConArchivos(
-            Long emisorId,
-            Long receptorId,
-            String contenido,
-            List<MultipartFile> archivos
-    ) {
-        validarEnvioPermitido(emisorId, receptorId);
-
-        String contenidoNormalizado = normalizarContenido(contenido);
-        List<MultipartFile> archivosValidos = normalizarArchivos(archivos);
-
-        if (contenidoNormalizado == null && archivosValidos.isEmpty()) {
-            throw new IllegalArgumentException("El mensaje debe contener texto o al menos un archivo");
-        }
-
-        Usuario emisor = obtenerUsuario(emisorId, "Emisor no encontrado");
-        Usuario receptor = obtenerUsuario(receptorId, "Receptor no encontrado");
-        List<ArchivoSubidoDTO> archivosSubidos = new ArrayList<>();
-
-        try {
-            if (!archivosValidos.isEmpty()) {
-                archivosSubidos = archivoChatService.validarYSubir(
-                        archivosValidos,
-                        "chat/privado/" + emisorId + "-" + receptorId
+        if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
+            var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
+            if (bloqueoEmisor.isPresent()) {
+                throw new IllegalStateException(
+                        "Has bloqueado a este usuario. Desbloquéalo para enviarle mensajes."
                 );
             }
-
-            Mensaje mensaje = Mensaje.builder()
-                    .emisor(emisor)
-                    .receptor(receptor)
-                    .contenido(contenidoNormalizado)
-                    .tipoMensaje(determinarTipoMensaje(contenidoNormalizado, archivosSubidos))
-                    .leido(false)
-                    .eliminado(false)
-                    .build();
-
-            if (!archivosSubidos.isEmpty()) {
-                ArchivoSubidoDTO primero = archivosSubidos.get(0);
-                mensaje.setUrlArchivo(primero.secureUrl());
-                mensaje.setNombreArchivo(primero.nombreOriginal());
-            }
-
-            mensaje = mensajeRepository.save(mensaje);
-
-            for (ArchivoSubidoDTO subido : archivosSubidos) {
-                mensaje.agregarArchivo(crearEntidadArchivo(subido));
-            }
-
-            if (!archivosSubidos.isEmpty()) {
-                mensaje = mensajeRepository.save(mensaje);
-            }
-
-            MensajeChatDTO destinatario = convertirMensajeDTO(mensaje, receptorId);
-            enviarPorWebSocket(receptorId, destinatario);
-
-            return convertirMensajeDTO(mensaje, emisorId);
-        } catch (RuntimeException exception) {
-            if (!archivosSubidos.isEmpty()) {
-                archivoChatService.eliminarArchivos(archivosSubidos);
-            }
-            throw exception;
+            throw new IllegalStateException("No puedes enviar mensajes a este usuario.");
         }
-    }
 
-    @Transactional
-    @CacheEvict(value = {"conversaciones", "mensajes"}, allEntries = true)
-    public void marcarMensajesComoLeidos(Long usuarioId, Long otroUsuarioId) {
-        List<Mensaje> mensajesNoLeidos = mensajeRepository.findConversacionNoLeidos(
-                usuarioId,
-                otroUsuarioId
+        Usuario emisor = usuarioRepository.findById(emisorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Emisor no encontrado"));
+        Usuario receptor = usuarioRepository.findById(receptorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
+
+        Mensaje mensaje = Mensaje.builder()
+                .emisor(emisor)
+                .receptor(receptor)
+                .contenido(contenido)
+                .leido(false)
+                .build();
+
+        mensaje = mensajeRepository.save(mensaje);
+
+        MensajeChatDTO dto = new MensajeChatDTO(
+                mensaje.getId(),
+                mensaje.getEmisor().getId(),
+                mensaje.getContenido(),
+                mensaje.getFechaEnvio(),
+                false,
+                null
         );
 
-        if (mensajesNoLeidos.isEmpty()) {
-            return;
+        try {
+            messagingTemplate.convertAndSendToUser(
+                    receptorId.toString(), "/queue/mensajes", dto
+            );
+        } catch (Exception e) {
+            log.error("Error WebSocket: {}", e.getMessage());
         }
 
-        Instant fechaLectura = Instant.now();
-        mensajesNoLeidos.forEach(mensaje -> {
-            mensaje.setLeido(true);
-            mensaje.setFechaLeido(fechaLectura);
-        });
-        mensajeRepository.saveAll(mensajesNoLeidos);
-    }
-
-    @Transactional(readOnly = true)
-    public List<SolicitudContactoDTO> listarSolicitudes(Long usuarioId) {
-        return solicitudRepository.findByReceptorIdAndEstado(
-                        usuarioId,
-                        SolicitudContacto.EstadoSolicitud.PENDIENTE
-                )
-                .stream()
-                .map(solicitud -> new SolicitudContactoDTO(
-                        solicitud.getId(),
-                        solicitud.getEmisor().getId(),
-                        solicitud.getEmisor().getNombreUsuario(),
-                        solicitud.getEmisor().getFotoPerfilUrl(),
-                        solicitud.getEstado().name(),
-                        solicitud.getFechaSolicitud()
-                ))
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<SolicitudContactoDTO> listarSolicitudesEnviadas(Long usuarioId) {
-        return solicitudRepository.findByEmisorIdAndEstado(
-                        usuarioId,
-                        SolicitudContacto.EstadoSolicitud.PENDIENTE
-                )
-                .stream()
-                .map(solicitud -> new SolicitudContactoDTO(
-                        solicitud.getId(),
-                        solicitud.getReceptor().getId(),
-                        solicitud.getReceptor().getNombreUsuario(),
-                        solicitud.getReceptor().getFotoPerfilUrl(),
-                        solicitud.getEstado().name(),
-                        solicitud.getFechaSolicitud()
-                ))
-                .toList();
+        return new MensajeChatDTO(
+                mensaje.getId(),
+                mensaje.getEmisor().getId(),
+                mensaje.getContenido(),
+                mensaje.getFechaEnvio(),
+                true,
+                null
+        );
     }
 
     @Transactional
-    @CacheEvict(value = {"solicitudes", "conversaciones", "contactos"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #receptorId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#emisorId, #receptorId) + ':' + T(java.lang.Math).max(#emisorId, #receptorId)"
+            ),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
+    public MensajeChatDTO enviarMensajeConArchivos(
+            Long emisorId, Long receptorId,
+            String contenido, List<MultipartFile> archivos) {
+
+        log.info("Enviando mensaje con archivos de {} a {}", emisorId, receptorId);
+
+        if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
+            var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
+            if (bloqueoEmisor.isPresent()) {
+                throw new IllegalStateException("Has bloqueado a este usuario.");
+            }
+            throw new IllegalStateException("No puedes enviar mensajes a este usuario.");
+        }
+
+        Usuario emisor = usuarioRepository.findById(emisorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Emisor no encontrado"));
+        Usuario receptor = usuarioRepository.findById(receptorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
+
+        Mensaje mensaje = Mensaje.builder()
+                .emisor(emisor)
+                .receptor(receptor)
+                .contenido(contenido != null ? contenido : "")
+                .leido(false)
+                .build();
+
+        mensaje = mensajeRepository.save(mensaje);
+
+        List<MensajeArchivoDTO> archivosDTO = new ArrayList<>();
+
+        if (archivos != null && !archivos.isEmpty()) {
+            for (MultipartFile archivo : archivos) {
+                try {
+                    String url = storageService.subirArchivo(archivo);
+                    String nombreArchivo = archivo.getOriginalFilename();
+                    String tipoArchivo = determinarTipoArchivo(archivo);
+
+                    mensaje.setUrlArchivo(url);
+                    mensaje.setNombreArchivo(nombreArchivo);
+                    mensaje.setTipoMensaje(tipoArchivo);
+                    mensaje = mensajeRepository.save(mensaje);
+
+                    archivosDTO.add(new MensajeArchivoDTO(
+                            null, nombreArchivo, url, tipoArchivo,
+                            (int) (archivo.getSize() / 1024), false
+                    ));
+                } catch (Exception e) {
+                    log.error("Error al subir archivo: {}", e.getMessage());
+                }
+            }
+        }
+
+        MensajeChatDTO dto = new MensajeChatDTO(
+                mensaje.getId(),
+                mensaje.getEmisor().getId(),
+                mensaje.getContenido(),
+                mensaje.getFechaEnvio(),
+                false,
+                archivosDTO.isEmpty() ? null : archivosDTO
+        );
+
+        try {
+            messagingTemplate.convertAndSendToUser(receptorId.toString(), "/queue/mensajes", dto);
+        } catch (Exception e) {
+            log.error("Error WebSocket: {}", e.getMessage());
+        }
+
+        return new MensajeChatDTO(
+                mensaje.getId(),
+                mensaje.getEmisor().getId(),
+                mensaje.getContenido(),
+                mensaje.getFechaEnvio(),
+                true,
+                archivosDTO.isEmpty() ? null : archivosDTO
+        );
+    }
+
+    private String determinarTipoArchivo(MultipartFile archivo) {
+        String nombre = archivo.getOriginalFilename();
+        if (nombre == null) return "documento";
+        String extension = nombre.substring(nombre.lastIndexOf(".") + 1).toLowerCase();
+        return switch (extension) {
+            case "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg" -> "imagen";
+            case "pdf" -> "pdf";
+            case "doc", "docx" -> "word";
+            case "xls", "xlsx" -> "excel";
+            case "ppt", "pptx" -> "powerpoint";
+            case "zip", "rar" -> "comprimido";
+            case "txt" -> "texto";
+            default -> "documento";
+        };
+    }
+
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#usuarioId, #otroUsuarioId) + ':' + T(java.lang.Math).max(#usuarioId, #otroUsuarioId)"
+            ),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
+    public void marcarMensajesComoLeidos(Long usuarioId, Long otroUsuarioId) {
+        List<Mensaje> mensajesNoLeidos = mensajeRepository.findConversacionNoLeidos(usuarioId, otroUsuarioId);
+        if (!mensajesNoLeidos.isEmpty()) {
+            mensajesNoLeidos.forEach(m -> m.setLeido(true));
+            mensajeRepository.saveAll(mensajesNoLeidos);
+        }
+    }
+
+    // ============================================================
+    // SOLICITUDES
+    // ============================================================
+    @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_SOLICITUDES,
+            key = "'recibidas:' + #usuarioId"
+    )
+    public List<SolicitudContactoDTO> listarSolicitudes(Long usuarioId) {
+        log.info("[DB] Listando solicitudes recibidas de usuario: {}", usuarioId);
+
+        List<SolicitudContacto> solicitudes = solicitudRepository.findByReceptorIdAndEstado(
+                usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE);
+
+        return solicitudes.stream()
+                .map(s -> new SolicitudContactoDTO(
+                        s.getId(),
+                        s.getEmisor().getId(),
+                        s.getEmisor().getNombreUsuario(),
+                        s.getEmisor().getFotoPerfilUrl(),
+                        s.getEstado().name(),
+                        s.getFechaSolicitud()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_SOLICITUDES,
+            key = "'enviadas:' + #usuarioId"
+    )
+    public List<SolicitudContactoDTO> listarSolicitudesEnviadas(Long usuarioId) {
+        log.info("[DB] Listando solicitudes enviadas de usuario: {}", usuarioId);
+
+        List<SolicitudContacto> solicitudes = solicitudRepository.findByEmisorIdAndEstado(
+                usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE);
+
+        return solicitudes.stream()
+                .map(s -> new SolicitudContactoDTO(
+                        s.getId(),
+                        s.getReceptor().getId(),
+                        s.getReceptor().getNombreUsuario(),
+                        s.getReceptor().getFotoPerfilUrl(),
+                        s.getEstado().name(),
+                        s.getFechaSolicitud()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_SOLICITUDES, allEntries = true),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #receptorId"),
+            @CacheEvict(value = CACHE_CONTACTOS, allEntries = true),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, key = "'usuario:' + #emisorId")
+    })
     public SolicitudContactoDTO enviarSolicitud(Long emisorId, Long receptorId) {
         if (emisorId.equals(receptorId)) {
             throw new IllegalArgumentException("No puedes enviarte una solicitud a ti mismo");
         }
 
-        validarEnvioPermitido(emisorId, receptorId);
+        if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
+            var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
+            if (bloqueoEmisor.isPresent()) {
+                throw new IllegalStateException("Has bloqueado a este usuario.");
+            }
+            throw new IllegalStateException("No puedes enviar solicitudes a este usuario.");
+        }
 
-        Usuario emisor = obtenerUsuario(emisorId, "Emisor no encontrado");
-        Usuario receptor = obtenerUsuario(receptorId, "Receptor no encontrado");
+        Usuario emisor = usuarioRepository.findById(emisorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Emisor no encontrado"));
+        Usuario receptor = usuarioRepository.findById(receptorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
 
         if (sonContactos(emisorId, receptorId)) {
             throw new IllegalStateException("Ya son contactos");
         }
 
         if (solicitudRepository.existsByEmisorIdAndReceptorIdAndEstado(
-                emisorId,
-                receptorId,
-                SolicitudContacto.EstadoSolicitud.PENDIENTE
-        )) {
+                emisorId, receptorId, SolicitudContacto.EstadoSolicitud.PENDIENTE)) {
             throw new IllegalStateException("Ya enviaste una solicitud a este usuario");
         }
 
         if (solicitudRepository.existsByEmisorIdAndReceptorIdAndEstado(
-                receptorId,
-                emisorId,
-                SolicitudContacto.EstadoSolicitud.PENDIENTE
-        )) {
-            throw new IllegalStateException(
-                    "Este usuario ya te envio una solicitud. Revisa tus solicitudes."
-            );
+                receptorId, emisorId, SolicitudContacto.EstadoSolicitud.PENDIENTE)) {
+            throw new IllegalStateException("Este usuario ya te envió una solicitud. Revisa tus solicitudes.");
         }
 
         SolicitudContacto solicitud = SolicitudContacto.builder()
@@ -287,53 +471,75 @@ public class ChatService {
     }
 
     @Transactional
-    @CacheEvict(value = {"solicitudes", "conversaciones", "contactos"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_SOLICITUDES, allEntries = true),
+            @CacheEvict(value = CACHE_CONVERSACIONES, allEntries = true),
+            @CacheEvict(value = CACHE_CONTACTOS, allEntries = true),
+            @CacheEvict(value = CACHE_MENSAJES, allEntries = true),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, allEntries = true),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public void aceptarSolicitud(Long solicitudId, Long usuarioId) {
-        SolicitudContacto solicitud = obtenerSolicitud(solicitudId);
-        validarReceptorSolicitud(solicitud, usuarioId);
+        SolicitudContacto solicitud = solicitudRepository.findById(solicitudId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
+
+        if (!solicitud.getReceptor().getId().equals(usuarioId)) {
+            throw new SecurityException("No tienes permiso");
+        }
+
+        Instant ahora = Instant.now();
 
         solicitud.setEstado(SolicitudContacto.EstadoSolicitud.ACEPTADA);
-        solicitud.setFechaRespuesta(Instant.now());
+        solicitud.setFechaRespuesta(ahora);
         solicitudRepository.save(solicitud);
 
+        // CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarNotificacionesSolicitudComoLeidas(
                 usuarioId,
-                solicitud.getEmisor().getId()
+                solicitud.getEmisor().getId(),
+                ahora
         );
 
         Usuario emisor = solicitud.getEmisor();
         Usuario receptor = solicitud.getReceptor();
 
         mensajeRepository.save(Mensaje.builder()
-                .emisor(emisor)
-                .receptor(receptor)
-                .contenido("Hola, ahora somos contactos.")
-                .tipoMensaje("TEXTO")
-                .leido(false)
-                .build());
+                .emisor(emisor).receptor(receptor)
+                .contenido("¡Hola! Ahora somos contactos.")
+                .leido(false).build());
 
         mensajeRepository.save(Mensaje.builder()
-                .emisor(receptor)
-                .receptor(emisor)
-                .contenido("Hola, gracias por aceptar.")
-                .tipoMensaje("TEXTO")
-                .leido(false)
-                .build());
+                .emisor(receptor).receptor(emisor)
+                .contenido("¡Hola! Gracias por aceptar.")
+                .leido(false).build());
     }
 
     @Transactional
-    @CacheEvict(value = {"solicitudes", "conversaciones", "contactos"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_SOLICITUDES, allEntries = true),
+            @CacheEvict(value = CACHE_CONTACTOS, allEntries = true),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, allEntries = true),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public void rechazarSolicitud(Long solicitudId, Long usuarioId) {
-        SolicitudContacto solicitud = obtenerSolicitud(solicitudId);
-        validarReceptorSolicitud(solicitud, usuarioId);
+        SolicitudContacto solicitud = solicitudRepository.findById(solicitudId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
+
+        if (!solicitud.getReceptor().getId().equals(usuarioId)) {
+            throw new SecurityException("No tienes permiso");
+        }
+
+        Instant ahora = Instant.now();
 
         solicitud.setEstado(SolicitudContacto.EstadoSolicitud.RECHAZADA);
-        solicitud.setFechaRespuesta(Instant.now());
+        solicitud.setFechaRespuesta(ahora);
         solicitudRepository.save(solicitud);
 
+        // CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarNotificacionesSolicitudComoLeidas(
                 usuarioId,
-                solicitud.getEmisor().getId()
+                solicitud.getEmisor().getId(),
+                ahora
         );
     }
 
@@ -342,283 +548,74 @@ public class ChatService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_USUARIOS_DISPONIBLES,
+            key = "'usuario:' + #usuarioId"
+    )
     public List<UsuarioDisponibleDTO> listarUsuariosDisponibles(Long usuarioId) {
+        log.info("[DB] Listando usuarios disponibles para: {}", usuarioId);
+
         List<Long> contactosIds = mensajeRepository.findContactosId(usuarioId);
         List<Long> solicitudesEnviadasIds = solicitudRepository.findByEmisorIdAndEstado(
-                        usuarioId,
-                        SolicitudContacto.EstadoSolicitud.PENDIENTE
-                )
-                .stream()
-                .map(solicitud -> solicitud.getReceptor().getId())
-                .toList();
+                        usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE)
+                .stream().map(s -> s.getReceptor().getId()).collect(Collectors.toList());
         List<Long> solicitudesRecibidasIds = solicitudRepository.findByReceptorIdAndEstado(
-                        usuarioId,
-                        SolicitudContacto.EstadoSolicitud.PENDIENTE
-                )
-                .stream()
-                .map(solicitud -> solicitud.getEmisor().getId())
-                .toList();
+                        usuarioId, SolicitudContacto.EstadoSolicitud.PENDIENTE)
+                .stream().map(s -> s.getEmisor().getId()).collect(Collectors.toList());
+
         List<Long> bloqueadosIds = bloqueoRepository.findUsuariosBloqueadosIds(usuarioId);
         List<Long> bloqueadoresIds = bloqueoRepository.findUsuariosQueMeBloquearonIds(usuarioId);
 
-        return usuarioRepository.findAll()
-                .stream()
-                .filter(usuario -> !usuario.getId().equals(usuarioId))
-                .filter(usuario -> !contactosIds.contains(usuario.getId()))
-                .filter(usuario -> !solicitudesEnviadasIds.contains(usuario.getId()))
-                .filter(usuario -> !solicitudesRecibidasIds.contains(usuario.getId()))
-                .filter(usuario -> !bloqueadosIds.contains(usuario.getId()))
-                .filter(usuario -> !bloqueadoresIds.contains(usuario.getId()))
-                .map(usuario -> new UsuarioDisponibleDTO(
-                        usuario.getId(),
-                        usuario.getNombreUsuario(),
-                        usuario.getFotoPerfilUrl()
-                ))
-                .toList();
+        return usuarioRepository.findAll().stream()
+                .filter(u -> !u.getId().equals(usuarioId))
+                .filter(u -> !contactosIds.contains(u.getId()))
+                .filter(u -> !solicitudesEnviadasIds.contains(u.getId()))
+                .filter(u -> !solicitudesRecibidasIds.contains(u.getId()))
+                .filter(u -> !bloqueadosIds.contains(u.getId()))
+                .filter(u -> !bloqueadoresIds.contains(u.getId()))
+                .map(u -> new UsuarioDisponibleDTO(u.getId(), u.getNombreUsuario(), u.getFotoPerfilUrl()))
+                .collect(Collectors.toList());
     }
 
     @Transactional
-    @CacheEvict(value = {"conversaciones", "mensajes", "contactos"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #contactoId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#usuarioId, #contactoId) + ':' + T(java.lang.Math).max(#usuarioId, #contactoId)"
+            ),
+            @CacheEvict(value = CACHE_CONTACTOS, allEntries = true),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, key = "'usuario:' + #usuarioId"),
+            @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, key = "'usuario:' + #contactoId"),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
     public void eliminarContacto(Long usuarioId, Long contactoId) {
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, contactoId);
-
-        if (!mensajes.isEmpty()) {
-            mensajes.forEach(mensaje -> {
-                mensaje.setEliminado(true);
-                mensaje.setFechaEliminacion(Instant.now());
-            });
-            mensajeRepository.saveAll(mensajes);
-        }
+        if (!mensajes.isEmpty()) mensajeRepository.deleteAll(mensajes);
 
         solicitudRepository.findByEmisorIdAndReceptorIdAndEstado(
-                usuarioId,
-                contactoId,
-                SolicitudContacto.EstadoSolicitud.ACEPTADA
-        ).ifPresent(this::marcarSolicitudComoRechazada);
+                        usuarioId, contactoId, SolicitudContacto.EstadoSolicitud.ACEPTADA)
+                .ifPresent(s -> {
+                    s.setEstado(SolicitudContacto.EstadoSolicitud.RECHAZADA);
+                    s.setFechaRespuesta(Instant.now());
+                    solicitudRepository.save(s);
+                });
 
         solicitudRepository.findByEmisorIdAndReceptorIdAndEstado(
-                contactoId,
-                usuarioId,
-                SolicitudContacto.EstadoSolicitud.ACEPTADA
-        ).ifPresent(this::marcarSolicitudComoRechazada);
+                        contactoId, usuarioId, SolicitudContacto.EstadoSolicitud.ACEPTADA)
+                .ifPresent(s -> {
+                    s.setEstado(SolicitudContacto.EstadoSolicitud.RECHAZADA);
+                    s.setFechaRespuesta(Instant.now());
+                    solicitudRepository.save(s);
+                });
     }
 
-    @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_CONTADORES,
+            key = "'noLeidos:' + #usuarioId"
+    )
     public long obtenerMensajesNoLeidos(Long usuarioId) {
-        return mensajeRepository.countByReceptorIdAndLeidoFalseAndEliminadoFalse(usuarioId);
-    }
-
-    private ConversacionDTO crearConversacionDTO(
-            Long usuarioId,
-            Long otroUsuarioId,
-            List<Mensaje> mensajes
-    ) {
-        Mensaje ultimo = mensajes.stream()
-                .max(Comparator.comparing(Mensaje::getFechaEnvio))
-                .orElse(null);
-
-        long noLeidos = mensajes.stream()
-                .filter(mensaje -> mensaje.getReceptor().getId().equals(usuarioId))
-                .filter(mensaje -> !mensaje.isLeido())
-                .count();
-
-        Usuario otroUsuario = obtenerUsuario(otroUsuarioId, "Usuario no encontrado");
-        String marcoId = personalizacionRepository.findByUsuarioId(otroUsuarioId)
-                .map(PersonalizacionUsuario::getMarcoId)
-                .orElse("none");
-        boolean online = Boolean.TRUE.equals(otroUsuario.getEnLinea());
-
-        return new ConversacionDTO(
-                otroUsuario.getId(),
-                otroUsuario.getNombreUsuario(),
-                otroUsuario.getFotoPerfilUrl(),
-                marcoId,
-                obtenerResumenMensaje(ultimo),
-                ultimo == null ? null : ultimo.getFechaEnvio().toString(),
-                otroUsuario.getUltimaConexion() == null
-                        ? null
-                        : otroUsuario.getUltimaConexion().toString(),
-                noLeidos,
-                online
-        );
-    }
-
-    private MensajeChatDTO convertirMensajeDTO(Mensaje mensaje, Long usuarioActualId) {
-        List<MensajeArchivoDTO> archivos = mensaje.getArchivos() == null
-                ? new ArrayList<>()
-                : mensaje.getArchivos()
-                .stream()
-                .map(this::convertirArchivoDTO)
-                .toList();
-
-        if (archivos.isEmpty() && mensaje.getUrlArchivo() != null) {
-            archivos = List.of(new MensajeArchivoDTO(
-                    null,
-                    mensaje.getNombreArchivo(),
-                    mensaje.getUrlArchivo(),
-                    normalizarTipoParaFrontend(mensaje.getTipoMensaje()),
-                    null,
-                    false
-            ));
-        }
-
-        return new MensajeChatDTO(
-                mensaje.getId(),
-                mensaje.getEmisor().getId(),
-                mensaje.getContenido(),
-                mensaje.getFechaEnvio(),
-                mensaje.getEmisor().getId().equals(usuarioActualId),
-                archivos.isEmpty() ? null : archivos
-        );
-    }
-
-    private MensajeArchivoDTO convertirArchivoDTO(MensajeArchivo archivo) {
-        Integer pesoKb = archivo.getTamanoBytes() == null
-                ? null
-                : Math.toIntExact((archivo.getTamanoBytes() + 1023L) / 1024L);
-
-        return new MensajeArchivoDTO(
-                archivo.getId(),
-                archivo.getNombreArchivo(),
-                archivo.getUrlArchivo(),
-                normalizarTipoParaFrontend(archivo.getTipoArchivo()),
-                pesoKb,
-                false,
-                archivo.getPublicId(),
-                archivo.getTipoMime(),
-                archivo.getFormato(),
-                archivo.getResourceType(),
-                archivo.getTamanoBytes(),
-                archivo.getDuracionSegundos(),
-                archivo.getAncho(),
-                archivo.getAlto()
-        );
-    }
-
-    private MensajeArchivo crearEntidadArchivo(ArchivoSubidoDTO archivo) {
-        return MensajeArchivo.builder()
-                .nombreArchivo(archivo.nombreOriginal())
-                .urlArchivo(archivo.secureUrl())
-                .publicId(archivo.publicId())
-                .tipoMime(archivo.tipoMime())
-                .tipoArchivo(archivo.tipoArchivo())
-                .formato(archivo.formato())
-                .resourceType(archivo.resourceType())
-                .tamanoBytes(archivo.tamanoBytes())
-                .duracionSegundos(archivo.duracionSegundos())
-                .ancho(archivo.ancho())
-                .alto(archivo.alto())
-                .build();
-    }
-
-    private String determinarTipoMensaje(
-            String contenido,
-            List<ArchivoSubidoDTO> archivos
-    ) {
-        if (archivos.isEmpty()) {
-            return "TEXTO";
-        }
-
-        boolean todosMismoTipo = archivos.stream()
-                .map(ArchivoSubidoDTO::tipoArchivo)
-                .distinct()
-                .count() == 1;
-
-        if (contenido == null && todosMismoTipo) {
-            return archivos.get(0).tipoArchivo();
-        }
-
-        return "MULTIMEDIA";
-    }
-
-    private String obtenerResumenMensaje(Mensaje mensaje) {
-        if (mensaje == null) {
-            return null;
-        }
-        if (mensaje.getContenido() != null && !mensaje.getContenido().isBlank()) {
-            return mensaje.getContenido();
-        }
-        int cantidad = mensaje.getArchivos() == null ? 0 : mensaje.getArchivos().size();
-        if (cantidad > 1) {
-            return cantidad + " archivos";
-        }
-        if (cantidad == 1 || mensaje.getUrlArchivo() != null) {
-            return "Archivo adjunto";
-        }
-        return null;
-    }
-
-    private String normalizarContenido(String contenido) {
-        if (contenido == null) {
-            return null;
-        }
-        String valor = contenido.trim();
-        return valor.isEmpty() ? null : valor;
-    }
-
-    private List<MultipartFile> normalizarArchivos(List<MultipartFile> archivos) {
-        if (archivos == null) {
-            return List.of();
-        }
-        return archivos.stream()
-                .filter(archivo -> archivo != null && !archivo.isEmpty())
-                .toList();
-    }
-
-    private String normalizarTipoParaFrontend(String tipo) {
-        return tipo == null ? "documento" : tipo.toLowerCase(Locale.ROOT);
-    }
-
-    private void validarEnvioPermitido(Long emisorId, Long receptorId) {
-        if (!bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
-            return;
-        }
-        if (bloqueoRepository.findBloqueoActivo(emisorId, receptorId).isPresent()) {
-            throw new IllegalStateException(
-                    "Has bloqueado a este usuario. Desbloquealo para continuar."
-            );
-        }
-        throw new IllegalStateException("No puedes comunicarte con este usuario.");
-    }
-
-    private Usuario obtenerUsuario(Long usuarioId, String mensajeError) {
-        return usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new RecursoNoEncontradoException(mensajeError));
-    }
-
-    private SolicitudContacto obtenerSolicitud(Long solicitudId) {
-        return solicitudRepository.findById(solicitudId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
-    }
-
-    private void validarReceptorSolicitud(
-            SolicitudContacto solicitud,
-            Long usuarioId
-    ) {
-        if (!solicitud.getReceptor().getId().equals(usuarioId)) {
-            throw new SecurityException("No tienes permiso");
-        }
-    }
-
-    private void marcarSolicitudComoRechazada(SolicitudContacto solicitud) {
-        solicitud.setEstado(SolicitudContacto.EstadoSolicitud.RECHAZADA);
-        solicitud.setFechaRespuesta(Instant.now());
-        solicitudRepository.save(solicitud);
-    }
-
-    private void enviarPorWebSocket(Long receptorId, MensajeChatDTO mensaje) {
-        try {
-            messagingTemplate.convertAndSendToUser(
-                    receptorId.toString(),
-                    "/queue/mensajes",
-                    mensaje
-            );
-        } catch (RuntimeException exception) {
-            log.error(
-                    "No se pudo notificar el mensaje por WebSocket al usuario {}",
-                    receptorId,
-                    exception
-            );
-        }
+        return mensajeRepository.countByReceptorIdAndLeidoFalse(usuarioId);
     }
 }

@@ -30,7 +30,7 @@ public class Post {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String descripcion;
 
-    // ✅ CAMPO STRING - Acepta cualquier categoría
+    // CAMPO STRING - Acepta cualquier categoría
     @Column(nullable = false, length = 50)
     private String categoria;
 
@@ -59,7 +59,7 @@ public class Post {
     @Column(nullable = false)
     @Builder.Default
     private boolean eliminado = false;
-    // ✅ NUEVO CAMPO: TOTAL COMPARTIDOS
+    // NUEVO CAMPO: TOTAL COMPARTIDOS
     @Column(name = "total_compartidos", nullable = false)
     @Builder.Default
     private Long totalCompartidos = 0L;

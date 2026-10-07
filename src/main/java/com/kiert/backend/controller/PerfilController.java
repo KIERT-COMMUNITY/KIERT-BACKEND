@@ -24,14 +24,14 @@ public class PerfilController {
     @GetMapping
     @Cacheable(value = "perfil", key = "#usuarioActual.id()")
     public ResponseEntity<UsuarioDTO> obtenerPerfil() {
-        log.info("📋 Obteniendo perfil del usuario: {}", usuarioActual.id());
+        log.info("Obteniendo perfil del usuario: {}", usuarioActual.id());
         return ResponseEntity.ok(perfilService.obtenerPerfil(usuarioActual.id()));
     }
 
     @PostMapping(value = "/foto", consumes = "multipart/form-data")
     @CacheEvict(value = {"perfil", "usuarios", "personalizacion"}, allEntries = true)
     public ResponseEntity<UsuarioDTO> subirFoto(@RequestParam("archivo") MultipartFile archivo) {
-        log.info("📸 Subiendo foto para usuario: {}", usuarioActual.id());
+        log.info("Subiendo foto para usuario: {}", usuarioActual.id());
         UsuarioDTO usuario = perfilService.subirFotoPerfil(usuarioActual.id(), archivo);
         return ResponseEntity.ok(usuario);
     }
@@ -39,7 +39,7 @@ public class PerfilController {
     @PatchMapping("/foto-url")
     @CacheEvict(value = {"perfil", "usuarios", "personalizacion"}, allEntries = true)
     public ResponseEntity<UsuarioDTO> actualizarFotoUrl(@RequestBody ActualizarFotoPerfilDTO datos) {
-        log.info("📸 Actualizando foto de perfil del usuario: {}", usuarioActual.id());
+        log.info("Actualizando foto de perfil del usuario: {}", usuarioActual.id());
         UsuarioDTO usuario = perfilService.actualizarFotoPerfil(usuarioActual.id(), datos.urlFoto());
         return ResponseEntity.ok(usuario);
     }
@@ -47,7 +47,7 @@ public class PerfilController {
     @DeleteMapping("/cache")
     @CacheEvict(value = {"perfil", "usuarios", "publicaciones", "busquedaUsuarios", "contactos", "solicitudes"}, allEntries = true)
     public ResponseEntity<Void> limpiarCache() {
-        log.info("🧹 Limpiando caché del usuario: {}", usuarioActual.id());
+        log.info("Limpiando caché del usuario: {}", usuarioActual.id());
         perfilService.eliminarCachePerfil(usuarioActual.id());
         return ResponseEntity.ok().build();
     }
