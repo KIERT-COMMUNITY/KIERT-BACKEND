@@ -1,5 +1,6 @@
 package com.kiert.backend.service;
 
+import com.kiert.backend.dto.ArchivoSubidoDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,46 +15,50 @@ public class StorageService {
 
     private final CloudinaryService cloudinaryService;
 
-    // ========== SUBIR ARCHIVO (DETECCIÓN AUTOMÁTICA) ==========
     public String subirArchivo(MultipartFile archivo) {
-        log.info("📤 StorageService - Subiendo archivo a Cloudinary");
         return cloudinaryService.subirArchivo(archivo);
     }
 
-    // ========== SUBIR ARCHIVO CON CARPETA ==========
     public String subirArchivo(MultipartFile archivo, String carpeta) {
-        log.info("📤 StorageService - Subiendo archivo a Cloudinary en carpeta: {}", carpeta);
         return cloudinaryService.subirArchivo(archivo, carpeta);
     }
 
-    // ========== SUBIR VIDEO ==========
-    public String subirVideo(MultipartFile video, String carpeta) {
-        log.info("🎥 StorageService - Subiendo video a Cloudinary en carpeta: {}", carpeta);
-        Map<String, Object> result = cloudinaryService.subirVideo(video, carpeta);
-        return result.get("secure_url").toString();
+    public ArchivoSubidoDTO subirArchivoChat(
+            MultipartFile archivo,
+            String carpeta,
+            String tipoArchivo
+    ) {
+        return cloudinaryService.subirArchivoChat(archivo, carpeta, tipoArchivo);
     }
 
-    // ========== SUBIR GIF ==========
+    public void eliminarArchivo(String publicId, String resourceType) {
+        cloudinaryService.eliminarArchivo(publicId, resourceType);
+    }
+
+    public String subirVideo(MultipartFile video, String carpeta) {
+        Map<String, Object> resultado = cloudinaryService.subirVideo(video, carpeta);
+        Object url = resultado.get("secure_url");
+        return url == null ? null : url.toString();
+    }
+
     public String subirGif(MultipartFile gif, String carpeta) {
-        log.info("🎬 StorageService - Subiendo GIF a Cloudinary en carpeta: {}", carpeta);
         return cloudinaryService.subirGif(gif, carpeta);
     }
 
-    // ========== SUBIR IMAGEN ==========
     public String subirImagen(MultipartFile imagen, String carpeta) {
-        log.info("🖼️ StorageService - Subiendo imagen a Cloudinary en carpeta: {}", carpeta);
         return cloudinaryService.subirImagen(imagen, carpeta);
     }
 
-    // ========== SUBIR MARCO ==========
     public String subirMarco(MultipartFile archivo, String nombre) {
-        log.info("🖼️ StorageService - Subiendo marco a Cloudinary: {}", nombre);
         return cloudinaryService.subirMarco(archivo, nombre);
     }
 
-    // ========== VERIFICAR TIPOS ==========
     public boolean esVideo(MultipartFile archivo) {
         return cloudinaryService.esVideo(archivo);
+    }
+
+    public boolean esAudio(MultipartFile archivo) {
+        return cloudinaryService.esAudio(archivo);
     }
 
     public boolean esGif(MultipartFile archivo) {
@@ -68,19 +73,14 @@ public class StorageService {
         return cloudinaryService.getFormato(contentType);
     }
 
-    // ========== GENERAR URL FIRMADA ==========
     public String generarUrlFirmadaSubida(String nombreArchivo) {
-        log.info("🔑 StorageService - Generando URL firmada para: {}", nombreArchivo);
         return cloudinaryService.generarUrlFirmadaSubida(nombreArchivo);
     }
 
-    // ========== URL PÚBLICA ==========
     public String urlPublica(String nombreArchivo) {
-        log.info("🌐 StorageService - URL pública para: {}", nombreArchivo);
         return cloudinaryService.urlPublica(nombreArchivo);
     }
 
-    // ========== SANITIZAR NOMBRE ==========
     public String sanitizar(String nombre) {
         return cloudinaryService.sanitizar(nombre);
     }

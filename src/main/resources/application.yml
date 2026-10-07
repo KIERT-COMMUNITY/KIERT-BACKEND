@@ -55,7 +55,8 @@ spring:
           writetimeout: 5000
 
 server:
-  port: 8080
+  port: 8081
+
   error:
     include-message: always
 
@@ -83,7 +84,7 @@ springdoc:
 # ========== JWT CONFIGURATION ==========
 kiert:
   jwt:
-    secret: ${vault.jwt.secret:TBOqs9hbL57mK002kBHg6rfQXIFDFvRyEsm3ISAAl70=}
+    secret: ${vault.jwt.secret:5ea8bc5772b55186e648930d752def86b48d09657d8e5d52f04d3b76bc5e2f9a}
     expiration-ms: ${vault.jwt.expiration-ms:86400000}  # 24 horas
   cors:
     allowed-origins:
@@ -95,9 +96,9 @@ kiert:
 
   # ========== CLOUDINARY CONFIGURATION ==========
   cloudinary:
-    cloud-name: ${vault.cloudinary.cloud-name:zopnporu}
-    api-key: ${vault.cloudinary.api-key:271319861416221}
-    api-secret: ${vault.cloudinary.api-secret:CyeOaPpO-eABboZou_R35PEKYs0}
+    cloud-name: ${vault.cloudinary.cloud-name:mlg68j4q}
+    api-key: ${vault.cloudinary.api-key:211297651585938}
+    api-secret: ${vault.cloudinary.api-secret:Ha4BGIzY4FuDPiRltpdlKHiKbpY}
 
 logging:
   level:
@@ -119,7 +120,7 @@ spring:
   datasource:
     url: ${vault.db.url:jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true}
     username: ${vault.db.username:root}
-    password: ${vault.db.password:adrian.200503}
+    password: ${vault.db.password:admin}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10

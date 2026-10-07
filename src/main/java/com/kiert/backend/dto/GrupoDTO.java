@@ -14,5 +14,36 @@ public record GrupoDTO(
         Instant fechaCreacion,
         Integer totalMiembros,
         List<MiembroGrupoDTO> miembros,
-        String rolDelUsuario // Para saber el rol del usuario actual
-) {}
+        String rolDelUsuario,
+        Integer miembrosEnLinea
+) {
+
+    public GrupoDTO(
+            Long id,
+            String nombre,
+            String descripcion,
+            String fotoUrl,
+            Long creadorId,
+            String creadorNombre,
+            String tipo,
+            Instant fechaCreacion,
+            Integer totalMiembros,
+            List<MiembroGrupoDTO> miembros,
+            String rolDelUsuario
+    ) {
+        this(
+                id,
+                nombre,
+                descripcion,
+                fotoUrl,
+                creadorId,
+                creadorNombre,
+                tipo,
+                fechaCreacion,
+                totalMiembros,
+                miembros,
+                rolDelUsuario,
+                0
+        );
+    }
+}
