@@ -120,7 +120,7 @@ spring:
   datasource:
     url: ${vault.db.url:jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true}
     username: ${vault.db.username:root}
-    password: ${vault.db.password:admin}
+    password: ${vault.db.password:adrian.200503}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10

@@ -2,6 +2,7 @@ package com.kiert.backend.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import com.kiert.backend.dto.ArchivoSubidoDTO;
 import com.kiert.backend.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,7 @@ public class CloudinaryService {
     // ========== CONSTANTES DE TAMAÑO ==========
     private static final long MAX_IMAGE_SIZE = 15 * 1024 * 1024; // 15MB
     private static final long MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
-    private static final long MAX_GIF_SIZE = 15 * 1024 * 1024; // 15MB
+    private static final long MAX_GIF_SIZE   = 15 * 1024 * 1024; // 15MB
 
     // ========== SUBIR ARCHIVO (PARA CHAT) ==========
     public String subirArchivo(MultipartFile archivo) {
@@ -74,7 +75,63 @@ public class CloudinaryService {
         }
     }
 
-    // ========== SUBIR IMAGEN (CORREGIDO) ==========
+    // ========== SUBIR ARCHIVO DE CHAT (NUEVO) ==========
+    public ArchivoSubidoDTO subirArchivoChat(
+            MultipartFile archivo,
+            String carpeta,
+            String tipoArchivo
+    ) {
+        try {
+            log.info("Subiendo archivo de chat tipo {} a Cloudinary en carpeta: {}", tipoArchivo, carpeta);
+
+            String resourceType = resolverResourceType(tipoArchivo);
+
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(
+                    archivo.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", carpeta != null ? carpeta : "chat",
+                            "resource_type", resourceType,
+                            "use_filename", true,
+                            "unique_filename", true
+                    )
+            );
+
+            return construirDTO(archivo, uploadResult, tipoArchivo, resourceType);
+
+        } catch (IOException e) {
+            log.error("Error al subir archivo de chat: {}", e.getMessage(), e);
+            throw new BadRequestException("Error al subir el archivo: " + e.getMessage());
+        }
+    }
+
+    // ========== ELIMINAR ARCHIVO (NUEVO) ==========
+    public void eliminarArchivo(String publicId, String resourceType) {
+        if (publicId == null || publicId.isBlank()) {
+            return;
+        }
+
+        try {
+            String tipo = (resourceType == null || resourceType.isBlank())
+                    ? "image"
+                    : resourceType;
+
+            log.info("Eliminando archivo de Cloudinary: {} (tipo {})", publicId, tipo);
+
+            cloudinary.uploader().destroy(
+                    publicId,
+                    ObjectUtils.asMap(
+                            "resource_type", tipo,
+                            "invalidate", true
+                    )
+            );
+
+        } catch (IOException e) {
+            log.error("Error al eliminar archivo {}: {}", publicId, e.getMessage(), e);
+            throw new BadRequestException("Error al eliminar el archivo: " + e.getMessage());
+        }
+    }
+
+    // ========== SUBIR IMAGEN ==========
     public String subirImagen(MultipartFile imagen, String carpeta) {
         try {
             log.info("Subiendo imagen a Cloudinary: {}", imagen.getOriginalFilename());
@@ -88,7 +145,6 @@ public class CloudinaryService {
                 throw new BadRequestException("El archivo debe ser una imagen (no GIF)");
             }
 
-            // CORREGIDO: Sin transformaciones inválidas
             Map<String, Object> uploadResult = cloudinary.uploader().upload(
                     imagen.getBytes(),
                     ObjectUtils.asMap(
@@ -224,21 +280,79 @@ public class CloudinaryService {
         return null;
     }
 
-    // ========== GENERAR URL FIRMADA ==========
     public String generarUrlFirmadaSubida(String nombreArchivo) {
         log.info("Generando URL firmada para: {}", nombreArchivo);
         return null;
     }
 
-    // ========== URL PÚBLICA ==========
     public String urlPublica(String nombreArchivo) {
         log.info("Generando URL pública para: {}", nombreArchivo);
         return cloudinary.url().generate(nombreArchivo);
     }
 
-    // ========== SANITIZAR NOMBRE ==========
     public String sanitizar(String nombre) {
         if (nombre == null) return null;
         return nombre.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    // ========== HELPERS PRIVADOS ==========
+
+    private String resolverResourceType(String tipoArchivo) {
+        if (tipoArchivo == null) return "auto";
+        return switch (tipoArchivo) {
+            case "IMAGEN" -> "image";
+            case "VIDEO" -> "video";
+            case "AUDIO", "NOTA_VOZ" -> "video"; // Cloudinary trata audio como video
+            default -> "raw"; // documentos, zip
+        };
+    }
+
+    private ArchivoSubidoDTO construirDTO(
+            MultipartFile archivo,
+            Map<String, Object> uploadResult,
+            String tipoArchivo,
+            String resourceType
+    ) {
+        String secureUrl   = string(uploadResult.get("secure_url"));
+        String publicId    = string(uploadResult.get("public_id"));
+        String formato     = string(uploadResult.get("format"));
+        String resource    = string(uploadResult.get("resource_type"));
+        Long   bytes       = longValue(uploadResult.get("bytes"));
+        Double duracion    = doubleValue(uploadResult.get("duration"));
+        Integer ancho      = intValue(uploadResult.get("width"));
+        Integer alto       = intValue(uploadResult.get("height"));
+
+        return new ArchivoSubidoDTO(
+                archivo.getOriginalFilename(),
+                secureUrl,
+                publicId,
+                archivo.getContentType(),
+                tipoArchivo,
+                formato,
+                resource != null ? resource : resourceType,
+                bytes != null ? bytes : archivo.getSize(),
+                duracion,
+                ancho,
+                alto
+        );
+    }
+
+    private String string(Object valor) {
+        return valor == null ? null : valor.toString();
+    }
+
+    private Long longValue(Object valor) {
+        if (valor instanceof Number n) return n.longValue();
+        return null;
+    }
+
+    private Double doubleValue(Object valor) {
+        if (valor instanceof Number n) return n.doubleValue();
+        return null;
+    }
+
+    private Integer intValue(Object valor) {
+        if (valor instanceof Number n) return n.intValue();
+        return null;
     }
 }

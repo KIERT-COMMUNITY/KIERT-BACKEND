@@ -1,5 +1,6 @@
 package com.kiert.backend.service;
 
+import com.kiert.backend.dto.ArchivoSubidoDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,23 @@ public class StorageService {
     public String subirArchivo(MultipartFile archivo, String carpeta) {
         log.info("StorageService - Subiendo archivo a Cloudinary en carpeta: {}", carpeta);
         return cloudinaryService.subirArchivo(archivo, carpeta);
+    }
+
+    // ========== SUBIR ARCHIVO DE CHAT (NUEVO) ==========
+    public ArchivoSubidoDTO subirArchivoChat(
+            MultipartFile archivo,
+            String carpeta,
+            String tipoArchivo
+    ) {
+        log.info("StorageService - Subiendo archivo de chat tipo {} en carpeta: {}",
+                tipoArchivo, carpeta);
+        return cloudinaryService.subirArchivoChat(archivo, carpeta, tipoArchivo);
+    }
+
+    // ========== ELIMINAR ARCHIVO (NUEVO) ==========
+    public void eliminarArchivo(String publicId, String resourceType) {
+        log.info("StorageService - Eliminando archivo {} de tipo {}", publicId, resourceType);
+        cloudinaryService.eliminarArchivo(publicId, resourceType);
     }
 
     // ========== SUBIR VIDEO ==========
