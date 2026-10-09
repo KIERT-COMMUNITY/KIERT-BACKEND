@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;   // ✅ AÑADIDO
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -35,8 +36,8 @@ public class ChatService {
     private final PersonalizacionRepository personalizacionRepository;
     private final StorageService storageService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final PresenciaService presenciaService;
 
-    // Nombres de caché centralizados
     private static final String CACHE_CONVERSACIONES = "conversaciones";
     private static final String CACHE_MENSAJES = "mensajes";
     private static final String CACHE_SOLICITUDES = "solicitudes";
@@ -45,13 +46,9 @@ public class ChatService {
     private static final String CACHE_CONTADORES = "contadores";
 
     // ============================================================
-    // CONVERSACIONES
+    // CONVERSACIONES — ✅ con fallback a BD y TRUNCADO a milisegundos
     // ============================================================
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_CONVERSACIONES,
-            key = "'usuario:' + #usuarioId"
-    )
     public List<ConversacionDTO> listarConversaciones(Long usuarioId) {
         log.info("[DB] Listando conversaciones para usuario: {}", usuarioId);
 
@@ -73,6 +70,11 @@ public class ChatService {
                                 ? m.getReceptor().getId()
                                 : m.getEmisor().getId()
                 ));
+
+        // ✅ Consultar Redis UNA SOLA VEZ
+        List<Long> idsOtros = new ArrayList<>(mensajesPorUsuario.keySet());
+        Map<Long, PresenciaService.EstadoPresencia> estados =
+                presenciaService.obtenerEstados(idsOtros);
 
         List<ConversacionDTO> conversaciones = new ArrayList<>();
 
@@ -96,14 +98,24 @@ public class ChatService {
                     .map(PersonalizacionUsuario::getMarcoId)
                     .orElse("none");
 
-            Boolean online = otroUsuario.getEnLinea() != null && otroUsuario.getEnLinea();
+            // ✅ Estado desde Redis
+            PresenciaService.EstadoPresencia estado = estados.get(otroUsuarioId);
+            boolean online = estado != null && estado.enLinea();
 
-            String ultimaConexionReal = otroUsuario.getUltimaConexion() != null
-                    ? otroUsuario.getUltimaConexion().toString()
+            // ✅ Fallback a BD si Redis no tiene fecha
+            Instant ultimaConexion = estado != null ? estado.ultimaConexion() : null;
+            if (ultimaConexion == null && otroUsuario.getUltimaConexion() != null) {
+                ultimaConexion = otroUsuario.getUltimaConexion();
+                log.debug("📅 Fallback BD para usuario {}: {}", otroUsuarioId, ultimaConexion);
+            }
+
+            // ✅ Truncar a milisegundos para que JS lo parsee
+            String ultimaConexionStr = ultimaConexion != null
+                    ? ultimaConexion.truncatedTo(ChronoUnit.MILLIS).toString()
                     : null;
 
             String fechaUltimoMensaje = ultimo != null
-                    ? ultimo.getFechaEnvio().toString()
+                    ? ultimo.getFechaEnvio().truncatedTo(ChronoUnit.MILLIS).toString()
                     : null;
 
             conversaciones.add(new ConversacionDTO(
@@ -115,7 +127,7 @@ public class ChatService {
                     fechaUltimoMensaje,
                     noLeidos,
                     online,
-                    ultimaConexionReal
+                    ultimaConexionStr
             ));
         }
 
@@ -158,12 +170,8 @@ public class ChatService {
                     List<MensajeArchivoDTO> archivos = new ArrayList<>();
                     if (m.getUrlArchivo() != null) {
                         archivos.add(new MensajeArchivoDTO(
-                                null,
-                                m.getNombreArchivo(),
-                                m.getUrlArchivo(),
-                                "imagen",
-                                null,
-                                false
+                                null, m.getNombreArchivo(), m.getUrlArchivo(),
+                                "imagen", null, false
                         ));
                     }
 
@@ -195,9 +203,7 @@ public class ChatService {
         if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
             var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
             if (bloqueoEmisor.isPresent()) {
-                throw new IllegalStateException(
-                        "Has bloqueado a este usuario. Desbloquéalo para enviarle mensajes."
-                );
+                throw new IllegalStateException("Has bloqueado a este usuario. Desbloquéalo para enviarle mensajes.");
             }
             throw new IllegalStateException("No puedes enviar mensajes a este usuario.");
         }
@@ -208,38 +214,25 @@ public class ChatService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
 
         Mensaje mensaje = Mensaje.builder()
-                .emisor(emisor)
-                .receptor(receptor)
-                .contenido(contenido)
-                .leido(false)
-                .build();
+                .emisor(emisor).receptor(receptor)
+                .contenido(contenido).leido(false).build();
 
         mensaje = mensajeRepository.save(mensaje);
 
         MensajeChatDTO dto = new MensajeChatDTO(
-                mensaje.getId(),
-                mensaje.getEmisor().getId(),
-                mensaje.getContenido(),
-                mensaje.getFechaEnvio(),
-                false,
-                null
+                mensaje.getId(), mensaje.getEmisor().getId(),
+                mensaje.getContenido(), mensaje.getFechaEnvio(), false, null
         );
 
         try {
-            messagingTemplate.convertAndSendToUser(
-                    receptorId.toString(), "/queue/mensajes", dto
-            );
+            messagingTemplate.convertAndSendToUser(receptorId.toString(), "/queue/mensajes", dto);
         } catch (Exception e) {
             log.error("Error WebSocket: {}", e.getMessage());
         }
 
         return new MensajeChatDTO(
-                mensaje.getId(),
-                mensaje.getEmisor().getId(),
-                mensaje.getContenido(),
-                mensaje.getFechaEnvio(),
-                true,
-                null
+                mensaje.getId(), mensaje.getEmisor().getId(),
+                mensaje.getContenido(), mensaje.getFechaEnvio(), true, null
         );
     }
 
@@ -273,11 +266,9 @@ public class ChatService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
 
         Mensaje mensaje = Mensaje.builder()
-                .emisor(emisor)
-                .receptor(receptor)
+                .emisor(emisor).receptor(receptor)
                 .contenido(contenido != null ? contenido : "")
-                .leido(false)
-                .build();
+                .leido(false).build();
 
         mensaje = mensajeRepository.save(mensaje);
 
@@ -306,11 +297,8 @@ public class ChatService {
         }
 
         MensajeChatDTO dto = new MensajeChatDTO(
-                mensaje.getId(),
-                mensaje.getEmisor().getId(),
-                mensaje.getContenido(),
-                mensaje.getFechaEnvio(),
-                false,
+                mensaje.getId(), mensaje.getEmisor().getId(),
+                mensaje.getContenido(), mensaje.getFechaEnvio(), false,
                 archivosDTO.isEmpty() ? null : archivosDTO
         );
 
@@ -321,11 +309,8 @@ public class ChatService {
         }
 
         return new MensajeChatDTO(
-                mensaje.getId(),
-                mensaje.getEmisor().getId(),
-                mensaje.getContenido(),
-                mensaje.getFechaEnvio(),
-                true,
+                mensaje.getId(), mensaje.getEmisor().getId(),
+                mensaje.getContenido(), mensaje.getFechaEnvio(), true,
                 archivosDTO.isEmpty() ? null : archivosDTO
         );
     }
@@ -367,10 +352,7 @@ public class ChatService {
     // SOLICITUDES
     // ============================================================
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_SOLICITUDES,
-            key = "'recibidas:' + #usuarioId"
-    )
+    @Cacheable(value = CACHE_SOLICITUDES, key = "'recibidas:' + #usuarioId")
     public List<SolicitudContactoDTO> listarSolicitudes(Long usuarioId) {
         log.info("[DB] Listando solicitudes recibidas de usuario: {}", usuarioId);
 
@@ -379,21 +361,15 @@ public class ChatService {
 
         return solicitudes.stream()
                 .map(s -> new SolicitudContactoDTO(
-                        s.getId(),
-                        s.getEmisor().getId(),
-                        s.getEmisor().getNombreUsuario(),
-                        s.getEmisor().getFotoPerfilUrl(),
-                        s.getEstado().name(),
-                        s.getFechaSolicitud()
+                        s.getId(), s.getEmisor().getId(),
+                        s.getEmisor().getNombreUsuario(), s.getEmisor().getFotoPerfilUrl(),
+                        s.getEstado().name(), s.getFechaSolicitud()
                 ))
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_SOLICITUDES,
-            key = "'enviadas:' + #usuarioId"
-    )
+    @Cacheable(value = CACHE_SOLICITUDES, key = "'enviadas:' + #usuarioId")
     public List<SolicitudContactoDTO> listarSolicitudesEnviadas(Long usuarioId) {
         log.info("[DB] Listando solicitudes enviadas de usuario: {}", usuarioId);
 
@@ -402,12 +378,9 @@ public class ChatService {
 
         return solicitudes.stream()
                 .map(s -> new SolicitudContactoDTO(
-                        s.getId(),
-                        s.getReceptor().getId(),
-                        s.getReceptor().getNombreUsuario(),
-                        s.getReceptor().getFotoPerfilUrl(),
-                        s.getEstado().name(),
-                        s.getFechaSolicitud()
+                        s.getId(), s.getReceptor().getId(),
+                        s.getReceptor().getNombreUsuario(), s.getReceptor().getFotoPerfilUrl(),
+                        s.getEstado().name(), s.getFechaSolicitud()
                 ))
                 .collect(Collectors.toList());
     }
@@ -453,20 +426,16 @@ public class ChatService {
         }
 
         SolicitudContacto solicitud = SolicitudContacto.builder()
-                .emisor(emisor)
-                .receptor(receptor)
+                .emisor(emisor).receptor(receptor)
                 .estado(SolicitudContacto.EstadoSolicitud.PENDIENTE)
                 .build();
 
         solicitud = solicitudRepository.save(solicitud);
 
         return new SolicitudContactoDTO(
-                solicitud.getId(),
-                solicitud.getEmisor().getId(),
-                solicitud.getEmisor().getNombreUsuario(),
-                solicitud.getEmisor().getFotoPerfilUrl(),
-                solicitud.getEstado().name(),
-                solicitud.getFechaSolicitud()
+                solicitud.getId(), solicitud.getEmisor().getId(),
+                solicitud.getEmisor().getNombreUsuario(), solicitud.getEmisor().getFotoPerfilUrl(),
+                solicitud.getEstado().name(), solicitud.getFechaSolicitud()
         );
     }
 
@@ -493,12 +462,8 @@ public class ChatService {
         solicitud.setFechaRespuesta(ahora);
         solicitudRepository.save(solicitud);
 
-        // CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarNotificacionesSolicitudComoLeidas(
-                usuarioId,
-                solicitud.getEmisor().getId(),
-                ahora
-        );
+                usuarioId, solicitud.getEmisor().getId(), ahora);
 
         Usuario emisor = solicitud.getEmisor();
         Usuario receptor = solicitud.getReceptor();
@@ -535,12 +500,8 @@ public class ChatService {
         solicitud.setFechaRespuesta(ahora);
         solicitudRepository.save(solicitud);
 
-        // CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarNotificacionesSolicitudComoLeidas(
-                usuarioId,
-                solicitud.getEmisor().getId(),
-                ahora
-        );
+                usuarioId, solicitud.getEmisor().getId(), ahora);
     }
 
     public boolean sonContactos(Long usuario1, Long usuario2) {
@@ -548,10 +509,7 @@ public class ChatService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_USUARIOS_DISPONIBLES,
-            key = "'usuario:' + #usuarioId"
-    )
+    @Cacheable(value = CACHE_USUARIOS_DISPONIBLES, key = "'usuario:' + #usuarioId")
     public List<UsuarioDisponibleDTO> listarUsuariosDisponibles(Long usuarioId) {
         log.info("[DB] Listando usuarios disponibles para: {}", usuarioId);
 
@@ -611,10 +569,7 @@ public class ChatService {
                 });
     }
 
-    @Cacheable(
-            value = CACHE_CONTADORES,
-            key = "'noLeidos:' + #usuarioId"
-    )
+    @Cacheable(value = CACHE_CONTADORES, key = "'noLeidos:' + #usuarioId")
     public long obtenerMensajesNoLeidos(Long usuarioId) {
         return mensajeRepository.countByReceptorIdAndLeidoFalse(usuarioId);
     }

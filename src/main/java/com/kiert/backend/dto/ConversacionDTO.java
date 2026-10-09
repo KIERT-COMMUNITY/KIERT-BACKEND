@@ -7,8 +7,8 @@ public record ConversacionDTO(
         String fotoPerfilUrl,
         String marcoId,
         String ultimoMensaje,
-        String ultimaConexion,      // ← el que tienes
+        String fechaUltimoMensaje,      // ISO sin microsegundos
         long noLeidos,
         Boolean online,
-        String ultimaConexionReal   // ← 9no campo (¡ya lo tienes añadido!)
+        String ultimaConexion           // ✅ ISO con milisegundos (JS lo parsea)
 ) {}

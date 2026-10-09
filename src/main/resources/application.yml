@@ -42,8 +42,8 @@ spring:
   mail:
     host: ${vault.mail.host:smtp.gmail.com}
     port: ${vault.mail.port:587}
-    username: ${vault.mail.username:gringoelmatador30@gmail.com}
-    password: ${vault.mail.password:qxii xkra gsbf jszj}
+    username: ${vault.mail.username:keanovpaginawebyproyectos@gmail.com}
+    password: ${vault.mail.password:gntt popc upns zfpy}
     properties:
       mail:
         smtp:
