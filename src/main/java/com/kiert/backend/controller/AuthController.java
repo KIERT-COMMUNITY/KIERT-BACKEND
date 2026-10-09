@@ -5,9 +5,12 @@ import com.kiert.backend.dto.*;
 import com.kiert.backend.dto.request.LoginRequestDTO;
 import com.kiert.backend.dto.request.RegisterRequestDTO;
 import com.kiert.backend.dto.response.AuthResponseDTO;
+import com.kiert.backend.entity.Usuario;
 import com.kiert.backend.exception.BadRequestException;
+import com.kiert.backend.repository.UsuarioRepository;
 import com.kiert.backend.security.JwtService;
 import com.kiert.backend.security.UsuarioActual;
+import com.kiert.backend.service.PresenciaService;
 import com.kiert.backend.service.auth.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -31,12 +34,14 @@ public class AuthController {
 
     private final AuthService authService;
     private final UsuarioActual usuarioActual;
-    private final JwtService jwtService;   // ← NUEVO: para extraer el usuario del token en logout
+    private final JwtService jwtService;
+    private final UsuarioRepository usuarioRepository;     // ✅ NUEVO
+    private final PresenciaService presenciaService;       // ✅ NUEVO
 
     private static final String PREFIJO_BEARER = "Bearer ";
 
     // ============================================================
-    // REGISTRO -> envia codigo al email
+    // REGISTRO
     // ============================================================
     @PostMapping("/registro")
     public ResponseEntity<?> registrar(@Valid @RequestBody RegisterRequestDTO datos) {
@@ -70,7 +75,7 @@ public class AuthController {
     }
 
     // ============================================================
-    // REENVIAR CODIGO DE VERIFICACION
+    // REENVIAR CODIGO
     // ============================================================
     @PostMapping("/reenviar-codigo")
     public ResponseEntity<?> reenviarCodigo(@Valid @RequestBody ReenviarCodigoDTO req) {
@@ -86,13 +91,24 @@ public class AuthController {
     }
 
     // ============================================================
-    // LOGIN
+    // LOGIN — ✅ marca en línea al usuario
     // ============================================================
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDTO datos) {
         log.info("Login para usuario: {}", datos.email());
         try {
             AuthResponseDTO response = authService.login(datos);
+
+            // ✅ Marcar en línea al usuario recién logueado
+            try {
+                usuarioRepository.findByEmail(datos.email()).ifPresent(u -> {
+                    presenciaService.marcarEnLinea(u.getId());
+                    log.info("🟢 Usuario {} EN LÍNEA tras login", u.getId());
+                });
+            } catch (Exception e) {
+                log.warn("No se pudo marcar en línea tras login: {}", e.getMessage());
+            }
+
             return ResponseEntity.ok(response);
         } catch (BadRequestException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -101,21 +117,25 @@ public class AuthController {
     }
 
     // ============================================================
-    // LOGOUT (con blacklist de JWT)
+    // LOGOUT — ✅ marca desconectado
     // ============================================================
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request) {
-        // Extraer el token del header Authorization
         String token = extraerTokenDelHeader(request);
-
-        // Extraer el usuarioId del token
         Long usuarioId = extraerUsuarioIdDelToken(token);
 
         log.info("Logout para usuario: {}", usuarioId);
 
-        // Si no hay token válido, no hay nada que invalidar
         if (usuarioId == null) {
             return ResponseEntity.ok().build();
+        }
+
+        // ✅ Marcar desconectado ANTES de invalidar el token
+        try {
+            presenciaService.marcarDesconectado(usuarioId);
+            log.info("🔴 Usuario {} DESCONECTADO tras logout", usuarioId);
+        } catch (Exception e) {
+            log.warn("No se pudo marcar desconectado: {}", e.getMessage());
         }
 
         authService.logout(usuarioId, token);
@@ -125,12 +145,6 @@ public class AuthController {
     // ============================================================
     // LOGOUT BEACON (para navigator.sendBeacon)
     // ============================================================
-    /**
-     * ⚠️ CAMBIO IMPORTANTE: ya NO acepta usuarioId como @RequestParam.
-     * Antes, cualquiera podía hacer logout de otro usuario.
-     *
-     * Ahora extrae el usuarioId del token (que sí es seguro).
-     */
     @PostMapping("/logout-beacon")
     public ResponseEntity<Void> logoutBeacon(HttpServletRequest request) {
         String token = extraerTokenDelHeader(request);
@@ -142,12 +156,19 @@ public class AuthController {
             return ResponseEntity.ok().build();
         }
 
+        // ✅ Marcar desconectado
+        try {
+            presenciaService.marcarDesconectado(usuarioId);
+        } catch (Exception e) {
+            log.warn("No se pudo marcar desconectado via beacon: {}", e.getMessage());
+        }
+
         authService.logout(usuarioId, token);
         return ResponseEntity.ok().build();
     }
 
     // ============================================================
-    // SOLICITAR RECUPERACION -> envia codigo
+    // RECUPERACION
     // ============================================================
     @PostMapping("/recuperar")
     public ResponseEntity<?> solicitarRecuperacion(@Valid @RequestBody SolicitarRecuperacionDTO datos) {
@@ -157,15 +178,11 @@ public class AuthController {
             return ResponseEntity.ok(Map.of(
                     "mensaje", "Codigo enviado. Revisa tu correo y la carpeta de Spam."));
         } catch (BadRequestException e) {
-            // Por seguridad, no revelamos si el email existe o no
             return ResponseEntity.ok(Map.of(
                     "mensaje", "Si el correo esta registrado, recibiras un codigo en breve."));
         }
     }
 
-    // ============================================================
-    // RESET PASSWORD CON CODIGO
-    // ============================================================
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordConCodigoDTO req) {
         log.info("Reset password para: {}", req.email());
@@ -179,13 +196,8 @@ public class AuthController {
     }
 
     // ============================================================
-    // HELPERS PRIVADOS
+    // HELPERS
     // ============================================================
-
-    /**
-     * Extrae el token JWT del header Authorization.
-     * Devuelve null si no existe o no tiene el prefijo Bearer.
-     */
     private String extraerTokenDelHeader(HttpServletRequest request) {
         String header = request.getHeader("Authorization");
         if (header == null || !header.startsWith(PREFIJO_BEARER)) {
@@ -194,10 +206,6 @@ public class AuthController {
         return header.substring(PREFIJO_BEARER.length());
     }
 
-    /**
-     * Extrae el usuarioId del token JWT.
-     * Devuelve null si el token es inválido o ha expirado.
-     */
     private Long extraerUsuarioIdDelToken(String token) {
         if (token == null || token.isBlank()) {
             return null;

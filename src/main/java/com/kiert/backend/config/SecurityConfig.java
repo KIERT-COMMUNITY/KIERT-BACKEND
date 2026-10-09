@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/config/SecurityConfig.java
 package com.kiert.backend.config;
 
 import com.kiert.backend.security.JwtAuthFilter;
@@ -48,6 +49,13 @@ public class SecurityConfig {
 
                         // Auth (login, registro, recuperación)
                         .requestMatchers("/api/auth/**").permitAll()
+
+                        // ✅ PRESENCIA (heartbeat y offline son públicos — sin token no hacen nada)
+                        .requestMatchers("/api/presencia/**").permitAll()
+
+                        // ✅ Invitaciones por link (info pública)
+                        .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/grupos/invitacion/*/unirse").authenticated()
 
                         // Archivos públicos
                         .requestMatchers("/api/archivos/**").permitAll()

@@ -20,10 +20,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
     // LISTAR NOTIFICACIONES
     // ============================================================
 
-    /**
-     * Lista TODAS las notificaciones del usuario con relaciones cargadas.
-     * ⚠️ Para usuarios con muchas notificaciones, usa `findByUsuarioPaginado`.
-     */
     @Query("""
             SELECT DISTINCT n FROM Notificacion n
             LEFT JOIN FETCH n.usuarioOrigen
@@ -38,9 +34,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("usuarioId") Long usuarioId
     );
 
-    /**
-     *NUEVO: Versión paginada (recomendada).
-     */
     @Query("""
             SELECT DISTINCT n FROM Notificacion n
             LEFT JOIN FETCH n.usuarioOrigen
@@ -56,10 +49,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Últimas N notificaciones (para el dropdown del navbar).
-     * Mucho más rápido que cargar todas.
-     */
     @Query("""
             SELECT n FROM Notificacion n
             LEFT JOIN FETCH n.usuarioOrigen
@@ -77,10 +66,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
     // NO LEÍDAS
     // ============================================================
 
-    /**
-     * Contar no leídas (para el badge del navbar).
-     *  Este método se llama en CADA navegación. Cachear en Redis.
-     */
     @Query("""
             SELECT COUNT(n) FROM Notificacion n
             WHERE n.usuarioDestino.id = :usuarioId
@@ -88,9 +73,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             """)
     long countNoLeidasByUsuario(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * Obtener solo no leídas (con JOIN FETCH).
-     */
     @Query("""
             SELECT n FROM Notificacion n
             LEFT JOIN FETCH n.usuarioOrigen
@@ -104,9 +86,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             """)
     List<Notificacion> findNoLeidasByUsuario(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * NUEVO: Últimas N no leídas (para el dropdown).
-     */
     @Query("""
             SELECT n FROM Notificacion n
             LEFT JOIN FETCH n.usuarioOrigen
@@ -124,10 +103,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
     // CONTADORES POR TIPO
     // ============================================================
 
-    /**
-     *NUEVO: Cuenta no leídas agrupadas por tipo.
-     * Devuelve [tipo, count].
-     */
     @Query("""
             SELECT n.tipo, COUNT(n)
             FROM Notificacion n
@@ -137,9 +112,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             """)
     List<Object[]> contarNoLeidasPorTipo(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * NUEVO: Cuenta no leídas de un tipo específico.
-     */
     @Query("""
             SELECT COUNT(n) FROM Notificacion n
             WHERE n.usuarioDestino.id = :usuarioId
@@ -155,9 +127,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
     // MARCAR COMO LEÍDAS (bulk)
     // ============================================================
 
-    /**
-     * Marcar notificaciones específicas como leídas por IDs.
-     */
     @Modifying
     @Query("""
             UPDATE Notificacion n
@@ -173,9 +142,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("fecha") Instant fecha
     );
 
-    /**
-     * Marcar TODAS las notificaciones del usuario como leídas.
-     */
     @Modifying
     @Query("""
             UPDATE Notificacion n
@@ -189,9 +155,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("fecha") Instant fecha
     );
 
-    /**
-     * Marcar notificaciones de solicitud como leídas.
-     */
     @Modifying
     @Query("""
             UPDATE Notificacion n
@@ -208,9 +171,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("fecha") Instant fecha
     );
 
-    /**
-     * Marcar notificaciones de invitación a grupo como leídas.
-     */
     @Modifying
     @Query("""
             UPDATE Notificacion n
@@ -228,12 +188,30 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
     );
 
     // ============================================================
-    // ELIMINAR
+    // ✅ NUEVO: ELIMINAR NOTIFICACIONES DE INVITACIÓN A GRUPO
     // ============================================================
 
     /**
-     * NUEVO: Elimina notificaciones específicas por IDs (verificando dueño).
+     * Elimina TODAS las notificaciones de tipo INVITACION_GRUPO
+     * que el usuario tenga para ese grupo.
+     * Se usa al ACEPTAR o RECHAZAR una invitación.
      */
+    @Modifying
+    @Query("""
+            DELETE FROM Notificacion n
+            WHERE n.usuarioDestino.id = :usuarioId
+              AND n.tipo = 'INVITACION_GRUPO'
+              AND n.grupo.id = :grupoId
+            """)
+    int eliminarNotificacionesInvitacionGrupo(
+            @Param("usuarioId") Long usuarioId,
+            @Param("grupoId") Long grupoId
+    );
+
+    // ============================================================
+    // ELIMINAR
+    // ============================================================
+
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -245,9 +223,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("usuarioId") Long usuarioId
     );
 
-    /**
-     * NUEVO: Elimina TODAS las notificaciones de un usuario.
-     */
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -255,14 +230,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             """)
     int eliminarTodasDeUsuario(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // BULK DELETE POR ENTIDAD RELACIONADA
-    // ============================================================
-
-    /**
-     * NUEVO: Elimina notificaciones relacionadas con un post.
-     * Útil cuando se elimina un post.
-     */
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -270,9 +237,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             """)
     int eliminarPorPost(@Param("postId") Long postId);
 
-    /**
-     *NUEVO: Elimina notificaciones relacionadas con un comentario.
-     */
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -280,9 +244,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             """)
     int eliminarPorComentario(@Param("comentarioId") Long comentarioId);
 
-    /**
-     * NUEVO: Elimina notificaciones relacionadas con una respuesta.
-     */
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -290,10 +251,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             """)
     int eliminarPorRespuesta(@Param("respuestaId") Long respuestaId);
 
-    /**
-     * NUEVO: Elimina notificaciones relacionadas con un grupo.
-     * Útil cuando se elimina un grupo.
-     */
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -302,13 +259,9 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
     int eliminarPorGrupo(@Param("grupoId") Long grupoId);
 
     // ============================================================
-    // LIMPIEZA (para @Scheduled)
+    // LIMPIEZA
     // ============================================================
 
-    /**
-     * NUEVO: Elimina notificaciones LEÍDAS con más de N días.
-     * Se ejecuta con un @Scheduled para mantener la tabla pequeña.
-     */
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -321,21 +274,12 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
     // ESTADÍSTICAS
     // ============================================================
 
-    /**
-     * NUEVO: Total de notificaciones activas en el sistema.
-     */
     @Query("SELECT COUNT(n) FROM Notificacion n")
     long countTotal();
 
-    /**
-     * NUEVO: Cuenta total no leídas en el sistema (para admin).
-     */
     @Query("SELECT COUNT(n) FROM Notificacion n WHERE n.leida = false")
     long countTotalNoLeidas();
 
-    /**
-     * NUEVO: Notificaciones creadas en un rango de fechas (para reportes).
-     */
     @Query("""
             SELECT n FROM Notificacion n
             WHERE n.fechaCreacion >= :desde
