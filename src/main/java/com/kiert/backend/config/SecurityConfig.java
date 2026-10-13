@@ -97,7 +97,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/bloqueos/**").authenticated()
                         .requestMatchers("/api/reportes/**").authenticated()
                         .requestMatchers("/api/perfil/**").authenticated()
-
+                        .requestMatchers("/api/stickers/**").authenticated()
                         // Cualquier otra ruta requiere auth
                         .anyRequest().authenticated()
                 )

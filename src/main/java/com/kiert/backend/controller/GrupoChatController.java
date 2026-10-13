@@ -387,4 +387,26 @@ public class GrupoChatController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
         }
     }
+    // En src/main/java/com/kiert/backend/controller/GrupoChatController.java
+
+    @PostMapping("/{id}/mensajes/sticker")
+    public ResponseEntity<?> enviarSticker(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        try {
+            Long usuarioId = usuarioActual.id();
+            if (usuarioId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+            String stickerUrl = body.get("stickerUrl");
+            String stickerNombre = body.get("stickerNombre");
+            if (stickerUrl == null || stickerUrl.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "URL del sticker requerida"));
+            }
+
+            return ResponseEntity.ok(grupoService.enviarStickerGrupo(id, usuarioId, stickerUrl, stickerNombre));
+        } catch (Exception e) {
+            log.error("Error al enviar sticker: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }

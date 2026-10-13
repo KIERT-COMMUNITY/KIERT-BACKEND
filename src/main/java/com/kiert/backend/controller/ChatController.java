@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -67,6 +68,34 @@ public class ChatController {
             return ResponseEntity.ok(chatService.enviarMensajeConArchivos(usuarioActualId, usuarioId, contenido, archivos));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new MensajeSimpleDTO(e.getMessage()));
+        }
+    }
+
+    // ========== ✅ NUEVO: ENVIAR STICKER ==========
+    @PostMapping("/{usuarioId}/sticker")
+    public ResponseEntity<?> enviarSticker(
+            @PathVariable Long usuarioId,
+            @RequestBody Map<String, Long> body) {
+        Long usuarioActualId = usuarioActual.id();
+        if (usuarioActualId == null) return noAuth();
+
+        Long stickerId = body.get("stickerId");
+        if (stickerId == null) {
+            return ResponseEntity.badRequest()
+                    .body(new MensajeSimpleDTO("stickerId es obligatorio"));
+        }
+
+        try {
+            return ResponseEntity.ok(
+                    chatService.enviarSticker(usuarioActualId, usuarioId, stickerId)
+            );
+        } catch (SecurityException | IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new MensajeSimpleDTO(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error al enviar sticker: {}", e.getMessage());
+            return ResponseEntity.badRequest()
                     .body(new MensajeSimpleDTO(e.getMessage()));
         }
     }

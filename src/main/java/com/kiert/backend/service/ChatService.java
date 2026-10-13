@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;   // ✅ AÑADIDO
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -37,6 +37,7 @@ public class ChatService {
     private final StorageService storageService;
     private final SimpMessagingTemplate messagingTemplate;
     private final PresenciaService presenciaService;
+    private final StickerRepository stickerRepository;   // ✅ NUEVO
 
     private static final String CACHE_CONVERSACIONES = "conversaciones";
     private static final String CACHE_MENSAJES = "mensajes";
@@ -46,7 +47,7 @@ public class ChatService {
     private static final String CACHE_CONTADORES = "contadores";
 
     // ============================================================
-    // CONVERSACIONES — ✅ con fallback a BD y TRUNCADO a milisegundos
+    // CONVERSACIONES
     // ============================================================
     @Transactional(readOnly = true)
     public List<ConversacionDTO> listarConversaciones(Long usuarioId) {
@@ -71,7 +72,6 @@ public class ChatService {
                                 : m.getEmisor().getId()
                 ));
 
-        // ✅ Consultar Redis UNA SOLA VEZ
         List<Long> idsOtros = new ArrayList<>(mensajesPorUsuario.keySet());
         Map<Long, PresenciaService.EstadoPresencia> estados =
                 presenciaService.obtenerEstados(idsOtros);
@@ -98,18 +98,14 @@ public class ChatService {
                     .map(PersonalizacionUsuario::getMarcoId)
                     .orElse("none");
 
-            // ✅ Estado desde Redis
             PresenciaService.EstadoPresencia estado = estados.get(otroUsuarioId);
             boolean online = estado != null && estado.enLinea();
 
-            // ✅ Fallback a BD si Redis no tiene fecha
             Instant ultimaConexion = estado != null ? estado.ultimaConexion() : null;
             if (ultimaConexion == null && otroUsuario.getUltimaConexion() != null) {
                 ultimaConexion = otroUsuario.getUltimaConexion();
-                log.debug("📅 Fallback BD para usuario {}: {}", otroUsuarioId, ultimaConexion);
             }
 
-            // ✅ Truncar a milisegundos para que JS lo parsee
             String ultimaConexionStr = ultimaConexion != null
                     ? ultimaConexion.truncatedTo(ChronoUnit.MILLIS).toString()
                     : null;
@@ -118,12 +114,19 @@ public class ChatService {
                     ? ultimo.getFechaEnvio().truncatedTo(ChronoUnit.MILLIS).toString()
                     : null;
 
+            // ✅ Preview inteligente: si es sticker, mostrar "[Sticker]"
+            String preview = ultimo != null
+                    ? ("STICKER".equals(ultimo.getTipoMensaje())
+                       ? "[Sticker]"
+                       : ultimo.getContenido())
+                    : null;
+
             conversaciones.add(new ConversacionDTO(
                     otroUsuario.getId(),
                     otroUsuario.getNombreUsuario(),
                     otroUsuario.getFotoPerfilUrl(),
                     marcoId,
-                    ultimo != null ? ultimo.getContenido() : null,
+                    preview,
                     fechaUltimoMensaje,
                     noLeidos,
                     online,
@@ -161,14 +164,16 @@ public class ChatService {
                 .collect(Collectors.toList());
 
         if (!noLeidos.isEmpty()) {
-            noLeidos.forEach(m -> m.setLeido(true));
+            noLeidos.forEach(Mensaje::marcarComoLeido);
             mensajeRepository.saveAll(noLeidos);
         }
 
         return mensajes.stream()
                 .map(m -> {
                     List<MensajeArchivoDTO> archivos = new ArrayList<>();
-                    if (m.getUrlArchivo() != null) {
+                    boolean esSticker = "STICKER".equals(m.getTipoMensaje());
+
+                    if (m.getUrlArchivo() != null && !esSticker) {
                         archivos.add(new MensajeArchivoDTO(
                                 null, m.getNombreArchivo(), m.getUrlArchivo(),
                                 "imagen", null, false
@@ -181,7 +186,10 @@ public class ChatService {
                             m.getContenido(),
                             m.getFechaEnvio(),
                             m.getEmisor().getId().equals(usuarioId),
-                            archivos.isEmpty() ? null : archivos
+                            archivos.isEmpty() ? null : archivos,
+                            m.getTipoMensaje() != null ? m.getTipoMensaje() : "TEXTO",
+                            esSticker ? m.getUrlArchivo() : null,
+                            esSticker ? m.getNombreArchivo() : null
                     );
                 })
                 .collect(Collectors.toList());
@@ -215,13 +223,16 @@ public class ChatService {
 
         Mensaje mensaje = Mensaje.builder()
                 .emisor(emisor).receptor(receptor)
-                .contenido(contenido).leido(false).build();
+                .contenido(contenido)
+                .tipoMensaje("TEXTO")
+                .leido(false).build();
 
         mensaje = mensajeRepository.save(mensaje);
 
         MensajeChatDTO dto = new MensajeChatDTO(
                 mensaje.getId(), mensaje.getEmisor().getId(),
-                mensaje.getContenido(), mensaje.getFechaEnvio(), false, null
+                mensaje.getContenido(), mensaje.getFechaEnvio(), false,
+                null, "TEXTO", null, null
         );
 
         try {
@@ -232,7 +243,8 @@ public class ChatService {
 
         return new MensajeChatDTO(
                 mensaje.getId(), mensaje.getEmisor().getId(),
-                mensaje.getContenido(), mensaje.getFechaEnvio(), true, null
+                mensaje.getContenido(), mensaje.getFechaEnvio(), true,
+                null, "TEXTO", null, null
         );
     }
 
@@ -268,6 +280,7 @@ public class ChatService {
         Mensaje mensaje = Mensaje.builder()
                 .emisor(emisor).receptor(receptor)
                 .contenido(contenido != null ? contenido : "")
+                .tipoMensaje("TEXTO")
                 .leido(false).build();
 
         mensaje = mensajeRepository.save(mensaje);
@@ -299,7 +312,8 @@ public class ChatService {
         MensajeChatDTO dto = new MensajeChatDTO(
                 mensaje.getId(), mensaje.getEmisor().getId(),
                 mensaje.getContenido(), mensaje.getFechaEnvio(), false,
-                archivosDTO.isEmpty() ? null : archivosDTO
+                archivosDTO.isEmpty() ? null : archivosDTO,
+                mensaje.getTipoMensaje(), null, null
         );
 
         try {
@@ -311,7 +325,94 @@ public class ChatService {
         return new MensajeChatDTO(
                 mensaje.getId(), mensaje.getEmisor().getId(),
                 mensaje.getContenido(), mensaje.getFechaEnvio(), true,
-                archivosDTO.isEmpty() ? null : archivosDTO
+                archivosDTO.isEmpty() ? null : archivosDTO,
+                mensaje.getTipoMensaje(), null, null
+        );
+    }
+
+    // ============================================================
+    // ✅ NUEVO: ENVIAR STICKER
+    // ============================================================
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
+            @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #receptorId"),
+            @CacheEvict(
+                    value = CACHE_MENSAJES,
+                    key = "'conv:' + T(java.lang.Math).min(#emisorId, #receptorId) + ':' + T(java.lang.Math).max(#emisorId, #receptorId)"
+            ),
+            @CacheEvict(value = CACHE_CONTADORES, allEntries = true)
+    })
+    public MensajeChatDTO enviarSticker(Long emisorId, Long receptorId, Long stickerId) {
+        log.info("Enviando sticker {} de {} a {}", stickerId, emisorId, receptorId);
+
+        if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
+            var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
+            if (bloqueoEmisor.isPresent()) {
+                throw new IllegalStateException("Has bloqueado a este usuario. Desbloquéalo para enviarle stickers.");
+            }
+            throw new IllegalStateException("No puedes enviar stickers a este usuario.");
+        }
+
+        Usuario emisor = usuarioRepository.findById(emisorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Emisor no encontrado"));
+
+        Usuario receptor = usuarioRepository.findById(receptorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
+
+        Sticker sticker = stickerRepository.findById(stickerId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Sticker no encontrado"));
+
+        boolean esPropio = sticker.getUsuario().getId().equals(emisorId);
+        boolean esPublico = Boolean.TRUE.equals(sticker.getEsPublico());
+
+        if (!esPropio && !esPublico) {
+            throw new SecurityException("No puedes usar ese sticker");
+        }
+
+        Mensaje mensaje = Mensaje.builder()
+                .emisor(emisor)
+                .receptor(receptor)
+                .contenido("")
+                .tipoMensaje("STICKER")
+                .urlArchivo(sticker.getUrlImagen())
+                .nombreArchivo(sticker.getNombre())
+                .stickerId(sticker.getId())
+                .leido(false)
+                .build();
+
+        mensaje = mensajeRepository.save(mensaje);
+
+        MensajeChatDTO dto = new MensajeChatDTO(
+                mensaje.getId(),
+                mensaje.getEmisor().getId(),
+                "",
+                mensaje.getFechaEnvio(),
+                false,
+                null,
+                "STICKER",
+                sticker.getUrlImagen(),
+                sticker.getNombre()
+        );
+
+        try {
+            messagingTemplate.convertAndSendToUser(
+                    receptorId.toString(), "/queue/mensajes", dto
+            );
+        } catch (Exception e) {
+            log.error("Error WebSocket: {}", e.getMessage());
+        }
+
+        return new MensajeChatDTO(
+                mensaje.getId(),
+                mensaje.getEmisor().getId(),
+                "",
+                mensaje.getFechaEnvio(),
+                true,
+                null,
+                "STICKER",
+                sticker.getUrlImagen(),
+                sticker.getNombre()
         );
     }
 
@@ -343,7 +444,7 @@ public class ChatService {
     public void marcarMensajesComoLeidos(Long usuarioId, Long otroUsuarioId) {
         List<Mensaje> mensajesNoLeidos = mensajeRepository.findConversacionNoLeidos(usuarioId, otroUsuarioId);
         if (!mensajesNoLeidos.isEmpty()) {
-            mensajesNoLeidos.forEach(m -> m.setLeido(true));
+            mensajesNoLeidos.forEach(Mensaje::marcarComoLeido);
             mensajeRepository.saveAll(mensajesNoLeidos);
         }
     }
@@ -471,11 +572,13 @@ public class ChatService {
         mensajeRepository.save(Mensaje.builder()
                 .emisor(emisor).receptor(receptor)
                 .contenido("¡Hola! Ahora somos contactos.")
+                .tipoMensaje("TEXTO")
                 .leido(false).build());
 
         mensajeRepository.save(Mensaje.builder()
                 .emisor(receptor).receptor(emisor)
                 .contenido("¡Hola! Gracias por aceptar.")
+                .tipoMensaje("TEXTO")
                 .leido(false).build());
     }
 
