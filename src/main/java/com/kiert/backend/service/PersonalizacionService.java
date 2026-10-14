@@ -26,15 +26,15 @@ public class PersonalizacionService {
     private final UsuarioRepository usuarioRepository;
     private final CloudinaryService cloudinaryService;
 
-    // Nombres de caché
     private static final String CACHE_PERSONALIZACION = "personalizacion";
     private static final String CACHE_MARCOS = "marcos";
     private static final String CACHE_FONDOS = "fondos";
 
     // ============================================================
     // OBTENER PERSONALIZACIÓN
+    // ✅ La foto SIEMPRE viene de Usuario.fotoPerfilUrl
     // ============================================================
-    @Transactional
+    @Transactional(readOnly = true)
     @Cacheable(
             value = CACHE_PERSONALIZACION,
             key = "#usuarioId",
@@ -44,28 +44,30 @@ public class PersonalizacionService {
         log.info("[DB] Obteniendo personalización para usuario: {}", usuarioId);
 
         if (usuarioId == null) {
-            log.error("usuarioId es null");
             throw new IllegalArgumentException("Usuario ID no puede ser null");
         }
 
-        try {
-            PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
-                    .orElseGet(() -> {
-                        log.info("No existe personalización, creando default para usuario: {}", usuarioId);
-                        return crearPersonalizacionDefault(usuarioId);
-                    });
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-            log.info("Personalización encontrada: ID={}, tema={}, marco={}, fondo={}",
-                    personalizacion.getId(),
-                    personalizacion.getTemaId(),
-                    personalizacion.getMarcoId(),
-                    personalizacion.getFondoId());
+        PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
+                .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
 
-            return toDTO(personalizacion);
-        } catch (Exception e) {
-            log.error("Error al obtener personalización: {}", e.getMessage(), e);
-            throw e;
-        }
+        return toDTO(personalizacion, usuario);
+    }
+
+    // ============================================================
+    // OBTENER PERSONALIZACIÓN POR USUARIO (público)
+    // ============================================================
+    @Transactional(readOnly = true)
+    @Cacheable(
+            value = CACHE_PERSONALIZACION,
+            key = "'user:' + #usuarioId",
+            unless = "#result == null"
+    )
+    public PersonalizacionDTO obtenerPersonalizacionPorUsuario(Long usuarioId) {
+        log.info("[DB] Obteniendo personalización de usuario {} (público)", usuarioId);
+        return obtenerPersonalizacion(usuarioId);
     }
 
     // ============================================================
@@ -73,9 +75,8 @@ public class PersonalizacionService {
     // ============================================================
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_PERSONALIZACION, key = "#usuarioId"),
-            // Invalidar caches donde aparece la personalización
-            @CacheEvict(value = "perfil", key = "#usuarioId"),
+            @CacheEvict(value = CACHE_PERSONALIZACION, allEntries = true),
+            @CacheEvict(value = "perfil", allEntries = true),
             @CacheEvict(value = "posts", allEntries = true),
             @CacheEvict(value = "post", allEntries = true),
             @CacheEvict(value = "comentarios", allEntries = true),
@@ -84,51 +85,41 @@ public class PersonalizacionService {
             @CacheEvict(value = "documentos", allEntries = true)
     })
     public PersonalizacionDTO guardarPersonalizacion(Long usuarioId, String temaId, String marcoId, String fondoId) {
-        log.info("Guardando personalización para usuario: {} con parámetros: tema={}, marco={}, fondo={}",
+        log.info("Guardando personalización para usuario: {} con tema={}, marco={}, fondo={}",
                 usuarioId, temaId, marcoId, fondoId);
 
         if (usuarioId == null) {
-            log.error("usuarioId es null");
             throw new IllegalArgumentException("Usuario ID no puede ser null");
         }
 
-        try {
-            PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
-                    .orElseGet(() -> {
-                        log.info("No existe personalización, creando nueva para usuario: {}", usuarioId);
-                        return crearPersonalizacionDefault(usuarioId);
-                    });
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-            if (temaId != null && !temaId.isEmpty() && !temaId.equals(personalizacion.getTemaId())) {
-                log.info("Actualizando tema: {} -> {}", personalizacion.getTemaId(), temaId);
-                personalizacion.setTemaId(temaId);
-            }
-            if (marcoId != null && !marcoId.isEmpty() && !marcoId.equals(personalizacion.getMarcoId())) {
-                log.info("Actualizando marco: {} -> {}", personalizacion.getMarcoId(), marcoId);
-                personalizacion.setMarcoId(marcoId);
-            }
-            if (fondoId != null && !fondoId.isEmpty() && !fondoId.equals(personalizacion.getFondoId())) {
-                log.info("Actualizando fondo: {} -> {}", personalizacion.getFondoId(), fondoId);
-                personalizacion.setFondoId(fondoId);
-            }
+        PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
+                .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
 
-            personalizacion = personalizacionRepository.save(personalizacion);
-            log.info("Personalización guardada para usuario: {} con ID: {}", usuarioId, personalizacion.getId());
-
-            return toDTO(personalizacion);
-        } catch (Exception e) {
-            log.error("Error al guardar personalización: {}", e.getMessage(), e);
-            throw e;
+        if (temaId != null && !temaId.isEmpty() && !temaId.equals(personalizacion.getTemaId())) {
+            personalizacion.setTemaId(temaId);
         }
+        if (marcoId != null && !marcoId.isEmpty() && !marcoId.equals(personalizacion.getMarcoId())) {
+            personalizacion.setMarcoId(marcoId);
+        }
+        if (fondoId != null && !fondoId.isEmpty() && !fondoId.equals(personalizacion.getFondoId())) {
+            personalizacion.setFondoId(fondoId);
+        }
+
+        personalizacion = personalizacionRepository.save(personalizacion);
+        return toDTO(personalizacion, usuario);
     }
 
     // ============================================================
     // SUBIR FOTO DE PERFIL
+    // ✅ Solo actualiza USUARIO (fuente de verdad)
     // ============================================================
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_PERSONALIZACION, key = "#usuarioId"),
-            @CacheEvict(value = "perfil", key = "#usuarioId"),
+            @CacheEvict(value = CACHE_PERSONALIZACION, allEntries = true),
+            @CacheEvict(value = "perfil", allEntries = true),
             @CacheEvict(value = "posts", allEntries = true),
             @CacheEvict(value = "post", allEntries = true),
             @CacheEvict(value = "comentarios", allEntries = true),
@@ -141,20 +132,71 @@ public class PersonalizacionService {
     public PersonalizacionDTO subirFotoPerfil(Long usuarioId, MultipartFile archivo) {
         log.info("Subiendo foto de perfil para usuario: {}", usuarioId);
 
-        String url = cloudinaryService.subirArchivo(archivo, "perfiles");
-
-        PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
-                .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
-
-        personalizacion.setFotoPerfilUrl(url);
-        personalizacion = personalizacionRepository.save(personalizacion);
-
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+
+        String urlAnterior = usuario.getFotoPerfilUrl();
+
+        // ✅ Subir nueva a Cloudinary
+        String url = cloudinaryService.subirArchivo(archivo, "perfiles");
+
+        // ✅ Eliminar la anterior de Cloudinary
+        if (urlAnterior != null && !urlAnterior.isBlank()) {
+            log.info("Eliminando foto anterior de Cloudinary: {}", urlAnterior);
+            cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+        }
+
+        // ✅ Actualizar en usuario (fuente de verdad)
         usuario.setFotoPerfilUrl(url);
         usuarioRepository.save(usuario);
 
-        return toDTO(personalizacion);
+        // Devolver DTO (la personalización ya no guarda foto)
+        PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
+                .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
+
+        return toDTO(personalizacion, usuario);
+    }
+
+    // ============================================================
+    // ✅ ELIMINAR FOTO DE PERFIL
+    // ✅ Solo actualiza USUARIO (fuente de verdad)
+    // ============================================================
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CACHE_PERSONALIZACION, allEntries = true),
+            @CacheEvict(value = "perfil", allEntries = true),
+            @CacheEvict(value = "posts", allEntries = true),
+            @CacheEvict(value = "post", allEntries = true),
+            @CacheEvict(value = "comentarios", allEntries = true),
+            @CacheEvict(value = "respuestas", allEntries = true),
+            @CacheEvict(value = "documentos", allEntries = true),
+            @CacheEvict(value = "conversaciones", allEntries = true),
+            @CacheEvict(value = "miembrosGrupo", allEntries = true),
+            @CacheEvict(value = "gruposUsuario", allEntries = true)
+    })
+    public PersonalizacionDTO eliminarFotoPerfil(Long usuarioId) {
+        log.info("Eliminando foto de perfil para usuario: {}", usuarioId);
+
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+
+        String urlAnterior = usuario.getFotoPerfilUrl();
+
+        if (urlAnterior != null && !urlAnterior.isBlank()) {
+            log.info("Eliminando foto de Cloudinary: {}", urlAnterior);
+            cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+        }
+
+        // ✅ Poner null en usuario (ÚNICA fuente de verdad)
+        usuario.setFotoPerfilUrl(null);
+        usuarioRepository.save(usuario);
+
+        // Devolver DTO
+        PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
+                .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
+
+        log.info("✅ Foto de perfil eliminada para el usuario {}", usuarioId);
+        return toDTO(personalizacion, usuario);
     }
 
     // ============================================================
@@ -162,38 +204,41 @@ public class PersonalizacionService {
     // ============================================================
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_PERSONALIZACION, key = "#usuarioId"),
-            @CacheEvict(value = "perfil", key = "#usuarioId")
+            @CacheEvict(value = CACHE_PERSONALIZACION, allEntries = true),
+            @CacheEvict(value = "perfil", allEntries = true)
     })
     public PersonalizacionDTO subirFotoPortada(Long usuarioId, MultipartFile archivo) {
         log.info("Subiendo foto de portada para usuario: {}", usuarioId);
 
-        String url = cloudinaryService.subirArchivo(archivo, "portadas");
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
                 .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
 
+        String urlAnterior = personalizacion.getFotoPortadaUrl();
+        String url = cloudinaryService.subirArchivo(archivo, "portadas");
+
+        if (urlAnterior != null && !urlAnterior.isBlank()) {
+            cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+        }
+
         personalizacion.setFotoPortadaUrl(url);
         personalizacion = personalizacionRepository.save(personalizacion);
 
-        return toDTO(personalizacion);
+        return toDTO(personalizacion, usuario);
     }
 
     // ============================================================
-    // OBTENER MARCOS (hardcodeado, pero cacheado)
+    // MARCOS Y FONDOS
     // ============================================================
     @Cacheable(value = CACHE_MARCOS, key = "'all'")
     public List<MarcoDTO> obtenerMarcos(Long usuarioId) {
-        log.info("[CACHE] Obteniendo marcos para usuario: {}", usuarioId);
         return getMarcosDefault();
     }
 
-    // ============================================================
-    // OBTENER FONDOS (hardcodeado, pero cacheado)
-    // ============================================================
     @Cacheable(value = CACHE_FONDOS, key = "'all'")
     public List<FondoDTO> obtenerFondos(Long usuarioId) {
-        log.info("[CACHE] Obteniendo fondos para usuario: {}", usuarioId);
         return getFondosDefault();
     }
 
@@ -207,7 +252,7 @@ public class PersonalizacionService {
             @CacheEvict(value = "perfil", allEntries = true)
     })
     public void limpiarCache() {
-        log.info("Limpiando toda la caché de personalización");
+        log.info("Limpiando caché de personalización");
     }
 
     // ============================================================
@@ -262,28 +307,29 @@ public class PersonalizacionService {
         log.info("Creando personalización default para usuario: {}", usuarioId);
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> {
-                    log.error("Usuario no encontrado con ID: {}", usuarioId);
-                    return new RecursoNoEncontradoException("Usuario no encontrado con ID: " + usuarioId);
-                });
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado con ID: " + usuarioId));
 
         PersonalizacionUsuario personalizacion = PersonalizacionUsuario.builder()
                 .usuario(usuario)
                 .temaId("default")
                 .marcoId("none")
                 .fondoId("default")
-                .fotoPerfilUrl(usuario.getFotoPerfilUrl())
                 .build();
 
-        log.info("Personalización default creada para usuario: {}", usuarioId);
         return personalizacionRepository.save(personalizacion);
     }
 
-    private PersonalizacionDTO toDTO(PersonalizacionUsuario entity) {
+    /**
+     * ✅ toDTO: la foto SIEMPRE viene del USUARIO, no de la personalización.
+     */
+    private PersonalizacionDTO toDTO(PersonalizacionUsuario entity, Usuario usuario) {
         if (entity == null) {
             log.warn("Entity es null en toDTO");
             return null;
         }
+
+        // ✅ La foto se toma del USUARIO (fuente de verdad)
+        String fotoActual = usuario != null ? usuario.getFotoPerfilUrl() : null;
 
         return new PersonalizacionDTO(
                 entity.getId(),
@@ -291,7 +337,7 @@ public class PersonalizacionService {
                 entity.getTemaId() != null ? entity.getTemaId() : "default",
                 entity.getMarcoId() != null ? entity.getMarcoId() : "none",
                 entity.getFondoId() != null ? entity.getFondoId() : "default",
-                entity.getFotoPerfilUrl(),
+                fotoActual,   // ✅ Foto del usuario
                 entity.getFotoPortadaUrl(),
                 entity.getMarcoPersonalizadoUrl()
         );

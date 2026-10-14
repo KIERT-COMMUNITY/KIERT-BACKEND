@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/controller/PerfilController.java
 package com.kiert.backend.controller;
 
 import com.kiert.backend.dto.ActualizarFotoPerfilDTO;
@@ -21,6 +22,9 @@ public class PerfilController {
     private final PerfilService perfilService;
     private final UsuarioActual usuarioActual;
 
+    // ============================================================
+    // OBTENER PERFIL
+    // ============================================================
     @GetMapping
     @Cacheable(value = "perfil", key = "#usuarioActual.id()")
     public ResponseEntity<UsuarioDTO> obtenerPerfil() {
@@ -28,6 +32,9 @@ public class PerfilController {
         return ResponseEntity.ok(perfilService.obtenerPerfil(usuarioActual.id()));
     }
 
+    // ============================================================
+    // SUBIR FOTO (multipart)
+    // ============================================================
     @PostMapping(value = "/foto", consumes = "multipart/form-data")
     @CacheEvict(value = {"perfil", "usuarios", "personalizacion"}, allEntries = true)
     public ResponseEntity<UsuarioDTO> subirFoto(@RequestParam("archivo") MultipartFile archivo) {
@@ -36,6 +43,9 @@ public class PerfilController {
         return ResponseEntity.ok(usuario);
     }
 
+    // ============================================================
+    // ACTUALIZAR FOTO POR URL
+    // ============================================================
     @PatchMapping("/foto-url")
     @CacheEvict(value = {"perfil", "usuarios", "personalizacion"}, allEntries = true)
     public ResponseEntity<UsuarioDTO> actualizarFotoUrl(@RequestBody ActualizarFotoPerfilDTO datos) {
@@ -44,6 +54,20 @@ public class PerfilController {
         return ResponseEntity.ok(usuario);
     }
 
+    // ============================================================
+    // ✅ ELIMINAR FOTO DE PERFIL
+    // ============================================================
+    @DeleteMapping("/foto")
+    @CacheEvict(value = {"perfil", "usuarios", "personalizacion"}, allEntries = true)
+    public ResponseEntity<UsuarioDTO> eliminarFoto() {
+        log.info("Eliminando foto de perfil del usuario: {}", usuarioActual.id());
+        UsuarioDTO usuario = perfilService.eliminarFotoPerfil(usuarioActual.id());
+        return ResponseEntity.ok(usuario);
+    }
+
+    // ============================================================
+    // LIMPIAR CACHÉ
+    // ============================================================
     @DeleteMapping("/cache")
     @CacheEvict(value = {"perfil", "usuarios", "publicaciones", "busquedaUsuarios", "contactos", "solicitudes"}, allEntries = true)
     public ResponseEntity<Void> limpiarCache() {

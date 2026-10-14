@@ -96,9 +96,9 @@ kiert:
 
   # ========== CLOUDINARY CONFIGURATION ==========
   cloudinary:
-    cloud-name: ${vault.cloudinary.cloud-name:mlg68j4q}
-    api-key: ${vault.cloudinary.api-key:211297651585938}
-    api-secret: ${vault.cloudinary.api-secret:Ha4BGIzY4FuDPiRltpdlKHiKbpY}
+    cloud-name: ${vault.cloudinary.cloud-name:zopnporu}
+    api-key: ${vault.cloudinary.api-key:271319861416221}
+    api-secret: ${vault.cloudinary.api-secret:CyeOaPpO-eABboZou_R35PEKYs0}
 
 logging:
   level:

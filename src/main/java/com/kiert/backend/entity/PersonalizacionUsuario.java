@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/entity/PersonalizacionUsuario.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
@@ -34,8 +35,8 @@ public class PersonalizacionUsuario {
     @Builder.Default
     private String fondoId = "default";
 
-    @Column(name = "foto_perfil_url", length = 500)
-    private String fotoPerfilUrl;
+    // ✅ ELIMINADO: foto_perfil_url
+    // La foto de perfil SIEMPRE viene de usuarios.foto_perfil_url
 
     @Column(name = "foto_portada_url", length = 500)
     private String fotoPortadaUrl;
@@ -43,7 +44,6 @@ public class PersonalizacionUsuario {
     @Column(name = "marco_personalizado_url", length = 500)
     private String marcoPersonalizadoUrl;
 
-    //NUEVO: campo que faltaba
     @Column(name = "fecha_actualizacion")
     private Instant fechaActualizacion;
 

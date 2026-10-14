@@ -19,11 +19,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
     // ============================================================
     // BUSCAR POR USUARIO
     // ============================================================
-
-    /**
-     * Busca la personalización del usuario con su usuario cargado.
-     *  MEJORA: incluye JOIN FETCH para evitar N+1.
-     */
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             LEFT JOIN FETCH p.usuario
@@ -31,10 +26,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     Optional<PersonalizacionUsuario> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * NUEVO: Verifica si existe la personalización del usuario
-     * (sin cargar la entidad completa).
-     */
     @Query("""
             SELECT COUNT(p) > 0 FROM PersonalizacionUsuario p
             WHERE p.usuario.id = :usuarioId
@@ -42,12 +33,8 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
     boolean existeByUsuarioId(@Param("usuarioId") Long usuarioId);
 
     // ============================================================
-    // BUSCAR POR VALORES (para estadísticas)
+    // BUSCAR POR VALORES
     // ============================================================
-
-    /**
-     * NUEVO: Usuarios que usan un marco específico.
-     */
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             WHERE p.marcoId = :marcoId
@@ -55,9 +42,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     List<PersonalizacionUsuario> findByMarcoId(@Param("marcoId") String marcoId);
 
-    /**
-     * NUEVO: Usuarios que usan un fondo específico.
-     */
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             WHERE p.fondoId = :fondoId
@@ -65,9 +49,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     List<PersonalizacionUsuario> findByFondoId(@Param("fondoId") String fondoId);
 
-    /**
-     * NUEVO: Usuarios que usan un tema específico.
-     */
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             WHERE p.temaId = :temaId
@@ -76,13 +57,8 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
     List<PersonalizacionUsuario> findByTemaId(@Param("temaId") String temaId);
 
     // ============================================================
-    // CONTADORES (para popularidad)
+    // CONTADORES
     // ============================================================
-
-    /**
-     *NUEVO: Cuántos usuarios usan cada marco.
-     * Devuelve [marcoId, count].
-     */
     @Query("""
             SELECT p.marcoId, COUNT(p)
             FROM PersonalizacionUsuario p
@@ -92,10 +68,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     List<Object[]> contarUsuariosPorMarco();
 
-    /**
-     * NUEVO: Cuántos usuarios usan cada fondo.
-     * Devuelve [fondoId, count].
-     */
     @Query("""
             SELECT p.fondoId, COUNT(p)
             FROM PersonalizacionUsuario p
@@ -105,10 +77,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     List<Object[]> contarUsuariosPorFondo();
 
-    /**
-     * NUEVO: Cuántos usuarios usan cada tema.
-     * Devuelve [temaId, count].
-     */
     @Query("""
             SELECT p.temaId, COUNT(p)
             FROM PersonalizacionUsuario p
@@ -118,18 +86,12 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     List<Object[]> contarUsuariosPorTema();
 
-    /**
-     * NUEVO: Cuenta cuántos usuarios usan un marco específico.
-     */
     @Query("""
             SELECT COUNT(p) FROM PersonalizacionUsuario p
             WHERE p.marcoId = :marcoId
             """)
     long countByMarcoId(@Param("marcoId") String marcoId);
 
-    /**
-     * NUEVO: Cuenta cuántos usuarios usan un fondo específico.
-     */
     @Query("""
             SELECT COUNT(p) FROM PersonalizacionUsuario p
             WHERE p.fondoId = :fondoId
@@ -137,12 +99,8 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
     long countByFondoId(@Param("fondoId") String fondoId);
 
     // ============================================================
-    // USUARIOS CON FOTO DE PORTADA / MARCO PERSONALIZADO
+    // USUARIOS CON PORTADA / MARCO PERSONALIZADO
     // ============================================================
-
-    /**
-     * NUEVO: Usuarios que tienen foto de portada configurada.
-     */
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             WHERE p.fotoPortadaUrl IS NOT NULL
@@ -150,9 +108,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     Page<PersonalizacionUsuario> findConFotoPortada(Pageable pageable);
 
-    /**
-     * NUEVO: Usuarios que tienen marco personalizado (imagen).
-     */
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             WHERE p.marcoPersonalizadoUrl IS NOT NULL
@@ -163,11 +118,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
     // ============================================================
     // BULK UPDATES
     // ============================================================
-
-    /**
-     * NUEVO: Resetea la personalización de un usuario a valores por defecto.
-     * No elimina la fila, solo reinicia los valores.
-     */
     @Modifying
     @Query("""
             UPDATE PersonalizacionUsuario p
@@ -180,10 +130,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     int resetearPersonalizacion(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * NUEVO: Desasigna un marco de TODOS los usuarios que lo usan.
-     * Útil cuando se desactiva un marco.
-     */
     @Modifying
     @Query("""
             UPDATE PersonalizacionUsuario p
@@ -193,9 +139,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     int desasignarMarcoDeUsuarios(@Param("marcoId") String marcoId);
 
-    /**
-     * NUEVO: Desasigna un fondo de TODOS los usuarios que lo usan.
-     */
     @Modifying
     @Query("""
             UPDATE PersonalizacionUsuario p
@@ -205,9 +148,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     int desasignarFondoDeUsuarios(@Param("fondoId") String fondoId);
 
-    /**
-     *NUEVO: Desasigna un tema de TODOS los usuarios que lo usan.
-     */
     @Modifying
     @Query("""
             UPDATE PersonalizacionUsuario p
@@ -218,14 +158,8 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
     int desasignarTemaDeUsuarios(@Param("temaId") String temaId);
 
     // ============================================================
-    // LIMPIEZA (para @Scheduled)
+    // LIMPIEZA
     // ============================================================
-
-    /**
-     * NUEVO: Elimina personalizaciones huérfanas
-     * (usuarios que ya no existen, si no hay FK en cascada).
-     * Normalmente no es necesario porque tienes ON DELETE CASCADE.
-     */
     @Modifying
     @Query("""
             DELETE FROM PersonalizacionUsuario p
@@ -236,17 +170,9 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
     // ============================================================
     // ESTADÍSTICAS
     // ============================================================
-
-    /**
-     * NUEVO: Total de personalizaciones activas.
-     */
     @Query("SELECT COUNT(p) FROM PersonalizacionUsuario p")
     long countTotal();
 
-    /**
-     * NUEVO: Cuántos usuarios han personalizado su perfil
-     * (tienen algo distinto del default).
-     */
     @Query("""
             SELECT COUNT(p) FROM PersonalizacionUsuario p
             WHERE p.temaId <> 'default'
@@ -255,12 +181,5 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     long countPersonalizados();
 
-    /**
-     *NUEVO: Cuántos usuarios tienen foto de perfil personalizada.
-     */
-    @Query("""
-            SELECT COUNT(p) FROM PersonalizacionUsuario p
-            WHERE p.fotoPerfilUrl IS NOT NULL
-            """)
-    long countConFotoPerfil();
+    // ⚠️ ELIMINADO: countConFotoPerfil() — ya no existe el campo
 }
