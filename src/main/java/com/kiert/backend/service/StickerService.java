@@ -24,14 +24,11 @@ public class StickerService {
 
     private final StickerRepository stickerRepository;
     private final UsuarioRepository usuarioRepository;
-    private final StorageService storageService;
+    private final CloudinaryService cloudinaryService;
 
-    private static final long MAX_SIZE = 500 * 1024;  // 500 KB
-    private static final int MAX_ANCHO = 512;
-    private static final int MAX_ALTO = 512;
-
+    private static final long MAX_SIZE = 1024 * 1024;     // 1 MB
     private static final List<String> FORMATOS_VALIDOS = List.of(
-            "image/webp", "image/png", "image/gif", "image/jpeg"
+            "image/webp", "image/png", "image/gif", "image/jpeg", "image/jpg"
     );
 
     @Transactional(readOnly = true)
@@ -53,7 +50,8 @@ public class StickerService {
     @Transactional
     public StickerDTO crearSticker(Long usuarioId, String nombre,
                                    Boolean esPublico, MultipartFile archivo) {
-        log.info("Creando sticker para usuario {}: {}", usuarioId, nombre);
+        log.info("Creando sticker para usuario {}: {} (público: {})",
+                usuarioId, nombre, esPublico);
 
         if (nombre == null || nombre.trim().isEmpty()) {
             throw new IllegalArgumentException("El nombre del sticker es obligatorio");
@@ -70,7 +68,10 @@ public class StickerService {
         }
 
         String contentType = archivo.getContentType();
-        if (contentType == null || !FORMATOS_VALIDOS.contains(contentType.toLowerCase())) {
+        if (contentType == null) {
+            throw new IllegalArgumentException("No se pudo determinar el tipo de archivo");
+        }
+        if (!FORMATOS_VALIDOS.contains(contentType.toLowerCase())) {
             throw new IllegalArgumentException(
                     "Formato no válido. Usa WEBP, PNG, GIF o JPG."
             );
@@ -81,9 +82,9 @@ public class StickerService {
 
         String url;
         try {
-            url = storageService.subirArchivo(archivo);
+            url = cloudinaryService.subirArchivo(archivo, "stickers");
         } catch (Exception e) {
-            log.error("Error al subir sticker: {}", e.getMessage());
+            log.error("Error al subir sticker a Cloudinary: {}", e.getMessage(), e);
             throw new RuntimeException("Error al subir el sticker: " + e.getMessage());
         }
 
@@ -91,7 +92,7 @@ public class StickerService {
                 .usuario(usuario)
                 .nombre(nombre.trim())
                 .urlImagen(url)
-                .urlMiniatura(url)  // puedes generar miniatura si quieres
+                .urlMiniatura(url)
                 .tipoArchivo(contentType)
                 .pesoKb((int) (archivo.getSize() / 1024))
                 .esPublico(esPublico != null && esPublico)
@@ -100,22 +101,43 @@ public class StickerService {
                 .build();
 
         sticker = stickerRepository.save(sticker);
-        log.info("Sticker creado id={}", sticker.getId());
+        log.info("✅ Sticker creado id={} esPublico={} url={}",
+                sticker.getId(), sticker.getEsPublico(), sticker.getUrlImagen());
 
         return mapearADTO(sticker);
     }
 
+    // ============================================================
+    // ✅ ELIMINAR STICKER (borra de Cloudinary + soft delete en BD)
+    // ============================================================
     @Transactional
     public void eliminarSticker(Long stickerId, Long usuarioId) {
         Sticker sticker = stickerRepository.findById(stickerId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Sticker no encontrado"));
 
+        // Verificar que el sticker pertenece al usuario
         if (!sticker.getUsuario().getId().equals(usuarioId)) {
             throw new SecurityException("No puedes eliminar este sticker");
         }
 
+        // Si ya está inactivo, no hacer nada
+        if (!sticker.getActivo()) {
+            log.warn("Sticker {} ya estaba eliminado", stickerId);
+            return;
+        }
+
+        log.info("Eliminando sticker {} (usuario {})", stickerId, usuarioId);
+
+        // ✅ Eliminar de Cloudinary
+        if (sticker.getUrlImagen() != null) {
+            cloudinaryService.eliminarArchivoPorUrl(sticker.getUrlImagen());
+        }
+
+        // ✅ Soft delete en BD (mantener histórico)
         sticker.setActivo(false);
         stickerRepository.save(sticker);
+
+        log.info("✅ Sticker {} eliminado correctamente", stickerId);
     }
 
     private StickerDTO mapearADTO(Sticker s) {

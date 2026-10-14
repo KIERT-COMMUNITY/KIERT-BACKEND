@@ -23,10 +23,13 @@ public class PerfilService {
     private static final long MAX_FOTO_PERFIL_BYTES = 5L * 1024 * 1024;
 
     private final UsuarioRepository usuarioRepository;
-    private final StorageService storageService;
+    private final CloudinaryService cloudinaryService;
+
+    // ❌ ELIMINADO: PersonalizacionRepository (ya no se usa)
+    // ✅ La foto vive SOLO en usuarios.foto_perfil_url
 
     // ============================================================
-    // OBTENER PERFIL (lectura frecuente)
+    // OBTENER PERFIL
     // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = "perfil", key = "#usuarioId")
@@ -37,36 +40,13 @@ public class PerfilService {
     }
 
     // ============================================================
-    // ACTUALIZAR FOTO DE PERFIL (por URL)
+    // SUBIR FOTO DE PERFIL
+    // ✅ Solo actualiza usuarios.foto_perfil_url
     // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "perfil", key = "#usuarioId"),
-            // También invalidar listas donde aparece el usuario
-            @CacheEvict(value = "posts", allEntries = true),
-            @CacheEvict(value = "post", allEntries = true),
-            @CacheEvict(value = "comentarios", allEntries = true),
-            @CacheEvict(value = "respuestas", allEntries = true),
-            @CacheEvict(value = "documentos", allEntries = true),
-            @CacheEvict(value = "documento", allEntries = true),
-            @CacheEvict(value = "conversaciones", allEntries = true),
-            @CacheEvict(value = "miembrosGrupo", allEntries = true),
-            @CacheEvict(value = "gruposUsuario", allEntries = true)
-    })
-    public UsuarioDTO actualizarFotoPerfil(Long usuarioId, String urlFoto) {
-        log.info("Actualizando foto de perfil del usuario {}: {}", usuarioId, urlFoto);
-        Usuario usuario = buscar(usuarioId);
-        usuario.setFotoPerfilUrl(urlFoto);
-        usuario = usuarioRepository.save(usuario);
-        return aDTO(usuario);
-    }
-
-    // ============================================================
-    // SUBIR FOTO DE PERFIL (multipart)
-    // ============================================================
-    @Transactional
-    @Caching(evict = {
-            @CacheEvict(value = "perfil", key = "#usuarioId"),
+            @CacheEvict(value = "personalizacion", allEntries = true),
             @CacheEvict(value = "posts", allEntries = true),
             @CacheEvict(value = "post", allEntries = true),
             @CacheEvict(value = "comentarios", allEntries = true),
@@ -90,31 +70,117 @@ public class PerfilService {
             throw new BadRequestException("La imagen no debe superar los 5MB.");
         }
 
-        try {
-            String urlFoto = storageService.subirArchivo(archivo);
-            log.info("Foto de perfil subida para el usuario {}: {}", usuarioId, urlFoto);
+        Usuario usuario = buscar(usuarioId);
+        String urlAnterior = usuario.getFotoPerfilUrl();
 
-            // NO llamar a actualizarFotoPerfil() internamente.
-            // El @CacheEvict de este método ya se encarga de la invalidación.
-            Usuario usuario = buscar(usuarioId);
-            usuario.setFotoPerfilUrl(urlFoto);
+        try {
+            // ✅ Subir nueva a Cloudinary
+            String urlNueva = cloudinaryService.subirArchivo(archivo, "perfiles");
+            log.info("Foto de perfil subida: {}", urlNueva);
+
+            // ✅ Eliminar foto anterior de Cloudinary
+            if (urlAnterior != null && !urlAnterior.isBlank()) {
+                log.info("Eliminando foto anterior de Cloudinary: {}", urlAnterior);
+                cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+            }
+
+            // ✅ Actualizar en usuario (ÚNICA fuente de verdad)
+            usuario.setFotoPerfilUrl(urlNueva);
             usuario = usuarioRepository.save(usuario);
+
             return aDTO(usuario);
+
         } catch (BadRequestException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.error("Error al subir foto de perfil para el usuario {}: {}", usuarioId, ex.getMessage());
+            log.error("Error al subir foto de perfil: {}", ex.getMessage(), ex);
             throw new BadRequestException("No se pudo subir la imagen. Intenta nuevamente.");
         }
     }
 
     // ============================================================
-    // LIMPIAR CACHÉ MANUALMENTE
+    // ACTUALIZAR FOTO POR URL
+    // ============================================================
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "perfil", key = "#usuarioId"),
+            @CacheEvict(value = "personalizacion", allEntries = true),
+            @CacheEvict(value = "posts", allEntries = true),
+            @CacheEvict(value = "post", allEntries = true),
+            @CacheEvict(value = "comentarios", allEntries = true),
+            @CacheEvict(value = "respuestas", allEntries = true),
+            @CacheEvict(value = "documentos", allEntries = true),
+            @CacheEvict(value = "documento", allEntries = true),
+            @CacheEvict(value = "conversaciones", allEntries = true),
+            @CacheEvict(value = "miembrosGrupo", allEntries = true),
+            @CacheEvict(value = "gruposUsuario", allEntries = true)
+    })
+    public UsuarioDTO actualizarFotoPerfil(Long usuarioId, String urlFoto) {
+        log.info("Actualizando foto de perfil del usuario {}: {}", usuarioId, urlFoto);
+
+        Usuario usuario = buscar(usuarioId);
+        String urlAnterior = usuario.getFotoPerfilUrl();
+
+        // ✅ Eliminar la anterior de Cloudinary si cambia
+        if (urlAnterior != null && !urlAnterior.isBlank() && !urlAnterior.equals(urlFoto)) {
+            log.info("Eliminando foto anterior de Cloudinary: {}", urlAnterior);
+            cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+        }
+
+        // ✅ Actualizar en usuario (ÚNICA fuente de verdad)
+        usuario.setFotoPerfilUrl(urlFoto);
+        usuario = usuarioRepository.save(usuario);
+
+        return aDTO(usuario);
+    }
+
+    // ============================================================
+    // ✅ ELIMINAR FOTO DE PERFIL
+    // ✅ Solo actualiza usuarios.foto_perfil_url = null
+    // ============================================================
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "perfil", key = "#usuarioId"),
+            @CacheEvict(value = "personalizacion", allEntries = true),
+            @CacheEvict(value = "posts", allEntries = true),
+            @CacheEvict(value = "post", allEntries = true),
+            @CacheEvict(value = "comentarios", allEntries = true),
+            @CacheEvict(value = "respuestas", allEntries = true),
+            @CacheEvict(value = "documentos", allEntries = true),
+            @CacheEvict(value = "documento", allEntries = true),
+            @CacheEvict(value = "conversaciones", allEntries = true),
+            @CacheEvict(value = "miembrosGrupo", allEntries = true),
+            @CacheEvict(value = "gruposUsuario", allEntries = true)
+    })
+    public UsuarioDTO eliminarFotoPerfil(Long usuarioId) {
+        log.info("Eliminando foto de perfil del usuario {}", usuarioId);
+
+        Usuario usuario = buscar(usuarioId);
+        String urlAnterior = usuario.getFotoPerfilUrl();
+
+        if (urlAnterior == null || urlAnterior.isBlank()) {
+            log.warn("El usuario {} no tiene foto de perfil", usuarioId);
+            return aDTO(usuario);
+        }
+
+        // ✅ Eliminar de Cloudinary
+        log.info("Eliminando foto de Cloudinary: {}", urlAnterior);
+        cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+
+        // ✅ Poner null en usuario (ÚNICA fuente de verdad)
+        usuario.setFotoPerfilUrl(null);
+        usuario = usuarioRepository.save(usuario);
+
+        log.info("✅ Foto de perfil eliminada para el usuario {}", usuarioId);
+        return aDTO(usuario);
+    }
+
+    // ============================================================
+    // LIMPIAR CACHÉ
     // ============================================================
     @CacheEvict(value = "perfil", key = "#usuarioId")
     public void eliminarCachePerfil(Long usuarioId) {
         log.info("Eliminando caché del usuario {}", usuarioId);
-        // @CacheEvict ya hace el trabajo, no necesitas redisTemplate.delete()
     }
 
     // ============================================================

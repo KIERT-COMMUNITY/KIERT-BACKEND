@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/entity/ReaccionRespuesta.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
@@ -35,4 +36,9 @@ public class ReaccionRespuesta {
 
     @Column(name = "fecha_actualizacion")
     private Instant fechaActualizacion;
+
+    @PreUpdate
+    public void preUpdate() {
+        this.fechaActualizacion = Instant.now();
+    }
 }

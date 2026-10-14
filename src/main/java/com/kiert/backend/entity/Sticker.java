@@ -19,8 +19,6 @@ public class Sticker {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
@@ -35,7 +33,7 @@ public class Sticker {
     private String urlMiniatura;
 
     @Column(name = "tipo_archivo", length = 20)
-    private String tipoArchivo;  // image/webp, image/png, image/gif
+    private String tipoArchivo;
 
     @Column(name = "peso_kb")
     private Integer pesoKb;
@@ -47,14 +45,29 @@ public class Sticker {
     private Integer alto;
 
     @Column(name = "es_publico", nullable = false)
+    @Builder.Default
     private Boolean esPublico = false;
 
     @Column(name = "activo", nullable = false)
+    @Builder.Default
     private Boolean activo = true;
 
-    @Column(name = "fecha_creacion", nullable = false)
-    private Instant fechaCreacion;
+    @Column(name = "fecha_creacion", nullable = false, updatable = false)
+    @Builder.Default
+    private Instant fechaCreacion = Instant.now();
 
     @Column(name = "fecha_actualizacion")
     private Instant fechaActualizacion;
+
+    @PrePersist
+    public void prePersist() {
+        if (fechaCreacion == null) fechaCreacion = Instant.now();
+        if (activo == null) activo = true;
+        if (esPublico == null) esPublico = false;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        fechaActualizacion = Instant.now();
+    }
 }
