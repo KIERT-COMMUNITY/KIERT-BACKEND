@@ -17,6 +17,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -30,7 +31,6 @@ public class RecursoBibliotecaService {
     private final RecursoBibliotecaRepository recursoRepository;
     private final UsuarioRepository usuarioRepository;
 
-    // Nombres de caché centralizados
     private static final String CACHE_RECURSOS = "recursosBiblioteca";
     private static final String CACHE_RECURSO = "recursoBiblioteca";
     private static final String CACHE_DESTACADOS = "recursosDestacados";
@@ -38,7 +38,47 @@ public class RecursoBibliotecaService {
     private static final String CACHE_NIVELES = "nivelesBiblioteca";
 
     // ============================================================
-    // LECTURA (globales + propios del usuario)
+    // ✅ LISTA BLANCA DE DOMINIOS PERMITIDOS
+    // ============================================================
+    private static final List<String> DOMINIOS_PERMITIDOS = List.of(
+            // Cursos / educación
+            "coursera.org", "edx.org", "udemy.com", "udacity.com", "platzi.com",
+            "domestika.org", "crehana.com", "khanacademy.org", "classcentral.com",
+            "freecodecamp.org", "codecademy.com", "aprendesql.dev", "midu.link",
+            "mygreatlearning.com", "exceedlms.com", "nobook.com",
+            // Documentación técnica
+            "developer.mozilla.org", "docs.microsoft.com", "docs.python.org",
+            "docs.oracle.com", "docs.spring.io", "angular.io", "react.dev",
+            "vuejs.org", "nodejs.org", "kotlinlang.org", "go.dev", "rust-lang.org",
+            "minecraft.wiki", "wikipedia.org",
+            // Repositorios y herramientas
+            "github.com", "gitlab.com", "bitbucket.org", "stackoverflow.com",
+            "figma.com", "notion.so", "trello.com", "miro.com",
+            "photopea.com", "ninite.com", "ventoy.net", "rufus.ie",
+            "optijuegos.net", "4download.net", "technical.city", "ifixit.com",
+            // Idiomas
+            "duolingo.com", "babbel.com", "busuu.com", "lingoda.com",
+            // Video
+            "youtube.com", "vimeo.com", "ted.com",
+            // Artículos
+            "medium.com", "dev.to", "vidaextra.com", "scholar.google.com",
+            // Ciberseguridad
+            "hackthebox.com", "tryhackme.com", "netacad.com",
+            // IA
+            "openai.com", "anthropic.com", "claude.ai", "chatgpt.com",
+            "gemini.google.com", "perplexity.ai", "deepseek.com", "kimi.ai",
+            "grok.com", "toolify.ai", "opencode.ai", "pippit.ai",
+            // Otros
+            "kaggle.com", "hackerrank.com", "leetcode.com", "codewars.com",
+            "encoded.pe", "rebajitas.com", "itsfree.dev", "minecraftsearch.com",
+            "frivlegend.com", "kawaiianimes.app", "moewalls.com",
+            "wallpapercave.com", "wallpaper.mob.org", "alphacoders.com",
+            "geode-sdk.org", "viper.pages.dev", "rojatvdirecta.online",
+            "futbollibrefullhd.org", "capacitacionlaboral.trabajo.gob.pe"
+    );
+
+    // ============================================================
+    // LECTURA
     // ============================================================
 
     @Transactional(readOnly = true)
@@ -95,9 +135,8 @@ public class RecursoBibliotecaService {
     public List<RecursoBibliotecaDTO> buscar(Long usuarioId, String query) {
         log.info("Buscando recursos query={} para usuario {}", query, usuarioId);
         if (query == null || query.trim().isEmpty()) {
-            return listarTodos(usuarioId);  // usa caché
+            return listarTodos(usuarioId);
         }
-        // Búsqueda de texto libre — NO se cachea (muchas variantes)
         List<RecursoBiblioteca> recursos = (usuarioId != null)
                 ? recursoRepository.buscarVisiblesParaUsuario(usuarioId, query.trim())
                 : recursoRepository.buscar(query.trim());
@@ -113,7 +152,6 @@ public class RecursoBibliotecaService {
                     .map(this::toDTO)
                     .collect(Collectors.toList());
         }
-        // Búsqueda de texto libre — NO se cachea
         return recursoRepository.buscarPorCategoria(categoria, query.trim())
                 .stream()
                 .map(this::toDTO)
@@ -142,6 +180,8 @@ public class RecursoBibliotecaService {
     })
     public RecursoBibliotecaDTO crear(Long usuarioId, RecursoUsuarioRequest request) {
         log.info("Creando recurso para usuario {}", usuarioId);
+
+        validarUrl(request.getUrl());
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
@@ -179,6 +219,8 @@ public class RecursoBibliotecaService {
     })
     public RecursoBibliotecaDTO actualizar(Long usuarioId, Long recursoId, RecursoUsuarioRequest request) {
         log.info("Actualizando recurso {} del usuario {}", recursoId, usuarioId);
+
+        validarUrl(request.getUrl());
 
         RecursoBiblioteca recurso = recursoRepository.findById(recursoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
@@ -220,9 +262,83 @@ public class RecursoBibliotecaService {
 
         validarPropiedad(recurso, usuarioId);
 
-        recurso.setActivo(false); // borrado lógico
+        recurso.setActivo(false);
         recursoRepository.save(recurso);
         log.info("Recurso {} eliminado (lógico)", recursoId);
+    }
+
+    // ============================================================
+    // ✅ VALIDACIÓN DE URL (CORREGIDA: variables final para lambdas)
+    // ============================================================
+    private void validarUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            throw new IllegalArgumentException("La URL es obligatoria");
+        }
+
+        final String urlLimpia = url.trim();
+
+        // 1. Protocolo: SOLO https://
+        if (!urlLimpia.startsWith("https://")) {
+            throw new IllegalArgumentException(
+                    "La URL debe comenzar con https:// (no se permite http://)"
+            );
+        }
+
+        // 2. Validar formato
+        final URI uri;
+        try {
+            uri = URI.create(urlLimpia);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("La URL no tiene un formato válido");
+        }
+
+        final String hostRaw = uri.getHost();
+        if (hostRaw == null || hostRaw.isBlank()) {
+            throw new IllegalArgumentException("URL inválida: no tiene dominio");
+        }
+
+        // ✅ IMPORTANTE: usar variable FINAL para los lambdas
+        final String host = hostRaw.toLowerCase();
+
+        // 3. Bloquear IPs directas
+        if (host.matches("^\\d{1,3}(\\.\\d{1,3}){3}$")) {
+            throw new IllegalArgumentException(
+                    "No se permiten IPs directas, usa un dominio"
+            );
+        }
+
+        // 4. Bloquear localhost / IPs privadas
+        if (host.equals("localhost") || host.startsWith("127.") ||
+                host.startsWith("192.168.") || host.startsWith("10.") ||
+                host.startsWith("172.")) {
+            throw new IllegalArgumentException(
+                    "No se permiten URLs internas o locales"
+            );
+        }
+
+        // 5. Bloquear acortadores
+        final List<String> acortadores = List.of(
+                "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly",
+                "is.gd", "buff.ly", "shorturl.at", "cutt.ly", "rb.gy"
+        );
+        for (final String acortador : acortadores) {
+            if (host.equals(acortador) || host.endsWith("." + acortador)) {
+                throw new IllegalArgumentException(
+                        "No se permiten acortadores de URL (ocultan el destino real)"
+                );
+            }
+        }
+
+        // 6. Lista blanca de dominios — ✅ host es FINAL, se puede usar en lambda
+        final boolean permitido = DOMINIOS_PERMITIDOS.stream()
+                .anyMatch(d -> host.equals(d) || host.endsWith("." + d));
+
+        if (!permitido) {
+            throw new IllegalArgumentException(
+                    "El dominio '" + host + "' no está en la lista de sitios permitidos. " +
+                            "Si crees que es un sitio legítimo, contacta al administrador."
+            );
+        }
     }
 
     // ============================================================
@@ -257,10 +373,6 @@ public class RecursoBibliotecaService {
                 .collect(Collectors.joining(","));
         return joined.isEmpty() ? null : joined;
     }
-
-    // ============================================================
-    // DTO MAPPING
-    // ============================================================
 
     private RecursoBibliotecaDTO toDTO(RecursoBiblioteca entity) {
         List<String> tags = (entity.getTags() != null && !entity.getTags().isEmpty())

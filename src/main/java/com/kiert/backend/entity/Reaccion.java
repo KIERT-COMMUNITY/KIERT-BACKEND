@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/entity/Reaccion.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
@@ -6,7 +7,13 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "reacciones")
+@Table(
+        name = "reacciones",
+        indexes = {
+                @Index(name = "idx_reaccion_usuario_post", columnList = "usuario_id, post_id"),
+                @Index(name = "idx_reaccion_usuario_comentario", columnList = "usuario_id, comentario_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -39,4 +46,9 @@ public class Reaccion {
 
     @Column(name = "fecha_actualizacion")
     private Instant fechaActualizacion;
+
+    @PreUpdate
+    public void preUpdate() {
+        this.fechaActualizacion = Instant.now();
+    }
 }
