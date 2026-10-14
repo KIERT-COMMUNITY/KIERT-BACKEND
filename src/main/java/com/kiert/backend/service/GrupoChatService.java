@@ -35,6 +35,7 @@ public class GrupoChatService {
     private final InvitacionLinkRepository invitacionLinkRepository;
     private final GrupoHistorialRepository historialRepository;
     private final StorageService storageService;
+    private final StickerRepository stickerRepository;
     private final PresenciaService presenciaService;
 
     private static final String BASE_URL = "https://kiert.app/join/";
@@ -681,19 +682,26 @@ public class GrupoChatService {
         log.info("[DB] Obteniendo mensajes del grupo: {}", grupoId);
         List<MensajeGrupo> mensajes = mensajeRepository.findMensajesDeGrupo(grupoId);
         return mensajes.stream()
-                .map(m -> new MensajeGrupoDTO(
-                        m.getId(),
-                        m.getGrupo().getId(),
-                        m.getEmisor().getId(),
-                        m.getEmisor().getNombreUsuario(),
-                        m.getEmisor().getFotoPerfilUrl(),
-                        m.getContenido(),
-                        m.getTipoMensaje(),
-                        m.getUrlArchivo(),
-                        m.getNombreArchivo(),
-                        m.getFechaEnvio(),
-                        usuarioActualId != null && m.getEmisor().getId().equals(usuarioActualId)
-                ))
+                .map(m -> {
+                    boolean esSticker = "STICKER".equals(m.getTipoMensaje());
+
+                    return new MensajeGrupoDTO(
+                            m.getId(),
+                            m.getGrupo().getId(),
+                            m.getEmisor().getId(),
+                            m.getEmisor().getNombreUsuario(),
+                            m.getEmisor().getFotoPerfilUrl(),
+                            m.getContenido(),
+                            m.getTipoMensaje(),
+                            m.getUrlArchivo(),
+                            m.getNombreArchivo(),
+                            m.getFechaEnvio(),
+                            usuarioActualId != null && m.getEmisor().getId().equals(usuarioActualId),
+                            null,
+                            esSticker ? m.getUrlArchivo() : null,
+                            esSticker ? m.getNombreArchivo() : null
+                    );
+                })
                 .collect(Collectors.toList());
     }
 
@@ -1186,6 +1194,60 @@ public class GrupoChatService {
                 link.isActivo(),
                 link.getFechaCreacion(),
                 link.getFechaUltimoUso()
+        );
+    }
+    // En src/main/java/com/kiert/backend/service/GrupoChatService.java
+
+    @Transactional
+    @CacheEvict(value = CACHE_MENSAJES_GRUPO, key = "'grupo:' + #grupoId")
+    public MensajeGrupoDTO enviarStickerGrupo(Long grupoId, Long emisorId, Long stickerId) {
+        log.info("Enviando sticker {} al grupo {} desde el usuario {}", stickerId, grupoId, emisorId);
+
+        GrupoChat grupo = grupoRepository.findById(grupoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Grupo no encontrado"));
+
+        if (!miembroRepository.esMiembroActivo(grupoId, emisorId)) {
+            throw new SecurityException("No eres miembro activo de este grupo");
+        }
+
+        Usuario emisor = usuarioRepository.findById(emisorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+
+        Sticker sticker = stickerRepository
+                .findActivoDisponibleParaUsuario(stickerId, emisorId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "Sticker no encontrado, inactivo o no disponible para este usuario"
+                ));
+
+        MensajeGrupo mensaje = MensajeGrupo.builder()
+                .grupo(grupo)
+                .emisor(emisor)
+                .contenido("")
+                .tipoMensaje("STICKER")
+                .urlArchivo(sticker.getUrlImagen())
+                .nombreArchivo(sticker.getNombre())
+                .fechaEnvio(Instant.now())
+                .eliminado(false)
+                .build();
+
+        mensaje = mensajeRepository.save(mensaje);
+        log.info("Sticker enviado al grupo. mensajeId={}, stickerId={}", mensaje.getId(), sticker.getId());
+
+        return new MensajeGrupoDTO(
+                mensaje.getId(),
+                grupo.getId(),
+                emisor.getId(),
+                emisor.getNombreUsuario(),
+                emisor.getFotoPerfilUrl(),
+                mensaje.getContenido(),
+                mensaje.getTipoMensaje(),
+                mensaje.getUrlArchivo(),
+                mensaje.getNombreArchivo(),
+                mensaje.getFechaEnvio(),
+                true,
+                null,
+                sticker.getUrlImagen(),
+                sticker.getNombre()
         );
     }
 }

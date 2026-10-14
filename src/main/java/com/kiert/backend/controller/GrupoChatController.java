@@ -2,6 +2,7 @@
 package com.kiert.backend.controller;
 
 import com.kiert.backend.dto.*;
+import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.security.UsuarioActual;
 import com.kiert.backend.service.GrupoChatService;
 import lombok.RequiredArgsConstructor;
@@ -385,6 +386,41 @@ public class GrupoChatController {
             return ResponseEntity.ok(grupoService.listarHistorial(id, usuarioId));
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        }
+    }
+    @PostMapping("/{id}/mensajes/sticker")
+    public ResponseEntity<?> enviarSticker(
+            @PathVariable Long id,
+            @RequestBody Map<String, Long> body) {
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+
+        Long stickerId = body.get("stickerId");
+        if (stickerId == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El identificador del sticker es obligatorio"));
+        }
+
+        try {
+            return ResponseEntity.ok(
+                    grupoService.enviarStickerGrupo(id, usuarioId, stickerId)
+            );
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (RecursoNoEncontradoException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error al enviar sticker al grupo {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "No se pudo enviar el sticker"));
         }
     }
 }

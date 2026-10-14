@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/dto/MensajeGrupoDTO.java
 package com.kiert.backend.dto;
 
 import java.time.Instant;
@@ -15,35 +16,18 @@ public record MensajeGrupoDTO(
         String nombreArchivo,
         Instant fechaEnvio,
         boolean propio,
-        List<MensajeArchivoDTO> archivos
+        List<MensajeArchivoDTO> archivos,
+        String stickerUrl,
+        String stickerNombre
 ) {
-
+    // Constructor sin sticker ni archivos
     public MensajeGrupoDTO(
-            Long id,
-            Long grupoId,
-            Long emisorId,
-            String emisorNombre,
-            String emisorFoto,
-            String contenido,
-            String tipoMensaje,
-            String urlArchivo,
-            String nombreArchivo,
-            Instant fechaEnvio,
-            boolean propio
+            Long id, Long grupoId, Long emisorId, String emisorNombre, String emisorFoto,
+            String contenido, String tipoMensaje, String urlArchivo, String nombreArchivo,
+            Instant fechaEnvio, boolean propio
     ) {
-        this(
-                id,
-                grupoId,
-                emisorId,
-                emisorNombre,
-                emisorFoto,
-                contenido,
-                tipoMensaje,
-                urlArchivo,
-                nombreArchivo,
-                fechaEnvio,
-                propio,
-                null
-        );
+        this(id, grupoId, emisorId, emisorNombre, emisorFoto,
+                contenido, tipoMensaje, urlArchivo, nombreArchivo,
+                fechaEnvio, propio, null, null, null);
     }
 }

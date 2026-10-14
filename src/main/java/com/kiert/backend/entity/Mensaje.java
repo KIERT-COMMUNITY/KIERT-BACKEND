@@ -48,6 +48,10 @@ public class Mensaje {
     @Column(name = "nombre_archivo", length = 255)
     private String nombreArchivo;
 
+    // En Mensaje.java y MensajeGrupo.java
+    @Column(name = "sticker_id")
+    private Long stickerId;  // nullable
+
     // ============================================================
     // ESTADO DE LECTURA
     // ============================================================
