@@ -29,20 +29,13 @@ public class NotificacionService {
     private final RespuestaComentarioRepository respuestaRepository;
     private final GrupoChatRepository grupoChatRepository;
 
-    // Nombres de caché
     private static final String CACHE_NOTIFICACIONES = "notificaciones";
     private static final String CACHE_CONTADOR_NOTIFICACIONES = "contadorNotificaciones";
 
     // ============================================================
-    // CREAR NOTIFICACIONES (escritura + invalidación)
+    // CREAR NOTIFICACIONES EXISTENTES
     // ============================================================
 
-    /**
-     * NOTA: Se usa `allEntries = true` porque no podemos garantizar
-     * que `#result` esté disponible en el `@CacheEvict` en todas las versiones
-     * de Spring. Como las notificaciones se crean con baja frecuencia,
-     * invalidar todos los contadores es aceptable.
-     */
     @Transactional
     @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion crearNotificacionLike(Long usuarioOrigenId, Long postId) {
@@ -206,6 +199,187 @@ public class NotificacionService {
     }
 
     // ============================================================
+    // ✅ NUEVAS NOTIFICACIONES DE REPORTES
+    // ============================================================
+
+    /**
+     * ✅ Notifica al REPORTANTE cuando su reporte fue resuelto o rechazado.
+     */
+    @Transactional
+    @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
+    public Notificacion notificarResultadoAlReportante(
+            Usuario reportante,
+            Usuario moderador,
+            String estadoFinal,
+            String tipoReporte,
+            String motivoReporte,
+            String notaModerador,
+            String accionTomada
+    ) {
+        boolean resuelto = "RESUELTO".equals(estadoFinal);
+        String tipo = resuelto ? "REPORTE_RESUELTO" : "REPORTE_RECHAZADO";
+
+        StringBuilder mensaje = new StringBuilder();
+        if (resuelto) {
+            mensaje.append("✅ Tu reporte de <strong>")
+                    .append(tipoReporte)
+                    .append("</strong> fue <strong>resuelto</strong> por ")
+                    .append("<strong>").append(moderador.getNombreUsuario()).append("</strong>.");
+        } else {
+            mensaje.append("❌ Tu reporte de <strong>")
+                    .append(tipoReporte)
+                    .append("</strong> fue <strong>rechazado</strong> por ")
+                    .append("<strong>").append(moderador.getNombreUsuario()).append("</strong>.");
+        }
+
+        if (notaModerador != null && !notaModerador.trim().isEmpty()) {
+            String nota = notaModerador.length() > 100
+                    ? notaModerador.substring(0, 100) + "..."
+                    : notaModerador;
+            mensaje.append(" Nota: \"").append(nota).append("\"");
+        }
+
+        if (accionTomada != null && !accionTomada.equals("NINGUNA")) {
+            mensaje.append(" Acción: <strong>").append(accionTomada).append("</strong>.");
+        }
+
+        Notificacion notif = Notificacion.builder()
+                .usuarioDestino(reportante)
+                .usuarioOrigen(moderador)
+                .tipo(tipo)
+                .mensaje(mensaje.toString())
+                .leida(false)
+                .url("/mis-reportes")
+                .build();
+
+        Notificacion guardada = notificacionRepository.save(notif);
+        log.info("[NOTIF] Notificado al reportante {} (reporte {})",
+                reportante.getId(), estadoFinal);
+        return guardada;
+    }
+
+    /**
+     * ✅ Notifica a TODOS los moderadores que hay un nuevo reporte pendiente.
+     */
+    @Transactional
+    @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
+    public void notificarNuevoReporteAModeradores(
+            Usuario reportante,
+            Usuario usuarioReportado,
+            String tipoReporte,
+            String motivoReporte,
+            Long reporteId
+    ) {
+        // Buscar todos los usuarios con rol CEO/ADMIN/MODERADOR
+        List<Usuario> moderadores = usuarioRepository.findByRolIn(
+                List.of("CEO", "ADMIN", "MODERADOR")
+        );
+
+        if (moderadores.isEmpty()) {
+            log.warn("[NOTIF] No hay moderadores activos para notificar");
+            return;
+        }
+
+        // No notificar al propio reportante si es moderador
+        String mensaje = String.format(
+                "🚨 <strong>Nuevo reporte</strong> de tipo <strong>%s</strong> " +
+                        "(motivo: %s) enviado por <strong>%s</strong>.",
+                tipoReporte,
+                motivoReporte,
+                reportante.getNombreUsuario()
+        );
+
+        for (Usuario moderador : moderadores) {
+            // No notificarse a sí mismo si el reportante es moderador
+            if (moderador.getId().equals(reportante.getId())) continue;
+
+            Notificacion notif = Notificacion.builder()
+                    .usuarioDestino(moderador)
+                    .usuarioOrigen(reportante)
+                    .tipo("REPORTE_NUEVO")
+                    .mensaje(mensaje)
+                    .leida(false)
+                    .url("/admin/reportes")
+                    .build();
+
+            notificacionRepository.save(notif);
+        }
+
+        log.info("[NOTIF] Notificado a {} moderadores sobre reporte {}",
+                moderadores.size(), reporteId);
+    }
+
+    /**
+     * ✅ Notifica al USUARIO REPORTADO cuando se toma acción sobre su contenido.
+     * Ej: contenido eliminado, advertencia, baneo.
+     */
+    @Transactional
+    @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
+    public void notificarUsuarioReportado(
+            Usuario usuarioReportado,
+            Usuario moderador,
+            String accionTomada,
+            String motivoReporte,
+            String notaModerador
+    ) {
+        if (usuarioReportado == null) return;
+
+        String tipo;
+        String mensaje;
+        String icono;
+
+        switch (accionTomada) {
+            case "ADVERTENCIA" -> {
+                tipo = "ADVERTENCIA";
+                icono = "⚠️";
+                mensaje = String.format(
+                        "%s Has recibido una <strong>advertencia</strong> por " +
+                                "<strong>%s</strong>. Motivo: %s",
+                        icono, moderador.getNombreUsuario(), motivoReporte
+                );
+            }
+            case "ELIMINADO" -> {
+                tipo = "CONTENIDO_ELIMINADO";
+                icono = "🗑️";
+                mensaje = String.format(
+                        "%s Tu contenido fue <strong>eliminado</strong> por " +
+                                "<strong>%s</strong>. Motivo: %s",
+                        icono, moderador.getNombreUsuario(), motivoReporte
+                );
+            }
+            case "BANEADO" -> {
+                tipo = "USUARIO_BANEADO";
+                icono = "🚫";
+                mensaje = String.format(
+                        "%s Tu cuenta ha sido <strong>suspendida</strong> por " +
+                                "<strong>%s</strong>. Motivo: %s",
+                        icono, moderador.getNombreUsuario(), motivoReporte
+                );
+            }
+            default -> {
+                return; // No notificar si la acción es "NINGUNA"
+            }
+        }
+
+        if (notaModerador != null && !notaModerador.trim().isEmpty()) {
+            mensaje += " Nota: \"" + notaModerador.trim() + "\"";
+        }
+
+        Notificacion notif = Notificacion.builder()
+                .usuarioDestino(usuarioReportado)
+                .usuarioOrigen(moderador)
+                .tipo(tipo)
+                .mensaje(mensaje)
+                .leida(false)
+                .url("/perfil")
+                .build();
+
+        notificacionRepository.save(notif);
+        log.info("[NOTIF] Notificado al usuario reportado {} (acción {})",
+                usuarioReportado.getId(), accionTomada);
+    }
+
+    // ============================================================
     // LECTURA (caché)
     // ============================================================
 
@@ -245,8 +419,6 @@ public class NotificacionService {
     public void marcarComoLeidas(List<Long> ids, Long usuarioId) {
         if (ids == null || ids.isEmpty()) return;
         log.info("Marcando {} como leídas (usuario {})", ids.size(), usuarioId);
-
-        // CORREGIDO: pasar el 3er argumento (Instant)
         notificacionRepository.marcarComoLeidas(ids, usuarioId, Instant.now());
     }
 
@@ -257,8 +429,6 @@ public class NotificacionService {
     })
     public void marcarTodasComoLeidas(Long usuarioId) {
         log.info("Marcando todas como leídas (usuario {})", usuarioId);
-
-        // CORREGIDO: pasar el 2do argumento (Instant)
         notificacionRepository.marcarTodasComoLeidas(usuarioId, Instant.now());
     }
 

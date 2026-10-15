@@ -125,6 +125,9 @@ public class Usuario {
     @Builder.Default
     private List<PasswordResetToken> resetTokens = new ArrayList<>();
 
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private String rol = "USER";
     // ============================================================
     // METODOS AUXILIARES
     // ============================================================

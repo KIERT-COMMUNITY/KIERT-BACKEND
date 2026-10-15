@@ -23,9 +23,18 @@ public class UsuarioPrincipal implements UserDetails {
         return usuario.getId();
     }
 
+    public String getRol() {
+        return usuario.getRol() != null ? usuario.getRol() : "USER";
+    }
+
+    // ✅ Expone el rol como authority de Spring Security
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        String rol = getRol();
+        return List.of(
+                new SimpleGrantedAuthority("ROLE_" + rol),
+                new SimpleGrantedAuthority("ROLE_USER") // todos son USER también
+        );
     }
 
     @Override
@@ -48,5 +57,5 @@ public class UsuarioPrincipal implements UserDetails {
     public boolean isCredentialsNonExpired() { return true; }
 
     @Override
-    public boolean isEnabled() { return true; }
+    public boolean isEnabled() { return Boolean.TRUE.equals(usuario.getActivo()); }
 }

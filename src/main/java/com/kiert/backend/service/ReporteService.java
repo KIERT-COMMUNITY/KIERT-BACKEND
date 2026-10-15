@@ -29,11 +29,12 @@ public class ReporteService {
     private final ComentarioRepository comentarioRepository;
     private final RespuestaComentarioRepository respuestaRepository;
 
-    // Nombres de caché
+    // ✅ NUEVO: inyectar NotificacionService
+    private final NotificacionService notificacionService;
+
     private static final String CACHE_RESUMEN_REPORTES = "resumenReportes";
     private static final String CACHE_MIS_REPORTES = "misReportes";
 
-    // Motivos válidos
     private static final List<String> MOTIVOS_VALIDOS = List.of(
             "SPAM", "ACOSO", "CONTENIDO_INAPROPIADO", "VIOLENCIA",
             "DERECHOS_AUTOR", "INFORMACION_FALSA", "OTRO"
@@ -69,7 +70,6 @@ public class ReporteService {
         Usuario reportante = usuarioRepository.findById(usuarioReportanteId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        // Verificar reporte duplicado
         if (reporteRepository.existeReporteDuplicado(
                 usuarioReportanteId, dto.tipoReporte(),
                 dto.postId(), dto.comentarioId(), dto.respuestaId(), dto.usuarioReportadoId())) {
@@ -86,7 +86,6 @@ public class ReporteService {
                 .fechaCreacion(Instant.now())
                 .build();
 
-        // Cargar entidad según tipo
         switch (dto.tipoReporte()) {
             case "POST" -> {
                 if (dto.postId() == null) throw new IllegalArgumentException("postId es requerido");
@@ -117,7 +116,6 @@ public class ReporteService {
             }
         }
 
-        // No puedes reportarte a ti mismo
         if (reporte.getUsuarioReportado() != null &&
                 reporte.getUsuarioReportado().getId().equals(usuarioReportanteId)) {
             throw new IllegalStateException("No puedes reportarte a ti mismo");
@@ -126,18 +124,26 @@ public class ReporteService {
         reporte = reporteRepository.save(reporte);
         log.info("Reporte creado con ID: {}", reporte.getId());
 
+        // ✅ NUEVO: Notificar a TODOS los moderadores
+        try {
+            notificacionService.notificarNuevoReporteAModeradores(
+                    reportante,
+                    reporte.getUsuarioReportado(),
+                    reporte.getTipoReporte(),
+                    reporte.getMotivo(),
+                    reporte.getId()
+            );
+        } catch (Exception e) {
+            log.error("[NOTIF] Error al notificar a moderadores: {}", e.getMessage(), e);
+            // No romper el flujo principal
+        }
+
         return mapearADTO(reporte);
     }
 
     // ============================================================
-    // LISTAR REPORTES (paginado, sin caché)
+    // LISTAR REPORTES
     // ============================================================
-    /**
-     * NO se cachea porque:
-     * - Page<T> no es serializable fácilmente por Jackson
-     * - Los filtros + paginación generan muchísimas claves
-     * - Es una consulta de moderación, no un hot path
-     */
     @Transactional(readOnly = true)
     public Page<ReporteDTO> listarReportes(String estado, String tipo, Pageable pageable) {
         return reporteRepository.findWithFilters(estado, tipo, pageable)
@@ -156,12 +162,11 @@ public class ReporteService {
     }
 
     // ============================================================
-    // ACTUALIZAR ESTADO
+    // ACTUALIZAR ESTADO (con notificaciones)
     // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_RESUMEN_REPORTES, allEntries = true),
-            // No podemos saber qué usuario reportó sin consultar, así que invalidamos todos
             @CacheEvict(value = CACHE_MIS_REPORTES, allEntries = true)
     })
     public ReporteDTO actualizarEstado(Long reporteId, Long moderadorId, ActualizarReporteDTO dto) {
@@ -171,6 +176,8 @@ public class ReporteService {
         Usuario moderador = usuarioRepository.findById(moderadorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Moderador no encontrado"));
 
+        String estadoAnterior = reporte.getEstado();
+
         reporte.setEstado(dto.estado());
         reporte.setNotaModerador(dto.notaModerador());
         reporte.setAccionTomada(dto.accionTomada());
@@ -178,18 +185,60 @@ public class ReporteService {
         reporte.setFechaRevision(Instant.now());
 
         reporte = reporteRepository.save(reporte);
-        log.info("Reporte {} actualizado a estado {}", reporteId, dto.estado());
+        log.info("Reporte {} actualizado de {} a {}", reporteId, estadoAnterior, dto.estado());
+
+        // ============================================================
+        // ✅ NUEVO: Enviar notificaciones
+        // ============================================================
+        boolean estadoFinal = "RESUELTO".equals(dto.estado()) || "RECHAZADO".equals(dto.estado());
+        boolean cambioEstado = !dto.estado().equals(estadoAnterior);
+
+        if (estadoFinal && cambioEstado) {
+            // ✅ 1. Notificar al REPORTANTE
+            try {
+                notificacionService.notificarResultadoAlReportante(
+                        reporte.getUsuarioReportante(),
+                        moderador,
+                        dto.estado(),
+                        reporte.getTipoReporte(),
+                        reporte.getMotivo(),
+                        dto.notaModerador(),
+                        dto.accionTomada()
+                );
+            } catch (Exception e) {
+                log.error("[NOTIF] Error al notificar reportante: {}", e.getMessage(), e);
+            }
+
+            // ✅ 2. Notificar al USUARIO REPORTADO (si hay acción)
+            try {
+                if (reporte.getUsuarioReportado() != null
+                        && dto.accionTomada() != null
+                        && !dto.accionTomada().equals("NINGUNA")
+                        && "RESUELTO".equals(dto.estado())) {
+
+                    notificacionService.notificarUsuarioReportado(
+                            reporte.getUsuarioReportado(),
+                            moderador,
+                            dto.accionTomada(),
+                            reporte.getMotivo(),
+                            dto.notaModerador()
+                    );
+                }
+            } catch (Exception e) {
+                log.error("[NOTIF] Error al notificar usuario reportado: {}", e.getMessage(), e);
+            }
+        }
 
         return mapearADTO(reporte);
     }
 
     // ============================================================
-    // OBTENER RESUMEN (4 COUNT queries → cachear)
+    // OBTENER RESUMEN
     // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_RESUMEN_REPORTES, key = "'all'")
     public ReporteResumenDTO obtenerResumen() {
-        log.info("[DB] Obteniendo resumen de reportes (4 queries COUNT)");
+        log.info("[DB] Obteniendo resumen de reportes");
         return new ReporteResumenDTO(
                 reporteRepository.countByEstado("PENDIENTE"),
                 reporteRepository.countByEstado("REVISANDO"),

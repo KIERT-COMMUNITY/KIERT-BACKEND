@@ -21,10 +21,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // BUSCAR POR EMAIL
     // ============================================================
 
-    /**
-     *  MEJORA: filtra usuarios no eliminados.
-     * Un usuario borrado no debería poder iniciar sesión.
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.email = :email
@@ -32,15 +28,9 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     Optional<Usuario> findByEmail(@Param("email") String email);
 
-    /**
-     * NUEVO: Busca por email SIN filtrar eliminados (para admin/debug).
-     */
     @Query("SELECT u FROM Usuario u WHERE u.email = :email")
     Optional<Usuario> findByEmailIncluyendoEliminados(@Param("email") String email);
 
-    /**
-     * Verifica si existe un usuario con ese email (no eliminado).
-     */
     @Query("""
             SELECT COUNT(u) > 0 FROM Usuario u
             WHERE u.email = :email
@@ -52,9 +42,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // BUSCAR POR NOMBRE DE USUARIO
     // ============================================================
 
-    /**
-     *  MEJORA: filtra usuarios no eliminados.
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.nombreUsuario = :nombreUsuario
@@ -62,9 +49,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     Optional<Usuario> findByNombreUsuario(@Param("nombreUsuario") String nombreUsuario);
 
-    /**
-     * Verifica si existe el nombre de usuario (no eliminado).
-     */
     @Query("""
             SELECT COUNT(u) > 0 FROM Usuario u
             WHERE u.nombreUsuario = :nombreUsuario
@@ -76,10 +60,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // BÚSQUEDA POR NOMBRE (LIKE)
     // ============================================================
 
-    /**
-     * Busca usuarios por coincidencia parcial en el nombre.
-     * ⚠️ LIMITADO: sin paginación puede traer 10,000 usuarios.
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE LOWER(u.nombreUsuario) LIKE LOWER(CONCAT('%', :nombreUsuario, '%'))
@@ -88,9 +68,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     List<Usuario> findByNombreUsuarioContainingIgnoreCase(@Param("nombreUsuario") String nombreUsuario);
 
-    /**
-     *  NUEVO: Versión paginada (recomendada).
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE LOWER(u.nombreUsuario) LIKE LOWER(CONCAT('%', :query, '%'))
@@ -103,9 +80,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             Pageable pageable
     );
 
-    /**
-     *  NUEVO: Búsqueda unificada por email o nombre.
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.eliminado = false
@@ -121,9 +95,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             Pageable pageable
     );
 
-    /**
-     *  NUEVO: Busca usuarios excluyendo al actual (para invitar).
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.id <> :usuarioId
@@ -139,12 +110,69 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     );
 
     // ============================================================
-    // LISTADOS
+    // ✅ NUEVO: BUSCAR POR ROL (para notificar a moderadores)
     // ============================================================
 
     /**
-     *  NUEVO: Lista usuarios activos (no eliminados) paginados.
+     * Busca todos los usuarios que tengan uno de los roles indicados,
+     * estén activos y no eliminados.
+     *
+     * Uso típico:
+     *   usuarioRepository.findByRolIn(List.of("CEO", "ADMIN", "MODERADOR"));
      */
+    @Query("""
+            SELECT u FROM Usuario u
+            WHERE u.rol IN :roles
+              AND u.eliminado = false
+              AND u.activo = true
+            ORDER BY u.rol ASC, u.nombreUsuario ASC
+            """)
+    List<Usuario> findByRolIn(@Param("roles") List<String> roles);
+
+    /**
+     * ✅ NUEVO: Variante con paginación (por si algún día hay muchos admins).
+     */
+    @Query("""
+            SELECT u FROM Usuario u
+            WHERE u.rol IN :roles
+              AND u.eliminado = false
+              AND u.activo = true
+            ORDER BY u.rol ASC, u.nombreUsuario ASC
+            """)
+    Page<Usuario> findByRolInPaginado(
+            @Param("roles") List<String> roles,
+            Pageable pageable
+    );
+
+    /**
+     * ✅ NUEVO: Cuenta cuántos usuarios hay con un rol específico.
+     */
+    @Query("""
+            SELECT COUNT(u) FROM Usuario u
+            WHERE u.rol = :rol
+              AND u.eliminado = false
+              AND u.activo = true
+            """)
+    long countByRol(@Param("rol") String rol);
+
+    /**
+     * ✅ NUEVO: Busca un usuario por email Y rol (útil para validar CEO).
+     */
+    @Query("""
+            SELECT u FROM Usuario u
+            WHERE u.email = :email
+              AND u.rol = :rol
+              AND u.eliminado = false
+            """)
+    Optional<Usuario> findByEmailAndRol(
+            @Param("email") String email,
+            @Param("rol") String rol
+    );
+
+    // ============================================================
+    // LISTADOS
+    // ============================================================
+
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.eliminado = false
@@ -153,11 +181,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     Page<Usuario> findActivosPaginado(Pageable pageable);
 
-    /**
-     *  NUEVO: Lista usuarios en línea.
-     * La columna `en_linea` ya no se usa (migramos a Redis).
-     * Este método se mantiene por compatibilidad.
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.eliminado = false
@@ -166,9 +189,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     List<Usuario> findEnLinea();
 
-    /**
-     *  NUEVO: Últimos usuarios registrados.
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.eliminado = false
@@ -180,9 +200,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // VERIFICACIONES DE ESTADO
     // ============================================================
 
-    /**
-     *  NUEVO: Verifica si un usuario está activo y verificado.
-     */
     @Query("""
             SELECT COUNT(u) > 0 FROM Usuario u
             WHERE u.id = :id
@@ -192,9 +209,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     boolean estaActivoYVerificado(@Param("id") Long id);
 
-    /**
-     * NUEVO: Verifica si un usuario está eliminado.
-     */
     @Query("""
             SELECT COUNT(u) > 0 FROM Usuario u
             WHERE u.id = :id
@@ -206,18 +220,12 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // ADMIN: BÚSQUEDA AVANZADA
     // ============================================================
 
-    /**
-     * NUEVO: Lista TODOS los usuarios (incluyendo eliminados) para admin.
-     */
     @Query("""
             SELECT u FROM Usuario u
             ORDER BY u.fechaCreacion DESC
             """)
     Page<Usuario> findAllParaAdmin(Pageable pageable);
 
-    /**
-     * NUEVO: Lista usuarios eliminados (para restaurar).
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.eliminado = true
@@ -225,9 +233,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     Page<Usuario> findEliminados(Pageable pageable);
 
-    /**
-     * NUEVO: Lista usuarios bloqueados.
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.bloqueadoHasta IS NOT NULL
@@ -240,9 +245,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // BULK UPDATES
     // ============================================================
 
-    /**
-     * NUEVO: Restaura un usuario eliminado.
-     */
     @Modifying
     @Query("""
             UPDATE Usuario u
@@ -252,9 +254,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     int restaurar(@Param("id") Long id);
 
-    /**
-     * NUEVO: Marca varios usuarios como eliminados (soft delete bulk).
-     */
     @Modifying
     @Query("""
             UPDATE Usuario u
@@ -268,9 +267,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             @Param("fecha") Instant fecha
     );
 
-    /**
-     * NUEVO: Desbloquea usuarios cuyo `bloqueadoHasta` ya expiró.
-     */
     @Modifying
     @Query("""
             UPDATE Usuario u
@@ -285,9 +281,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // ESTADÍSTICAS
     // ============================================================
 
-    /**
-     * NUEVO: Total de usuarios activos (no eliminados).
-     */
     @Query("""
             SELECT COUNT(u) FROM Usuario u
             WHERE u.eliminado = false
@@ -295,9 +288,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     long countActivos();
 
-    /**
-     * NUEVO: Total de usuarios verificados.
-     */
     @Query("""
             SELECT COUNT(u) FROM Usuario u
             WHERE u.eliminado = false
@@ -305,15 +295,9 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     long countVerificados();
 
-    /**
-     * NUEVO: Total de usuarios eliminados.
-     */
     @Query("SELECT COUNT(u) FROM Usuario u WHERE u.eliminado = true")
     long countEliminados();
 
-    /**
-     * NUEVO: Usuarios registrados en un rango de fechas.
-     */
     @Query("""
             SELECT COUNT(u) FROM Usuario u
             WHERE u.fechaCreacion >= :desde
@@ -324,9 +308,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             @Param("hasta") Instant hasta
     );
 
-    /**
-     * NUEVO: Estadísticas agrupadas de usuarios.
-     */
     @Query("""
             SELECT
               COUNT(u) AS total,
@@ -342,9 +323,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // LIMPIEZA (para @Scheduled)
     // ============================================================
 
-    /**
-     * NUEVO: Elimina (hard delete) usuarios con soft-delete de más de N días.
-     */
     @Modifying
     @Query(value = """
             DELETE FROM usuarios
@@ -353,10 +331,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """, nativeQuery = true)
     int eliminarUsuariosBorradosAntiguos(@Param("limite") Instant limite);
 
-    /**
-     * NUEVO: Limpia usuarios que nunca verificaron su email
-     * después de N días.
-     */
     @Modifying
     @Query("""
             DELETE FROM Usuario u

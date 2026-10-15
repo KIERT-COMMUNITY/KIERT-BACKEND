@@ -35,6 +35,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+
                         // ===== RUTAS PÚBLICAS =====
 
                         // Swagger
@@ -50,10 +51,13 @@ public class SecurityConfig {
                         // Auth (login, registro, recuperación)
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // ✅ PRESENCIA (heartbeat y offline son públicos — sin token no hacen nada)
+                        // ✅ LOGIN DE ADMIN (público para poder autenticarse)
+                        .requestMatchers("/api/admin/auth/login").permitAll()
+
+                        // ✅ PRESENCIA
                         .requestMatchers("/api/presencia/**").permitAll()
 
-                        // ✅ Invitaciones por link (info pública)
+                        // ✅ Invitaciones por link
                         .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/grupos/invitacion/*/unirse").authenticated()
 
@@ -73,7 +77,7 @@ public class SecurityConfig {
                         // Reacciones GET público
                         .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
 
-                        // WEBSOCKET - COMPLETAMENTE PÚBLICO
+                        // WEBSOCKET
                         .requestMatchers(
                                 "/ws",
                                 "/ws/**",
@@ -88,7 +92,11 @@ public class SecurityConfig {
                                 "/ws/*/htmlfile"
                         ).permitAll()
 
-                        // ===== RUTAS PROTEGIDAS =====
+                        // ===== ✅ RUTAS DE ADMIN (solo CEO/ADMIN/MODERADOR) =====
+                        .requestMatchers("/api/admin/**")
+                        .hasAnyRole("CEO", "ADMIN", "MODERADOR")
+
+                        // ===== RUTAS PROTEGIDAS (usuarios normales) =====
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/usuarios/**").authenticated()
                         .requestMatchers("/api/personalizacion/**").authenticated()
@@ -98,6 +106,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/reportes/**").authenticated()
                         .requestMatchers("/api/perfil/**").authenticated()
                         .requestMatchers("/api/stickers/**").authenticated()
+
                         // Cualquier otra ruta requiere auth
                         .anyRequest().authenticated()
                 )
