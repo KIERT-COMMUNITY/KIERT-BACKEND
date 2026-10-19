@@ -4,6 +4,7 @@ package com.kiert.backend.service;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import com.kiert.backend.dto.ArchivoSubidoDTO;
+import com.kiert.backend.dto.ImagenSubidaDTO;
 import com.kiert.backend.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -262,6 +263,53 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir imagen: {}", e.getMessage(), e);
+            throw new BadRequestException("Error al subir la imagen: " + e.getMessage());
+        }
+    }
+
+    // ========== ✅ SUBIR IMAGEN CON DETALLES (para anuncios) ==========
+    /**
+     * Sube una imagen y devuelve todos los metadatos necesarios
+     * para guardarlos en la base de datos (URL, public_id, formato, peso, ancho, alto).
+     */
+    public ImagenSubidaDTO subirImagenConDetalles(MultipartFile imagen, String carpeta) {
+        try {
+            log.info("Subiendo imagen con detalles a Cloudinary: {}", imagen.getOriginalFilename());
+
+            if (imagen.getSize() > MAX_IMAGE_SIZE) {
+                throw new BadRequestException("La imagen no puede exceder los 15MB");
+            }
+
+            String contentType = imagen.getContentType();
+            if (contentType == null || !contentType.startsWith("image/") || contentType.equals("image/gif")) {
+                throw new BadRequestException("El archivo debe ser una imagen (no GIF)");
+            }
+
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(
+                    imagen.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", carpeta != null ? carpeta : "anuncios",
+                            "resource_type", "image",
+                            "use_filename", true,
+                            "unique_filename", true
+                    )
+            );
+
+            String url      = string(uploadResult.get("secure_url"));
+            String publicId = string(uploadResult.get("public_id"));
+            String formato  = string(uploadResult.get("format"));
+            Integer ancho   = intValue(uploadResult.get("width"));
+            Integer alto    = intValue(uploadResult.get("height"));
+            Long bytes      = longValue(uploadResult.get("bytes"));
+            Integer pesoKb  = bytes != null ? (int) (bytes / 1024) : null;
+
+            log.info("Imagen subida con detalles: url={}, publicId={}, formato={}, {}x{}, {}KB",
+                    url, publicId, formato, ancho, alto, pesoKb);
+
+            return new ImagenSubidaDTO(url, publicId, formato, pesoKb, ancho, alto);
+
+        } catch (IOException e) {
+            log.error("Error al subir imagen con detalles: {}", e.getMessage(), e);
             throw new BadRequestException("Error al subir la imagen: " + e.getMessage());
         }
     }

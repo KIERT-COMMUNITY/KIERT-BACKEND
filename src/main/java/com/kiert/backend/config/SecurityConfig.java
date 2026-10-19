@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -23,6 +24,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -91,6 +93,15 @@ public class SecurityConfig {
                                 "/ws/*/eventsource",
                                 "/ws/*/htmlfile"
                         ).permitAll()
+
+                        // ============================================================
+                        // ✅ ANUNCIOS PÚBLICOS (usuarios autenticados, solo lectura)
+                        //    Debe ir ANTES que /api/admin/** para no chocar
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET, "/api/anuncios/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
 
                         // ===== ✅ RUTAS DE ADMIN (solo CEO/ADMIN/MODERADOR) =====
                         .requestMatchers("/api/admin/**")
