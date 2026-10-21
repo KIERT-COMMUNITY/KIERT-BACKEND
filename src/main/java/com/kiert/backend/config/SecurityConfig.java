@@ -38,78 +38,63 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
 
-                        // ===== RUTAS PÚBLICAS =====
-
-                        // Swagger
+                        // ============================================================
+                        // 1. RUTAS PÚBLICAS (SIN AUTENTICACIÓN)
+                        // ============================================================
                         .requestMatchers(
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/swagger-resources/**",
-                                "/v3/api-docs/**",
-                                "/api-docs/**",
-                                "/webjars/**"
+                                "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**",
+                                "/v3/api-docs/**", "/api-docs/**", "/webjars/**"
                         ).permitAll()
-
-                        // Auth (login, registro, recuperación)
                         .requestMatchers("/api/auth/**").permitAll()
-
-                        // ✅ LOGIN DE ADMIN (público para poder autenticarse)
                         .requestMatchers("/api/admin/auth/login").permitAll()
-
-                        // ✅ PRESENCIA
                         .requestMatchers("/api/presencia/**").permitAll()
-
-                        // ✅ Invitaciones por link
                         .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/grupos/invitacion/*/unirse").authenticated()
-
-                        // Archivos públicos
                         .requestMatchers("/api/archivos/**").permitAll()
+                        .requestMatchers("/ws", "/ws/**").permitAll()
 
-                        // PUBLICACIONES: GET público, POST/PUT/DELETE requieren auth
+                        // ============================================================
+                        // 2. RUTAS PÚBLICAS DE LECTURA (GET)
+                        // ============================================================
                         .requestMatchers(HttpMethod.GET, "/api/publicaciones/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/comentarios/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
+
+                        // ============================================================
+                        // 3. ANUNCIOS PÚBLICOS (Lectura autenticada)
+                        //    IMPORTANTE: Va ANTES que /api/admin/** para no chocar
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET, "/api/anuncios/publicos").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/anuncios/**").authenticated()
+
+                        // Bloquear escritura pública en /api/anuncios/**
+                        .requestMatchers(HttpMethod.POST, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.PATCH, "/api/anuncios/**").denyAll()
+
+                        // ============================================================
+                        // 4. RUTAS DE ADMIN (Solo CEO, ADMIN, MODERADOR)
+                        //    NOTA: /api/admin/anuncios ya está cubierto por /api/admin/**
+                        // ============================================================
+                        .requestMatchers("/api/admin/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+
+                        // ============================================================
+                        // 5. SEGURIDAD EXTRA: Admins NO pueden acceder al chat de usuarios
+                        // ============================================================
+                        .requestMatchers("/api/chat/**").hasRole("USER")
+                        .requestMatchers("/api/usuarios/solicitud/**").hasRole("USER")
+                        .requestMatchers("/api/usuarios/contactos").hasRole("USER")
+                        .requestMatchers("/api/usuarios/solicitudes/pendientes").hasRole("USER")
+
+                        // ============================================================
+                        // 6. RUTAS PROTEGIDAS (Usuarios normales autenticados)
+                        // ============================================================
                         .requestMatchers(HttpMethod.POST, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/publicaciones/**").authenticated()
 
-                        // Comentarios GET público
-                        .requestMatchers(HttpMethod.GET, "/api/comentarios/**").permitAll()
-
-                        // Reacciones GET público
-                        .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
-
-                        // WEBSOCKET
-                        .requestMatchers(
-                                "/ws",
-                                "/ws/**",
-                                "/ws/info",
-                                "/ws/info/**",
-                                "/ws/iframe.html",
-                                "/ws/*/xhr",
-                                "/ws/*/xhr_streaming",
-                                "/ws/*/xhr_send",
-                                "/ws/*/websocket",
-                                "/ws/*/eventsource",
-                                "/ws/*/htmlfile"
-                        ).permitAll()
-
-                        // ============================================================
-                        // ✅ ANUNCIOS PÚBLICOS (usuarios autenticados, solo lectura)
-                        //    Debe ir ANTES que /api/admin/** para no chocar
-                        // ============================================================
-                        .requestMatchers(HttpMethod.GET, "/api/anuncios/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/anuncios/**").denyAll()
-                        .requestMatchers(HttpMethod.PUT, "/api/anuncios/**").denyAll()
-                        .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
-
-                        // ===== ✅ RUTAS DE ADMIN (solo CEO/ADMIN/MODERADOR) =====
-                        .requestMatchers("/api/admin/**")
-                        .hasAnyRole("CEO", "ADMIN", "MODERADOR")
-
-                        // ===== RUTAS PROTEGIDAS (usuarios normales) =====
-                        .requestMatchers("/api/chat/**").authenticated()
-                        .requestMatchers("/api/usuarios/**").authenticated()
                         .requestMatchers("/api/personalizacion/**").authenticated()
                         .requestMatchers("/api/grupos/**").authenticated()
                         .requestMatchers("/api/notificaciones/**").authenticated()
@@ -117,8 +102,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/reportes/**").authenticated()
                         .requestMatchers("/api/perfil/**").authenticated()
                         .requestMatchers("/api/stickers/**").authenticated()
+                        .requestMatchers("/api/usuarios/**").authenticated()
 
-                        // Cualquier otra ruta requiere auth
+                        // ============================================================
+                        // 7. CUALQUIER OTRA RUTA REQUIERE AUTH
+                        // ============================================================
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
@@ -130,22 +118,13 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:4200",
-                "http://localhost:53334",
-                "http://localhost:8080",
-                "http://127.0.0.1:4200",
-                "*"
+                "http://localhost:4200", "http://localhost:53334",
+                "http://localhost:8080", "http://127.0.0.1:4200", "*"
         ));
-        configuration.setAllowedMethods(List.of(
-                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"
-        ));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of(
-                "Authorization",
-                "Content-Type",
-                "X-Requested-With",
-                "Accept",
-                "Origin"
+                "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"
         ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

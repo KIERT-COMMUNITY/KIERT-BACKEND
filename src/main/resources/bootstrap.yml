@@ -2,27 +2,142 @@ spring:
   application:
     name: kiert-backend
 
-  cloud:
-    vault:
+  profiles:
+    active: mysql
+
+  jackson:
+    default-property-inclusion: non_null
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 60MB
+
+  # ========== REDIS CONFIGURATION ==========
+  data:
+    redis:
       host: localhost
-      port: 8200
-      scheme: http
-      authentication: TOKEN
-     # token:
-      # CORREGIDO - Configuración correcta de KV
-      kv:
-        enabled: true
-        backend: secret
-        default-context: kiert-backend  # SIN "secret/" al inicio
+      port: 6379
+      timeout: 5000ms
+      database: 0
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
 
-      connection-timeout: 5000
-      read-timeout: 15000
-      fail-fast: true
+  # ========== CACHE CONFIGURATION ==========
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1800000  # 30 minutos
+      cache-null-values: false
+      key-prefix: "kiert:"
 
-      ssl:
-        enabled: false
+  # ========== MAIL CONFIGURATION ==========
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: keanovpaginawebyproyectos@gmail.com
+    password: gntt popc upns zfpy
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+server:
+  port: 8081
+
+  error:
+    include-message: always
+
+# ========== SWAGGER/OPENAPI ==========
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+    filter: true
+    display-request-duration: true
+    disable-swagger-default-url: true
+    use-root-path: false
+  show-actuator: true
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+  packages-to-scan: com.kiert.backend.controller
+  paths-to-match: /api/**
+
+# ========== JWT CONFIGURATION ==========
+kiert:
+  jwt:
+    secret: 5ea8bc5772b55186e648930d752def86b48d09657d8e5d52f04d3b76bc5e2f9a
+    expiration-ms: 86400000  # 24 horas
+  cors:
+    allowed-origins:
+      - "http://localhost:4200"
+      - "http://localhost:53334"
+      - "*"
+  frontend:
+    reset-password-url: "http://localhost:4200/restablecer-contrasena"
+
+  # ========== CLOUDINARY CONFIGURATION ==========
+  cloudinary:
+    cloud-name: zopnporu
+    api-key: 271319861416221
+    api-secret: CyeOaPpO-eABboZou_R35PEKYs0
 
 logging:
   level:
-    org.springframework.cloud.vault: DEBUG
-    org.springframework.vault: DEBUG
+    com.kiert.backend: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+
+---
+# ========== PERFIL: mysql ==========
+spring:
+  config:
+    activate:
+      on-profile: mysql
+
+  # ========== DATASOURCE MYSQL ==========
+  datasource:
+    url: jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
+    username: root
+    password: adrian.200503
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # ========== JPA ==========
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      ddl-auto: update
+      show-sql: true
+      format-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  sql:
+    init:
+      mode: never

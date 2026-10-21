@@ -15,14 +15,6 @@ import java.util.Optional;
 @Repository
 public interface PasswordResetTokenRepository extends JpaRepository<PasswordResetToken, Long> {
 
-    // ============================================================
-    // BUSCAR POR TOKEN
-    // ============================================================
-
-    /**
-     * Busca un token por su valor, cargando el usuario asociado.
-     * NO valida expiración ni uso. Usa `findVigenteByToken` en su lugar.
-     */
     @Query("""
             SELECT t FROM PasswordResetToken t
             LEFT JOIN FETCH t.usuario
@@ -30,10 +22,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             """)
     Optional<PasswordResetToken> findByToken(@Param("token") String token);
 
-    /**
-     *  NUEVO: Busca un token VIGENTE por valor.
-     * Filtra `usado = false` y `fechaExpiracion > :ahora` EN LA QUERY.
-     */
     @Query("""
             SELECT t FROM PasswordResetToken t
             LEFT JOIN FETCH t.usuario
@@ -46,9 +34,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             @Param("ahora") Instant ahora
     );
 
-    /**
-     * NUEVO: Verifica si un token es válido (sin cargar la entidad).
-     */
     @Query("""
             SELECT COUNT(t) > 0 FROM PasswordResetToken t
             WHERE t.token = :token
@@ -60,14 +45,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // BUSCAR POR USUARIO
-    // ============================================================
-
-    /**
-     * Lista tokens de un usuario ordenados por fecha DESC.
-     *  MEJORA: ordena por fecha para consistencia.
-     */
     @Query("""
             SELECT t FROM PasswordResetToken t
             WHERE t.usuario.id = :usuarioId
@@ -75,9 +52,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             """)
     List<PasswordResetToken> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * NUEVO: Tokens vigentes de un usuario (no usados, no expirados).
-     */
     @Query("""
             SELECT t FROM PasswordResetToken t
             WHERE t.usuario.id = :usuarioId
@@ -90,9 +64,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             @Param("ahora") Instant ahora
     );
 
-    /**
-     *NUEVO: Cuenta tokens vigentes de un usuario (para rate limiting).
-     */
     @Query("""
             SELECT COUNT(t) FROM PasswordResetToken t
             WHERE t.usuario.id = :usuarioId
@@ -104,14 +75,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // INVALIDAR TOKENS
-    // ============================================================
-
-    /**
-     *NUEVO: Invalida todos los tokens vigentes de un usuario.
-     * Útil antes de generar un nuevo token (evita múltiples activos).
-     */
     @Modifying
     @Query("""
             UPDATE PasswordResetToken t
@@ -125,10 +88,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             @Param("ahora") Instant ahora
     );
 
-    /**
-     * NUEVO: Invalida todos los tokens vigentes de un email.
-     * (útil si el usuario cambió de email recientemente)
-     */
     @Modifying
     @Query("""
             UPDATE PasswordResetToken t
@@ -142,14 +101,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // MARCAR COMO USADO
-    // ============================================================
-
-    /**
-     * NUEVO: Marca un token específico como usado (bulk).
-     * Más eficiente que `save()` tras `findByToken`.
-     */
     @Modifying
     @Query("""
             UPDATE PasswordResetToken t
@@ -163,13 +114,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // LIMPIEZA (para @Scheduled)
-    // ============================================================
-
-    /**
-     * NUEVO: Elimina tokens usados o expirados con más de N días.
-     */
     @Modifying
     @Query("""
             DELETE FROM PasswordResetToken t
@@ -178,9 +122,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             """)
     int eliminarTokensAntiguos(@Param("limite") Instant limite);
 
-    /**
-     * NUEVO: Cuenta cuántos tokens se eliminarán (para saber el impacto).
-     */
     @Query("""
             SELECT COUNT(t) FROM PasswordResetToken t
             WHERE t.fechaExpiracion < :limite
@@ -188,14 +129,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             """)
     long countTokensAntiguos(@Param("limite") Instant limite);
 
-    // ============================================================
-    // AUDITORÍA / SEGURIDAD
-    // ============================================================
-
-    /**
-     * NUEVO: Cuenta tokens solicitados por una IP en un período.
-     * Útil para rate limiting adicional.
-     */
     @Query("""
             SELECT COUNT(t) FROM PasswordResetToken t
             WHERE t.ipSolicitante = :ip
@@ -206,10 +139,6 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             @Param("desde") Instant desde
     );
 
-    /**
-     * NUEVO: Top IPs con más solicitudes (para detectar abuso).
-     * Devuelve [ip, count].
-     */
     @Query("""
             SELECT t.ipSolicitante, COUNT(t) as total
             FROM PasswordResetToken t
@@ -220,19 +149,9 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
             """)
     List<Object[]> topIpsConMasSolicitudes(@Param("desde") Instant desde);
 
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
-
-    /**
-     * NUEVO: Total de tokens generados en el sistema.
-     */
     @Query("SELECT COUNT(t) FROM PasswordResetToken t")
     long countTotal();
 
-    /**
-     * NUEVO: Tokens vigentes en el sistema (todos los usuarios).
-     */
     @Query("""
             SELECT COUNT(t) FROM PasswordResetToken t
             WHERE t.usado = false

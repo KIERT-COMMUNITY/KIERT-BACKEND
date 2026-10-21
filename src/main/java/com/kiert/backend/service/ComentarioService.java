@@ -1,7 +1,9 @@
+// src/main/java/com/kiert/backend/service/ComentarioService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
 import com.kiert.backend.entity.*;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -31,21 +33,21 @@ public class ComentarioService {
     private final ReaccionRespuestaRepository reaccionRespuestaRepository;
     private final NotificacionService notificationService;
 
-    // Nombres de caché centralizados
     private static final String CACHE_COMENTARIOS = "comentarios";
     private static final String CACHE_RESPUESTAS = "respuestas";
     private static final String CACHE_REACCIONES_COMENTARIO = "reaccionesComentario";
     private static final String CACHE_REACCIONES_RESPUESTA = "reaccionesRespuesta";
+
+    private static final int MAX_CONTENIDO = 2000;
+    private static final List<String> TIPOS_REACCION_VALIDOS =
+            List.of("like", "love", "haha", "wow", "sad", "angry");
 
     // ============================================================
     // COMENTARIOS
     // ============================================================
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_COMENTARIOS,
-            key = "'post:' + #postId"
-    )
+    @Cacheable(value = CACHE_COMENTARIOS, key = "'post:' + #postId")
     public List<ComentarioDTO> listarPorPost(Long postId) {
         log.info("[DB] Listando comentarios del post: {}", postId);
         List<Comentario> comentarios = comentarioRepository
@@ -64,8 +66,22 @@ public class ComentarioService {
     public ComentarioDTO crearComentario(Long postId, Long autorId, String contenido) {
         log.info("Creando comentario en post: {}, usuario: {}", postId, autorId);
 
+        if (postId == null || autorId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (contenido == null || contenido.isBlank()) {
+            throw new BadRequestException("El comentario no puede estar vacío");
+        }
+        if (contenido.length() > MAX_CONTENIDO) {
+            throw new BadRequestException("El comentario es demasiado largo");
+        }
+
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
+
+        if (post.isEliminado()) {
+            throw new BadRequestException("El post ya no está disponible");
+        }
 
         Usuario autor = usuarioRepository.findById(autorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -73,7 +89,7 @@ public class ComentarioService {
         Comentario comentario = Comentario.builder()
                 .post(post)
                 .autor(autor)
-                .contenido(contenido)
+                .contenido(contenido.trim())
                 .eliminado(false)
                 .build();
 
@@ -81,7 +97,11 @@ public class ComentarioService {
         log.info("Comentario creado con ID: {}", comentario.getId());
 
         if (!autorId.equals(post.getAutor().getId())) {
-            notificationService.crearNotificacionComentario(autorId, postId, comentario.getId());
+            try {
+                notificationService.crearNotificacionComentario(autorId, postId, comentario.getId());
+            } catch (Exception e) {
+                log.warn("Error creando notificación: {}", e.getMessage());
+            }
         }
 
         return toComentarioDTO(comentario);
@@ -98,11 +118,16 @@ public class ComentarioService {
     public void eliminarComentario(Long comentarioId, Long usuarioId) {
         log.info("Eliminando comentario: {}", comentarioId);
 
-        Comentario comentario = comentarioRepository.findById(comentarioId)
+        if (comentarioId == null || usuarioId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+
+        Comentario comentario = comentarioRepository.findActivoConAutor(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
 
         if (!comentario.getAutor().getId().equals(usuarioId)) {
-            throw new RuntimeException("No tienes permiso para eliminar este comentario");
+            // ⚠️ MENSAJE GENÉRICO: no revelar que el comentario existe
+            throw new BadRequestException("No tienes permiso para eliminar este comentario");
         }
 
         comentario.setEliminado(true);
@@ -116,10 +141,7 @@ public class ComentarioService {
     // ============================================================
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_RESPUESTAS,
-            key = "'comentario:' + #comentarioId"
-    )
+    @Cacheable(value = CACHE_RESPUESTAS, key = "'comentario:' + #comentarioId")
     public List<RespuestaDTO> listarRespuestas(Long comentarioId) {
         log.info("[DB] Listando respuestas del comentario: {}", comentarioId);
         List<RespuestaComentario> respuestas = respuestaRepository
@@ -137,8 +159,22 @@ public class ComentarioService {
     public RespuestaDTO crearRespuesta(Long comentarioId, Long autorId, String contenido) {
         log.info("Creando respuesta al comentario: {}, usuario: {}", comentarioId, autorId);
 
-        Comentario comentario = comentarioRepository.findById(comentarioId)
+        if (comentarioId == null || autorId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (contenido == null || contenido.isBlank()) {
+            throw new BadRequestException("La respuesta no puede estar vacía");
+        }
+        if (contenido.length() > MAX_CONTENIDO) {
+            throw new BadRequestException("La respuesta es demasiado larga");
+        }
+
+        Comentario comentario = comentarioRepository.findActivoConAutor(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
+
+        if (comentario.isEliminado()) {
+            throw new BadRequestException("El comentario ya no está disponible");
+        }
 
         Usuario autor = usuarioRepository.findById(autorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -146,7 +182,7 @@ public class ComentarioService {
         RespuestaComentario respuesta = RespuestaComentario.builder()
                 .comentario(comentario)
                 .autor(autor)
-                .contenido(contenido)
+                .contenido(contenido.trim())
                 .eliminado(false)
                 .build();
 
@@ -154,7 +190,11 @@ public class ComentarioService {
         log.info("Respuesta creada con ID: {}", respuesta.getId());
 
         if (!autorId.equals(comentario.getAutor().getId())) {
-            notificationService.crearNotificacionRespuesta(autorId, comentarioId, respuesta.getId());
+            try {
+                notificationService.crearNotificacionRespuesta(autorId, comentarioId, respuesta.getId());
+            } catch (Exception e) {
+                log.warn("Error creando notificación: {}", e.getMessage());
+            }
         }
 
         return toRespuestaDTO(respuesta);
@@ -168,11 +208,15 @@ public class ComentarioService {
     public void eliminarRespuesta(Long respuestaId, Long usuarioId) {
         log.info("Eliminando respuesta: {}", respuestaId);
 
-        RespuestaComentario respuesta = respuestaRepository.findById(respuestaId)
+        if (respuestaId == null || usuarioId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+
+        RespuestaComentario respuesta = respuestaRepository.findActivaById(respuestaId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Respuesta no encontrada"));
 
         if (!respuesta.getAutor().getId().equals(usuarioId)) {
-            throw new RuntimeException("No tienes permiso para eliminar esta respuesta");
+            throw new BadRequestException("No tienes permiso para eliminar esta respuesta");
         }
 
         respuesta.setEliminado(true);
@@ -193,8 +237,19 @@ public class ComentarioService {
     public Map<String, Long> reaccionarComentario(Long comentarioId, Long usuarioId, String tipo) {
         log.info("Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioId);
 
-        Comentario comentario = comentarioRepository.findById(comentarioId)
+        if (comentarioId == null || usuarioId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (tipo == null || !TIPOS_REACCION_VALIDOS.contains(tipo)) {
+            throw new BadRequestException("Tipo de reacción inválido");
+        }
+
+        Comentario comentario = comentarioRepository.findActivoConAutor(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
+
+        if (comentario.isEliminado()) {
+            throw new BadRequestException("El comentario ya no está disponible");
+        }
 
         Reaccion reaccion = reaccionRepository
                 .findByUsuarioIdAndComentarioId(usuarioId, comentarioId)
@@ -219,8 +274,6 @@ public class ComentarioService {
             log.info("Nueva reacción creada: {}", tipo);
         }
 
-        // Consulta directa a MySQL (el caché ya fue invalidado arriba, no lo usamos aquí
-        // porque queremos el valor actualizado inmediatamente para devolverlo al cliente)
         return calcularReaccionesComentarioDesdeDB(comentarioId);
     }
 
@@ -232,8 +285,19 @@ public class ComentarioService {
     public Map<String, Long> reaccionarRespuesta(Long respuestaId, Long usuarioId, String tipo) {
         log.info("Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioId);
 
-        RespuestaComentario respuesta = respuestaRepository.findById(respuestaId)
+        if (respuestaId == null || usuarioId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (tipo == null || !TIPOS_REACCION_VALIDOS.contains(tipo)) {
+            throw new BadRequestException("Tipo de reacción inválido");
+        }
+
+        RespuestaComentario respuesta = respuestaRepository.findActivaById(respuestaId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Respuesta no encontrada"));
+
+        if (respuesta.isEliminado()) {
+            throw new BadRequestException("La respuesta ya no está disponible");
+        }
 
         ReaccionRespuesta reaccion = reaccionRespuestaRepository
                 .findByUsuarioIdAndRespuestaId(usuarioId, respuestaId)
@@ -284,7 +348,7 @@ public class ComentarioService {
     }
 
     // ============================================================
-    // HELPERS — cálculo directo desde BD (sin caché)
+    // HELPERS
     // ============================================================
 
     private Map<String, Long> calcularReaccionesComentarioDesdeDB(Long comentarioId) {
@@ -321,10 +385,6 @@ public class ComentarioService {
         return reacciones;
     }
 
-    // ============================================================
-    // DTO CONVERSIONES
-    // ============================================================
-
     private AutorResumenDTO toAutorDTO(Usuario usuario) {
         return new AutorResumenDTO(
                 usuario.getId(),
@@ -335,18 +395,6 @@ public class ComentarioService {
     }
 
     private ComentarioDTO toComentarioDTO(Comentario entity) {
-        // Este método se llama DENTRO del método cacheado listarPorPost().
-        // Cada llamada a obtenerReaccionesComentario() pasará por el proxy de caché,
-        // así que aunque un post tenga 50 comentarios, solo se consultará MySQL
-        // la primera vez por cada reacción (luego se lee de Redis).
-        // Sin embargo, en el contexto actual (llamada interna), Spring AOP NO intercepta
-        // las llamadas a métodos del mismo bean. Por eso este método usa
-        // calcularReaccionesComentarioDesdeDB() directamente.
-        //
-        // Solución real: mover el toComentarioDTO a un helper SIN caché, y dejar que
-        // listarPorPost() haga UNA sola query agregada de reacciones. Pero eso requiere
-        // refactor del repository. Por ahora, el caché de listarPorPost() ya evita
-        // que se repita este N+1 en cada carga del post.
         Map<String, Long> reacciones = calcularReaccionesComentarioDesdeDB(entity.getId());
 
         return new ComentarioDTO(

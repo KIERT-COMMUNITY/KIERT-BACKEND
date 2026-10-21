@@ -17,14 +17,6 @@ import java.util.Optional;
 @Repository
 public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
 
-    // ============================================================
-    // COMPRAS POR USUARIO
-    // ============================================================
-
-    /**
-     * Lista todas las compras de un usuario, ordenadas por fecha DESC.
-     * ⚠️ Mejor usar `findByUsuarioIdPaginado` para muchos registros.
-     */
     @Query("""
             SELECT c FROM CompraUsuario c
             WHERE c.usuario.id = :usuarioId
@@ -32,9 +24,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             """)
     List<CompraUsuario> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * NUEVO: Versión paginada.
-     */
     @Query("""
             SELECT c FROM CompraUsuario c
             WHERE c.usuario.id = :usuarioId
@@ -45,9 +34,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             Pageable pageable
     );
 
-    /**
-     *  NUEVO: Compras por tipo (MARCOS, FONDOS, TEMAS, etc).
-     */
     @Query("""
             SELECT c FROM CompraUsuario c
             WHERE c.usuario.id = :usuarioId
@@ -59,10 +45,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             @Param("tipo") String tipo
     );
 
-    /**
-     * NUEVO: IDs de items comprados por tipo (para el catálogo).
-     * Uso típico: saber qué marcos ya tiene el usuario para marcarlos como "comprados".
-     */
     @Query("""
             SELECT c.itemId FROM CompraUsuario c
             WHERE c.usuario.id = :usuarioId
@@ -73,20 +55,8 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             @Param("tipo") String tipo
     );
 
-    // ============================================================
-    // VERIFICAR COMPRA ESPECÍFICA
-    // ============================================================
-
-    /**
-     * Verifica si un usuario ya compró un item específico.
-     * Uso: antes de permitir comprar de nuevo, o para marcar como "comprado" en el catálogo.
-     */
     boolean existsByUsuarioIdAndTipoAndItemId(Long usuarioId, String tipo, String itemId);
 
-    /**
-     * NUEVO: Devuelve la compra específica si existe.
-     * Uso: para mostrar detalles de la compra, o para auditoría.
-     */
     @Query("""
             SELECT c FROM CompraUsuario c
             WHERE c.usuario.id = :usuarioId
@@ -100,13 +70,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             @Param("itemId") String itemId
     );
 
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
-
-    /**
-     *  NUEVO: Total gastado por un usuario.
-     */
     @Query("""
             SELECT COALESCE(SUM(c.precio), 0)
             FROM CompraUsuario c
@@ -114,10 +77,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             """)
     BigDecimal totalGastadoPorUsuario(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * NUEVO: Total gastado agrupado por tipo.
-     * Devuelve [tipo, total].
-     */
     @Query("""
             SELECT c.tipo, COALESCE(SUM(c.precio), 0)
             FROM CompraUsuario c
@@ -126,19 +85,12 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             """)
     List<Object[]> totalGastadoPorTipo(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * NUEVO: Cuántas compras tiene un usuario.
-     */
     @Query("""
             SELECT COUNT(c) FROM CompraUsuario c
             WHERE c.usuario.id = :usuarioId
             """)
     long contarComprasDeUsuario(@Param("usuarioId") Long usuarioId);
 
-    /**
-     *  NUEVO: Cuántas veces se ha comprado un item específico.
-     * Útil para saber qué marcos/fondos son más populares.
-     */
     @Query("""
             SELECT COUNT(c) FROM CompraUsuario c
             WHERE c.tipo = :tipo
@@ -149,14 +101,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             @Param("itemId") String itemId
     );
 
-    // ============================================================
-    // TOP ITEMS MÁS COMPRADOS (para el catálogo)
-    // ============================================================
-
-    /**
-     * NUEVO: Top N items más comprados por tipo.
-     * Devuelve [itemId, count].
-     */
     @Query("""
             SELECT c.itemId, COUNT(c) as total
             FROM CompraUsuario c
@@ -169,14 +113,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             Pageable pageable
     );
 
-    // ============================================================
-    // HISTORIAL Y AUDITORÍA
-    // ============================================================
-
-    /**
-     *  NUEVO: Compras recientes en un rango de fechas.
-     * Útil para reportes admin.
-     */
     @Query("""
             SELECT c FROM CompraUsuario c
             WHERE c.fechaCompra >= :desde
@@ -188,9 +124,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             @Param("hasta") Instant hasta
     );
 
-    /**
-     *  NUEVO: Usuarios que compraron un item específico.
-     */
     @Query("""
             SELECT c.usuario.id FROM CompraUsuario c
             WHERE c.tipo = :tipo
@@ -201,14 +134,6 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             @Param("itemId") String itemId
     );
 
-    // ============================================================
-    // VALIDACIONES DE NEGOCIO
-    // ============================================================
-
-    /**
-     *  NUEVO: Verifica si un usuario puede comprar un item.
-     * Devuelve true si NO lo ha comprado antes (puede comprar).
-     */
     @Query("""
             SELECT COUNT(c) = 0 FROM CompraUsuario c
             WHERE c.usuario.id = :usuarioId
@@ -219,5 +144,23 @@ public interface CompraRepository extends JpaRepository<CompraUsuario, Long> {
             @Param("usuarioId") Long usuarioId,
             @Param("tipo") String tipo,
             @Param("itemId") String itemId
+    );
+
+    // ============================================================
+    // SEGURIDAD: Verificar que el usuario es dueño de la compra
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si el usuario es dueño de la compra.
+     * Se usa para impedir que un usuario vea o elimine compras ajenas.
+     */
+    @Query("""
+            SELECT COUNT(c) > 0 FROM CompraUsuario c
+            WHERE c.id = :compraId
+              AND c.usuario.id = :usuarioId
+            """)
+    boolean esCompraDelUsuario(
+            @Param("compraId") Long compraId,
+            @Param("usuarioId") Long usuarioId
     );
 }

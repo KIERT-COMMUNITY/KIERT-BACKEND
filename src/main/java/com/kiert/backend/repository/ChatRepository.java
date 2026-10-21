@@ -16,13 +16,6 @@ import java.util.List;
 @Repository
 public interface ChatRepository extends JpaRepository<Mensaje, Long> {
 
-    // ============================================================
-    // CONVERSACIÓN ENTRE DOS USUARIOS
-    // ============================================================
-    /**
-     * Trae todos los mensajes de una conversación ordenados por fecha.
-     * ⚠️ Para conversaciones largas, usa `findConversacionPaginada` en su lugar.
-     */
     @Query("""
             SELECT m FROM Mensaje m
             WHERE m.eliminado = false
@@ -38,11 +31,6 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             @Param("usuarioB") Long usuarioB
     );
 
-    /**
-     * NUEVO: Versión paginada (recomendada para chats largos).
-     * Trae los últimos N mensajes de una conversación.
-     * El frontend puede pedir "cargar más" con page=1, 2, ...
-     */
     @Query("""
             SELECT m FROM Mensaje m
             WHERE m.eliminado = false
@@ -59,16 +47,6 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             Pageable pageable
     );
 
-    // ============================================================
-    // TODOS LOS MENSAJES DE UN USUARIO
-    // ============================================================
-    /**
-     * ⚠️ ADVERTENCIA: Esta query trae TODOS los mensajes del usuario.
-     * Si el usuario tiene 10,000 mensajes, los carga todos en memoria.
-     *
-     * Úsala solo en `listarConversaciones()` porque ya está cacheada en Redis.
-     * Para cargar el historial de una conversación, usa `findConversacionPaginada`.
-     */
     @Query("""
             SELECT m FROM Mensaje m
             WHERE m.eliminado = false
@@ -77,14 +55,8 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             """)
     List<Mensaje> findTodosLosMensajesDeUsuario(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // CONTADORES
-    // ============================================================
     long countByEmisorIdAndReceptorIdAndLeidoFalse(Long emisorId, Long receptorId);
 
-    /**
-     * NUEVO: Contar TODOS los mensajes no leídos del usuario (para el badge).
-     */
     @Query("""
             SELECT COUNT(m) FROM Mensaje m
             WHERE m.receptor.id = :usuarioId
@@ -93,13 +65,6 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             """)
     long contarNoLeidosDeUsuario(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // CONTACTOS
-    // ============================================================
-    /**
-     * Devuelve los IDs de todos los usuarios con los que ha chateado.
-     * Útil para excluir contactos en `listarUsuariosDisponibles()`.
-     */
     @Query("""
             SELECT DISTINCT
               CASE WHEN m.emisor.id = :usuarioId THEN m.receptor.id
@@ -111,13 +76,6 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             """)
     List<Long> findContactosId(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // MENSAJES NO LEÍDOS DE UNA CONVERSACIÓN
-    // ============================================================
-    /**
-     * Trae los mensajes no leídos de una conversación específica.
-     * Usado por `marcarMensajesComoLeidos()`.
-     */
     @Query("""
             SELECT m FROM Mensaje m
             WHERE m.receptor.id = :usuarioId
@@ -130,13 +88,6 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             @Param("otroUsuarioId") Long otroUsuarioId
     );
 
-    // ============================================================
-    // MARCAR COMO LEÍDOS (bulk update)
-    // ============================================================
-    /**
-     *NUEVO: Marca como leídos todos los mensajes de una conversación
-     * en UNA sola query. Mucho más eficiente que iterar con save().
-     */
     @Modifying
     @Query("""
             UPDATE Mensaje m
@@ -152,17 +103,6 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             @Param("fecha") Instant fecha
     );
 
-    // ============================================================
-    // ÚLTIMO MENSAJE POR CONTACTO (optimización N+1)
-    // ============================================================
-    /**
-     * NUEVO: Obtiene solo el último mensaje por cada contacto.
-     * Reemplaza la lógica de `listarConversaciones()` que trae TODOS
-     * los mensajes y agrupa en memoria.
-     *
-     * ⚠️ Query nativa MySQL: usa una subquery con MAX(fecha_envio).
-     * Debe combinarse con el índice `idx_mensajes_ultimo`.
-     */
     @Query(value = """
             SELECT m.*
             FROM mensajes m
@@ -188,15 +128,6 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             """, nativeQuery = true)
     List<Mensaje> findUltimoMensajePorContacto(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // CONTAR NO LEÍDOS POR CONTACTO (optimización N+1)
-    // ============================================================
-    /**
-     *  NUEVO: Cuenta los mensajes no leídos agrupados por emisor.
-     * Devuelve [emisorId, count] para todos los contactos.
-     *
-     * Reemplaza el `stream().filter()` de `listarConversaciones()`.
-     */
     @Query("""
             SELECT m.emisor.id, COUNT(m)
             FROM Mensaje m
@@ -207,13 +138,6 @@ public interface ChatRepository extends JpaRepository<Mensaje, Long> {
             """)
     List<Object[]> contarNoLeidosPorContacto(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // BÚSQUEDA EN CONVERSACIÓN (opcional)
-    // ============================================================
-    /**
-     *  NUEVO: Buscar mensajes dentro de una conversación.
-     * Útil para la funcionalidad "buscar en este chat".
-     */
     @Query("""
             SELECT m FROM Mensaje m
             WHERE m.eliminado = false

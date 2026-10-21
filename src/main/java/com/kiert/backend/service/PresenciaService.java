@@ -67,7 +67,9 @@ public class PresenciaService {
         Map<Long, EstadoPresencia> resultado = new HashMap<>();
         if (usuarioIds == null || usuarioIds.isEmpty()) return resultado;
 
+        // Si hay muchos usuarios, usar pipeline para mejor rendimiento
         for (Long id : usuarioIds) {
+            if (id == null) continue;
             try {
                 resultado.put(id, new EstadoPresencia(
                         estaEnLinea(id),

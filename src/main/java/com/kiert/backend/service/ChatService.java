@@ -37,7 +37,7 @@ public class ChatService {
     private final StorageService storageService;
     private final SimpMessagingTemplate messagingTemplate;
     private final PresenciaService presenciaService;
-    private final StickerRepository stickerRepository;   // ✅ NUEVO
+    private final StickerRepository stickerRepository;
 
     private static final String CACHE_CONVERSACIONES = "conversaciones";
     private static final String CACHE_MENSAJES = "mensajes";
@@ -47,7 +47,7 @@ public class ChatService {
     private static final String CACHE_CONTADORES = "contadores";
 
     // ============================================================
-    // CONVERSACIONES
+    // CONVERSACIONES (solo del usuario autenticado)
     // ============================================================
     @Transactional(readOnly = true)
     public List<ConversacionDTO> listarConversaciones(Long usuarioId) {
@@ -73,8 +73,7 @@ public class ChatService {
                 ));
 
         List<Long> idsOtros = new ArrayList<>(mensajesPorUsuario.keySet());
-        Map<Long, PresenciaService.EstadoPresencia> estados =
-                presenciaService.obtenerEstados(idsOtros);
+        Map<Long, PresenciaService.EstadoPresencia> estados = presenciaService.obtenerEstados(idsOtros);
 
         List<ConversacionDTO> conversaciones = new ArrayList<>();
 
@@ -107,18 +106,13 @@ public class ChatService {
             }
 
             String ultimaConexionStr = ultimaConexion != null
-                    ? ultimaConexion.truncatedTo(ChronoUnit.MILLIS).toString()
-                    : null;
+                    ? ultimaConexion.truncatedTo(ChronoUnit.MILLIS).toString() : null;
 
             String fechaUltimoMensaje = ultimo != null
-                    ? ultimo.getFechaEnvio().truncatedTo(ChronoUnit.MILLIS).toString()
-                    : null;
+                    ? ultimo.getFechaEnvio().truncatedTo(ChronoUnit.MILLIS).toString() : null;
 
-            // ✅ Preview inteligente: si es sticker, mostrar "[Sticker]"
             String preview = ultimo != null
-                    ? ("STICKER".equals(ultimo.getTipoMensaje())
-                       ? "[Sticker]"
-                       : ultimo.getContenido())
+                    ? ("STICKER".equals(ultimo.getTipoMensaje()) ? "[Sticker]" : ultimo.getContenido())
                     : null;
 
             conversaciones.add(new ConversacionDTO(
@@ -146,7 +140,7 @@ public class ChatService {
     }
 
     // ============================================================
-    // MENSAJES
+    // MENSAJES (solo entre los dos usuarios)
     // ============================================================
     @Transactional
     @Cacheable(
@@ -156,6 +150,12 @@ public class ChatService {
     )
     public List<MensajeChatDTO> obtenerMensajes(Long usuarioId, Long otroUsuarioId) {
         log.info("[DB] Obteniendo mensajes entre {} y {}", usuarioId, otroUsuarioId);
+
+        // Validar que el usuario existe
+        usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+        usuarioRepository.findById(otroUsuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Otro usuario no encontrado"));
 
         List<Mensaje> mensajes = mensajeRepository.findConversacion(usuarioId, otroUsuarioId);
 
@@ -195,6 +195,9 @@ public class ChatService {
                 .collect(Collectors.toList());
     }
 
+    // ============================================================
+    // ENVIAR MENSAJE
+    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
@@ -208,10 +211,25 @@ public class ChatService {
     public MensajeChatDTO enviarMensaje(Long emisorId, Long receptorId, String contenido) {
         log.info("Enviando mensaje de {} a {}", emisorId, receptorId);
 
+        // Validaciones
+        if (emisorId == null || receptorId == null) {
+            throw new IllegalArgumentException("Emisor y receptor requeridos");
+        }
+        if (emisorId.equals(receptorId)) {
+            throw new IllegalArgumentException("No puedes enviarte mensajes a ti mismo");
+        }
+        if (contenido == null || contenido.isBlank()) {
+            throw new IllegalArgumentException("El contenido no puede estar vacío");
+        }
+        if (contenido.length() > 5000) {
+            throw new IllegalArgumentException("El mensaje es demasiado largo");
+        }
+
         if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
             var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
             if (bloqueoEmisor.isPresent()) {
-                throw new IllegalStateException("Has bloqueado a este usuario. Desbloquéalo para enviarle mensajes.");
+                throw new IllegalStateException(
+                        "Has bloqueado a este usuario. Desbloquéalo para enviarle mensajes.");
             }
             throw new IllegalStateException("No puedes enviar mensajes a este usuario.");
         }
@@ -223,7 +241,7 @@ public class ChatService {
 
         Mensaje mensaje = Mensaje.builder()
                 .emisor(emisor).receptor(receptor)
-                .contenido(contenido)
+                .contenido(contenido.trim())
                 .tipoMensaje("TEXTO")
                 .leido(false).build();
 
@@ -248,6 +266,9 @@ public class ChatService {
         );
     }
 
+    // ============================================================
+    // ENVIAR MENSAJE CON ARCHIVOS
+    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_CONVERSACIONES, key = "'usuario:' + #emisorId"),
@@ -264,6 +285,13 @@ public class ChatService {
 
         log.info("Enviando mensaje con archivos de {} a {}", emisorId, receptorId);
 
+        if (emisorId == null || receptorId == null) {
+            throw new IllegalArgumentException("Emisor y receptor requeridos");
+        }
+        if (emisorId.equals(receptorId)) {
+            throw new IllegalArgumentException("No puedes enviarte mensajes a ti mismo");
+        }
+
         if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
             var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
             if (bloqueoEmisor.isPresent()) {
@@ -279,7 +307,7 @@ public class ChatService {
 
         Mensaje mensaje = Mensaje.builder()
                 .emisor(emisor).receptor(receptor)
-                .contenido(contenido != null ? contenido : "")
+                .contenido(contenido != null ? contenido.trim() : "")
                 .tipoMensaje("TEXTO")
                 .leido(false).build();
 
@@ -305,6 +333,7 @@ public class ChatService {
                     ));
                 } catch (Exception e) {
                     log.error("Error al subir archivo: {}", e.getMessage());
+                    // No exponer el error al cliente
                 }
             }
         }
@@ -331,7 +360,7 @@ public class ChatService {
     }
 
     // ============================================================
-    // ✅ NUEVO: ENVIAR STICKER
+    // ENVIAR STICKER
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -346,17 +375,23 @@ public class ChatService {
     public MensajeChatDTO enviarSticker(Long emisorId, Long receptorId, Long stickerId) {
         log.info("Enviando sticker {} de {} a {}", stickerId, emisorId, receptorId);
 
+        if (emisorId == null || receptorId == null || stickerId == null) {
+            throw new IllegalArgumentException("Parámetros inválidos");
+        }
+        if (emisorId.equals(receptorId)) {
+            throw new IllegalArgumentException("No puedes enviarte stickers a ti mismo");
+        }
+
         if (bloqueoRepository.existeBloqueoEntre(emisorId, receptorId)) {
             var bloqueoEmisor = bloqueoRepository.findBloqueoActivo(emisorId, receptorId);
             if (bloqueoEmisor.isPresent()) {
-                throw new IllegalStateException("Has bloqueado a este usuario. Desbloquéalo para enviarle stickers.");
+                throw new IllegalStateException("Has bloqueado a este usuario.");
             }
             throw new IllegalStateException("No puedes enviar stickers a este usuario.");
         }
 
         Usuario emisor = usuarioRepository.findById(emisorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Emisor no encontrado"));
-
         Usuario receptor = usuarioRepository.findById(receptorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Receptor no encontrado"));
 
@@ -384,15 +419,10 @@ public class ChatService {
         mensaje = mensajeRepository.save(mensaje);
 
         MensajeChatDTO dto = new MensajeChatDTO(
-                mensaje.getId(),
-                mensaje.getEmisor().getId(),
-                "",
-                mensaje.getFechaEnvio(),
-                false,
-                null,
-                "STICKER",
-                sticker.getUrlImagen(),
-                sticker.getNombre()
+                mensaje.getId(), mensaje.getEmisor().getId(), "",
+                mensaje.getFechaEnvio(), false,
+                null, "STICKER",
+                sticker.getUrlImagen(), sticker.getNombre()
         );
 
         try {
@@ -404,15 +434,10 @@ public class ChatService {
         }
 
         return new MensajeChatDTO(
-                mensaje.getId(),
-                mensaje.getEmisor().getId(),
-                "",
-                mensaje.getFechaEnvio(),
-                true,
-                null,
-                "STICKER",
-                sticker.getUrlImagen(),
-                sticker.getNombre()
+                mensaje.getId(), mensaje.getEmisor().getId(), "",
+                mensaje.getFechaEnvio(), true,
+                null, "STICKER",
+                sticker.getUrlImagen(), sticker.getNombre()
         );
     }
 
@@ -495,6 +520,9 @@ public class ChatService {
             @CacheEvict(value = CACHE_USUARIOS_DISPONIBLES, key = "'usuario:' + #emisorId")
     })
     public SolicitudContactoDTO enviarSolicitud(Long emisorId, Long receptorId) {
+        if (emisorId == null || receptorId == null) {
+            throw new IllegalArgumentException("Parámetros inválidos");
+        }
         if (emisorId.equals(receptorId)) {
             throw new IllegalArgumentException("No puedes enviarte una solicitud a ti mismo");
         }
@@ -554,7 +582,11 @@ public class ChatService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
 
         if (!solicitud.getReceptor().getId().equals(usuarioId)) {
-            throw new SecurityException("No tienes permiso");
+            throw new SecurityException("No tienes permiso para aceptar esta solicitud");
+        }
+
+        if (solicitud.getEstado() != SolicitudContacto.EstadoSolicitud.PENDIENTE) {
+            throw new IllegalStateException("Esta solicitud ya fue procesada");
         }
 
         Instant ahora = Instant.now();
@@ -594,7 +626,11 @@ public class ChatService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
 
         if (!solicitud.getReceptor().getId().equals(usuarioId)) {
-            throw new SecurityException("No tienes permiso");
+            throw new SecurityException("No tienes permiso para rechazar esta solicitud");
+        }
+
+        if (solicitud.getEstado() != SolicitudContacto.EstadoSolicitud.PENDIENTE) {
+            throw new IllegalStateException("Esta solicitud ya fue procesada");
         }
 
         Instant ahora = Instant.now();

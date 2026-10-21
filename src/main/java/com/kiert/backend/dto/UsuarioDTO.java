@@ -4,5 +4,6 @@ public record UsuarioDTO(
         Long id,
         String nombreUsuario,
         String email,
-        String fotoPerfilUrl
+        String fotoPerfilUrl,
+        String bio
 ) {}

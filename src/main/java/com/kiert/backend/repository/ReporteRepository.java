@@ -21,36 +21,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // VERIFICAR DUPLICADOS
     // ============================================================
 
-    /**
-     * Verifica si ya existe un reporte del mismo usuario para el mismo contenido.
-     *
-     * ️ PROBLEMA CONOCIDO: si pasas `null` en `postId` y `comentarioId`,
-     * la condición `(:postId IS NULL OR r.post.id = :postId)` se cumple SIEMPRE,
-     * lo cual puede dar falsos positivos.
-     *
-     *  SOLUCIÓN: usar la versión específica según el tipo de reporte.
-     */
-    @Query("""
-            SELECT COUNT(r) > 0 FROM Reporte r
-            WHERE r.usuarioReportante.id = :usuarioId
-              AND r.tipoReporte = :tipo
-              AND (:postId IS NULL OR r.post.id = :postId)
-              AND (:comentarioId IS NULL OR r.comentario.id = :comentarioId)
-              AND (:respuestaId IS NULL OR r.respuesta.id = :respuestaId)
-              AND (:usuarioReportadoId IS NULL OR r.usuarioReportado.id = :usuarioReportadoId)
-            """)
-    boolean existeReporteDuplicado(
-            @Param("usuarioId") Long usuarioId,
-            @Param("tipo") String tipo,
-            @Param("postId") Long postId,
-            @Param("comentarioId") Long comentarioId,
-            @Param("respuestaId") Long respuestaId,
-            @Param("usuarioReportadoId") Long usuarioReportadoId
-    );
-
-    /**
-     *NUEVO: Verifica duplicado de reporte a un POST (sin falsos positivos).
-     */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
             WHERE r.usuarioReportante.id = :usuarioId
@@ -62,9 +32,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             @Param("postId") Long postId
     );
 
-    /**
-     * NUEVO: Verifica duplicado de reporte a un COMENTARIO.
-     */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
             WHERE r.usuarioReportante.id = :usuarioId
@@ -76,9 +43,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             @Param("comentarioId") Long comentarioId
     );
 
-    /**
-     *NUEVO: Verifica duplicado de reporte a una RESPUESTA.
-     */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
             WHERE r.usuarioReportante.id = :usuarioId
@@ -90,9 +54,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             @Param("respuestaId") Long respuestaId
     );
 
-    /**
-     *  NUEVO: Verifica duplicado de reporte a un USUARIO.
-     */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
             WHERE r.usuarioReportante.id = :usuarioId
@@ -108,10 +69,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // LISTAR REPORTES (admin)
     // ============================================================
 
-    /**
-     * Lista reportes con filtros (estado, tipo) y paginación.
-     * Con JOIN FETCH de todas las relaciones para evitar N+1.
-     */
     @Query("""
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.usuarioReportante
@@ -130,9 +87,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Reportes PENDIENTES (para el panel admin).
-     */
     @Query("""
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.usuarioReportante
@@ -145,9 +99,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             """)
     Page<Reporte> findPendientes(Pageable pageable);
 
-    /**
-     * NUEVO: Reportes asignados a un moderador.
-     */
     @Query("""
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.usuarioReportante
@@ -165,9 +116,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // REPORTES POR USUARIO
     // ============================================================
 
-    /**
-     * Reportes creados por un usuario.
-     */
     @Query("""
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.post
@@ -181,9 +129,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             @Param("usuarioId") Long usuarioId
     );
 
-    /**
-     * NUEVO: Versión paginada.
-     */
     @Query("""
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.post
@@ -198,10 +143,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Reportes CONTRA un usuario específico.
-     * Útil para ver "¿cuántas veces ha sido reportado X?".
-     */
     @Query("""
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.usuarioReportante
@@ -213,9 +154,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Cuenta reportes contra un usuario.
-     */
     @Query("""
             SELECT COUNT(r) FROM Reporte r
             WHERE r.usuarioReportado.id = :usuarioReportadoId
@@ -226,9 +164,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // OBTENER POR ID
     // ============================================================
 
-    /**
-     * NUEVO: Obtiene un reporte con todas sus relaciones cargadas.
-     */
     @Query("""
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.usuarioReportante
@@ -245,16 +180,8 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // CONTADORES
     // ============================================================
 
-    /**
-     * Cuenta reportes por estado.
-     * ⚠️ Se llama 4 veces en `obtenerResumen()`. Cachear en Redis.
-     */
     long countByEstado(String estado);
 
-    /**
-     * NUEVO: Cuenta reportes agrupados por estado.
-     * Devuelve [estado, count]. 1 query en lugar de 4.
-     */
     @Query("""
             SELECT r.estado, COUNT(r)
             FROM Reporte r
@@ -262,10 +189,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             """)
     List<Object[]> contarPorEstado();
 
-    /**
-     * NUEVO: Cuenta reportes agrupados por tipo.
-     * Devuelve [tipo, count].
-     */
     @Query("""
             SELECT r.tipoReporte, COUNT(r)
             FROM Reporte r
@@ -274,10 +197,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             """)
     List<Object[]> contarPorTipo();
 
-    /**
-     * NUEVO: Cuenta reportes agrupados por motivo.
-     * Devuelve [motivo, count].
-     */
     @Query("""
             SELECT r.motivo, COUNT(r)
             FROM Reporte r
@@ -287,9 +206,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             """)
     List<Object[]> contarPorMotivo();
 
-    /**
-     * NUEVO: Cuenta reportes por rango de fechas (para reportes).
-     */
     @Query("""
             SELECT COUNT(r) FROM Reporte r
             WHERE r.fechaCreacion >= :desde
@@ -301,13 +217,9 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     // ============================================================
-    // TOP USUARIOS REPORTADOS (para detectar abusadores)
+    // TOP USUARIOS REPORTADOS
     // ============================================================
 
-    /**
-     * NUEVO: Top usuarios más reportados (no rechazados).
-     * Devuelve [usuarioId, count].
-     */
     @Query("""
             SELECT r.usuarioReportado.id, COUNT(r) as total
             FROM Reporte r
@@ -318,10 +230,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             """)
     List<Object[]> topUsuariosMasReportados(Pageable pageable);
 
-    /**
-     * NUEVO: Top usuarios que MÁS reportan (por si abusan del sistema).
-     * Devuelve [usuarioId, count].
-     */
     @Query("""
             SELECT r.usuarioReportante.id, COUNT(r) as total
             FROM Reporte r
@@ -338,10 +246,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // ACTUALIZAR ESTADO (bulk)
     // ============================================================
 
-    /**
-     * NUEVO: Cambia el estado de varios reportes en 1 query.
-     * Útil para moderación en lote.
-     */
     @Modifying
     @Query("""
             UPDATE Reporte r
@@ -366,10 +270,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // LIMPIEZA (para @Scheduled)
     // ============================================================
 
-    /**
-     * NUEVO: Elimina reportes RESUELTOS/RECHAZADOS con más de N días.
-     * Se ejecuta con un @Scheduled para mantener la tabla pequeña.
-     */
     @Modifying
     @Query("""
             DELETE FROM Reporte r
@@ -378,9 +278,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             """)
     int eliminarResueltosAntiguos(@Param("limite") Instant limite);
 
-    /**
-     * NUEVO: Cuenta cuántos reportes se eliminarán (para saber el impacto).
-     */
     @Query("""
             SELECT COUNT(r) FROM Reporte r
             WHERE r.estado IN ('RESUELTO', 'RECHAZADO')
@@ -392,18 +289,41 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // ESTADÍSTICAS
     // ============================================================
 
-    /**
-     * NUEVO: Total de reportes en el sistema.
-     */
     @Query("SELECT COUNT(r) FROM Reporte r")
     long countTotal();
 
-    /**
-     * NUEVO: Total de reportes activos (no resueltos ni rechazados).
-     */
     @Query("""
             SELECT COUNT(r) FROM Reporte r
             WHERE r.estado IN ('PENDIENTE', 'REVISANDO')
             """)
     long countActivos();
+
+    // ============================================================
+    // SEGURIDAD: Validar permisos
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si el usuario es el autor del reporte (para verlo/eliminarlo).
+     */
+    @Query("""
+            SELECT COUNT(r) > 0 FROM Reporte r
+            WHERE r.id = :reporteId
+              AND r.usuarioReportante.id = :usuarioId
+            """)
+    boolean esAutorDelReporte(
+            @Param("reporteId") Long reporteId,
+            @Param("usuarioId") Long usuarioId
+    );
+
+    /**
+     * NUEVO: Verifica si el usuario es moderador/admin (para poder cambiar estado).
+     */
+    @Query("""
+            SELECT COUNT(u) > 0 FROM Usuario u
+            WHERE u.id = :moderadorId
+              AND u.rol IN ('CEO', 'ADMIN', 'MODERADOR')
+              AND u.eliminado = false
+              AND u.activo = true
+            """)
+    boolean esModeradorValido(@Param("moderadorId") Long moderadorId);
 }

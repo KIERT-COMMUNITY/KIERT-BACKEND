@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/config/WebSocketEventListener.java
 package com.kiert.backend.config;
 
 import com.kiert.backend.service.UsuarioService;
@@ -20,12 +21,8 @@ public class WebSocketEventListener {
 
     private final UsuarioService usuarioService;
 
-    // Mapa para contar sesiones activas por usuario (múltiples pestañas)
     private final Map<Long, AtomicInteger> sesionesActivas = new ConcurrentHashMap<>();
 
-    /**
-     * Cuando se conecta un WebSocket, marcamos al usuario como en línea.
-     */
     @EventListener
     public void handleWebSocketConnect(SessionConnectedEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
@@ -35,16 +32,12 @@ public class WebSocketEventListener {
 
         if (usuarioIdObj != null) {
             Long usuarioId = Long.parseLong(usuarioIdObj.toString());
-            log.info("WebSocket conectado para usuario: {}", usuarioId);
-
+            log.info("[WS] Conectado: {}", usuarioId);
             sesionesActivas.computeIfAbsent(usuarioId, k -> new AtomicInteger(0)).incrementAndGet();
             usuarioService.marcarEnLinea(usuarioId);
         }
     }
 
-    /**
-     * Cuando se desconecta un WebSocket, verificamos si es la última sesión.
-     */
     @EventListener
     public void handleWebSocketDisconnect(SessionDisconnectEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
@@ -54,7 +47,7 @@ public class WebSocketEventListener {
 
         if (usuarioIdObj != null) {
             Long usuarioId = Long.parseLong(usuarioIdObj.toString());
-            log.info("WebSocket desconectado para usuario: {}", usuarioId);
+            log.info("[WS] Desconectado: {}", usuarioId);
 
             AtomicInteger contador = sesionesActivas.get(usuarioId);
             if (contador != null) {
@@ -62,9 +55,7 @@ public class WebSocketEventListener {
                 if (restantes <= 0) {
                     sesionesActivas.remove(usuarioId);
                     usuarioService.marcarDesconectado(usuarioId);
-                    log.info("Usuario {} sin sesiones activas, marcado como desconectado", usuarioId);
-                } else {
-                    log.info("Usuario {} aún tiene {} sesión(es) activa(s)", usuarioId, restantes);
+                    log.info("[WS] Usuario {} sin sesiones activas", usuarioId);
                 }
             }
         }

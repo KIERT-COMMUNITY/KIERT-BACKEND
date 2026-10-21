@@ -3,6 +3,7 @@ package com.kiert.backend.service;
 
 import com.kiert.backend.dto.NotificacionDTO;
 import com.kiert.backend.entity.*;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +33,11 @@ public class NotificacionService {
     private static final String CACHE_NOTIFICACIONES = "notificaciones";
     private static final String CACHE_CONTADOR_NOTIFICACIONES = "contadorNotificaciones";
 
+    private static final int MAX_PREVIEW = 50;
+    private static final int MAX_NOTA = 100;
+
     // ============================================================
-    // CREAR NOTIFICACIONES EXISTENTES
+    // CREAR NOTIFICACIONES
     // ============================================================
 
     @Transactional
@@ -45,7 +49,6 @@ public class NotificacionService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
         if (usuarioOrigenId.equals(post.getAutor().getId())) {
-            log.info("Like propio, sin notificación");
             return null;
         }
 
@@ -53,7 +56,7 @@ public class NotificacionService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String mensaje = String.format("<strong>%s</strong> le dio like a tu publicación",
-                origen.getNombreUsuario());
+                escapeHtml(origen.getNombreUsuario()));
 
         Notificacion notif = Notificacion.builder()
                 .usuarioDestino(post.getAutor())
@@ -83,13 +86,13 @@ public class NotificacionService {
 
         Comentario comentario = comentarioRepository.findById(comentarioId).orElse(null);
         String preview = comentario != null && comentario.getContenido() != null
-                ? (comentario.getContenido().length() > 50
-                   ? comentario.getContenido().substring(0, 50) + "..."
+                ? (comentario.getContenido().length() > MAX_PREVIEW
+                   ? comentario.getContenido().substring(0, MAX_PREVIEW) + "..."
                    : comentario.getContenido())
                 : "";
 
         String mensaje = String.format("<strong>%s</strong> comentó: \"%s\"",
-                origen.getNombreUsuario(), preview);
+                escapeHtml(origen.getNombreUsuario()), escapeHtml(preview));
 
         Notificacion notif = Notificacion.builder()
                 .usuarioDestino(post.getAutor())
@@ -119,7 +122,7 @@ public class NotificacionService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String mensaje = String.format("<strong>%s</strong> respondió a tu comentario",
-                origen.getNombreUsuario());
+                escapeHtml(origen.getNombreUsuario()));
 
         Notificacion notif = Notificacion.builder()
                 .usuarioDestino(comentario.getAutor())
@@ -147,7 +150,7 @@ public class NotificacionService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario destino no encontrado"));
 
         String mensaje = String.format("<strong>%s</strong> quiere ser tu contacto",
-                origen.getNombreUsuario());
+                escapeHtml(origen.getNombreUsuario()));
 
         Notificacion notif = Notificacion.builder()
                 .usuarioDestino(destino)
@@ -199,12 +202,9 @@ public class NotificacionService {
     }
 
     // ============================================================
-    // ✅ NUEVAS NOTIFICACIONES DE REPORTES
+    // NOTIFICACIONES DE REPORTES
     // ============================================================
 
-    /**
-     * ✅ Notifica al REPORTANTE cuando su reporte fue resuelto o rechazado.
-     */
     @Transactional
     @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public Notificacion notificarResultadoAlReportante(
@@ -221,26 +221,26 @@ public class NotificacionService {
 
         StringBuilder mensaje = new StringBuilder();
         if (resuelto) {
-            mensaje.append("✅ Tu reporte de <strong>")
-                    .append(tipoReporte)
+            mensaje.append("Tu reporte de <strong>")
+                    .append(escapeHtml(tipoReporte))
                     .append("</strong> fue <strong>resuelto</strong> por ")
-                    .append("<strong>").append(moderador.getNombreUsuario()).append("</strong>.");
+                    .append("<strong>").append(escapeHtml(moderador.getNombreUsuario())).append("</strong>.");
         } else {
-            mensaje.append("❌ Tu reporte de <strong>")
-                    .append(tipoReporte)
+            mensaje.append("Tu reporte de <strong>")
+                    .append(escapeHtml(tipoReporte))
                     .append("</strong> fue <strong>rechazado</strong> por ")
-                    .append("<strong>").append(moderador.getNombreUsuario()).append("</strong>.");
+                    .append("<strong>").append(escapeHtml(moderador.getNombreUsuario())).append("</strong>.");
         }
 
         if (notaModerador != null && !notaModerador.trim().isEmpty()) {
-            String nota = notaModerador.length() > 100
-                    ? notaModerador.substring(0, 100) + "..."
+            String nota = notaModerador.length() > MAX_NOTA
+                    ? notaModerador.substring(0, MAX_NOTA) + "..."
                     : notaModerador;
-            mensaje.append(" Nota: \"").append(nota).append("\"");
+            mensaje.append(" Nota: \"").append(escapeHtml(nota)).append("\"");
         }
 
         if (accionTomada != null && !accionTomada.equals("NINGUNA")) {
-            mensaje.append(" Acción: <strong>").append(accionTomada).append("</strong>.");
+            mensaje.append(" Acción: <strong>").append(escapeHtml(accionTomada)).append("</strong>.");
         }
 
         Notificacion notif = Notificacion.builder()
@@ -258,9 +258,6 @@ public class NotificacionService {
         return guardada;
     }
 
-    /**
-     * ✅ Notifica a TODOS los moderadores que hay un nuevo reporte pendiente.
-     */
     @Transactional
     @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public void notificarNuevoReporteAModeradores(
@@ -270,7 +267,6 @@ public class NotificacionService {
             String motivoReporte,
             Long reporteId
     ) {
-        // Buscar todos los usuarios con rol CEO/ADMIN/MODERADOR
         List<Usuario> moderadores = usuarioRepository.findByRolIn(
                 List.of("CEO", "ADMIN", "MODERADOR")
         );
@@ -280,17 +276,15 @@ public class NotificacionService {
             return;
         }
 
-        // No notificar al propio reportante si es moderador
         String mensaje = String.format(
-                "🚨 <strong>Nuevo reporte</strong> de tipo <strong>%s</strong> " +
+                "<strong>Nuevo reporte</strong> de tipo <strong>%s</strong> " +
                         "(motivo: %s) enviado por <strong>%s</strong>.",
-                tipoReporte,
-                motivoReporte,
-                reportante.getNombreUsuario()
+                escapeHtml(tipoReporte),
+                escapeHtml(motivoReporte),
+                escapeHtml(reportante.getNombreUsuario())
         );
 
         for (Usuario moderador : moderadores) {
-            // No notificarse a sí mismo si el reportante es moderador
             if (moderador.getId().equals(reportante.getId())) continue;
 
             Notificacion notif = Notificacion.builder()
@@ -309,10 +303,6 @@ public class NotificacionService {
                 moderadores.size(), reporteId);
     }
 
-    /**
-     * ✅ Notifica al USUARIO REPORTADO cuando se toma acción sobre su contenido.
-     * Ej: contenido eliminado, advertencia, baneo.
-     */
     @Transactional
     @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, allEntries = true)
     public void notificarUsuarioReportado(
@@ -326,43 +316,45 @@ public class NotificacionService {
 
         String tipo;
         String mensaje;
-        String icono;
 
         switch (accionTomada) {
             case "ADVERTENCIA" -> {
                 tipo = "ADVERTENCIA";
-                icono = "⚠️";
                 mensaje = String.format(
-                        "%s Has recibido una <strong>advertencia</strong> por " +
+                        "Has recibido una <strong>advertencia</strong> por " +
                                 "<strong>%s</strong>. Motivo: %s",
-                        icono, moderador.getNombreUsuario(), motivoReporte
+                        escapeHtml(moderador.getNombreUsuario()),
+                        escapeHtml(motivoReporte)
                 );
             }
             case "ELIMINADO" -> {
                 tipo = "CONTENIDO_ELIMINADO";
-                icono = "🗑️";
                 mensaje = String.format(
-                        "%s Tu contenido fue <strong>eliminado</strong> por " +
+                        "Tu contenido fue <strong>eliminado</strong> por " +
                                 "<strong>%s</strong>. Motivo: %s",
-                        icono, moderador.getNombreUsuario(), motivoReporte
+                        escapeHtml(moderador.getNombreUsuario()),
+                        escapeHtml(motivoReporte)
                 );
             }
             case "BANEADO" -> {
                 tipo = "USUARIO_BANEADO";
-                icono = "🚫";
                 mensaje = String.format(
-                        "%s Tu cuenta ha sido <strong>suspendida</strong> por " +
+                        "Tu cuenta ha sido <strong>suspendida</strong> por " +
                                 "<strong>%s</strong>. Motivo: %s",
-                        icono, moderador.getNombreUsuario(), motivoReporte
+                        escapeHtml(moderador.getNombreUsuario()),
+                        escapeHtml(motivoReporte)
                 );
             }
             default -> {
-                return; // No notificar si la acción es "NINGUNA"
+                return;
             }
         }
 
         if (notaModerador != null && !notaModerador.trim().isEmpty()) {
-            mensaje += " Nota: \"" + notaModerador.trim() + "\"";
+            String nota = notaModerador.length() > MAX_NOTA
+                    ? notaModerador.substring(0, MAX_NOTA) + "..."
+                    : notaModerador;
+            mensaje += " Nota: \"" + escapeHtml(nota) + "\"";
         }
 
         Notificacion notif = Notificacion.builder()
@@ -380,14 +372,11 @@ public class NotificacionService {
     }
 
     // ============================================================
-    // LECTURA (caché)
+    // LECTURA
     // ============================================================
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_NOTIFICACIONES,
-            key = "'usuario:' + #usuarioId"
-    )
+    @Cacheable(value = CACHE_NOTIFICACIONES, key = "'usuario:' + #usuarioId")
     public List<NotificacionDTO> obtenerNotificaciones(Long usuarioId) {
         log.info("[DB] Obteniendo notificaciones del usuario: {}", usuarioId);
         return notificacionRepository
@@ -398,17 +387,13 @@ public class NotificacionService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_CONTADOR_NOTIFICACIONES,
-            key = "'usuario:' + #usuarioId"
-    )
+    @Cacheable(value = CACHE_CONTADOR_NOTIFICACIONES, key = "'usuario:' + #usuarioId")
     public long contarNoLeidas(Long usuarioId) {
-        log.debug("[DB] Contando notificaciones no leídas del usuario: {}", usuarioId);
         return notificacionRepository.countNoLeidasByUsuario(usuarioId);
     }
 
     // ============================================================
-    // ACTUALIZAR (invalidación)
+    // ACTUALIZAR
     // ============================================================
 
     @Transactional
@@ -418,7 +403,6 @@ public class NotificacionService {
     })
     public void marcarComoLeidas(List<Long> ids, Long usuarioId) {
         if (ids == null || ids.isEmpty()) return;
-        log.info("Marcando {} como leídas (usuario {})", ids.size(), usuarioId);
         notificacionRepository.marcarComoLeidas(ids, usuarioId, Instant.now());
     }
 
@@ -428,7 +412,6 @@ public class NotificacionService {
             @CacheEvict(value = CACHE_CONTADOR_NOTIFICACIONES, key = "'usuario:' + #usuarioId")
     })
     public void marcarTodasComoLeidas(Long usuarioId) {
-        log.info("Marcando todas como leídas (usuario {})", usuarioId);
         notificacionRepository.marcarTodasComoLeidas(usuarioId, Instant.now());
     }
 
@@ -468,5 +451,19 @@ public class NotificacionService {
                 n.getUrl(),
                 n.getGrupo() != null ? n.getGrupo().getId() : null
         );
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    private String escapeHtml(String input) {
+        if (input == null) return "";
+        return input
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 }

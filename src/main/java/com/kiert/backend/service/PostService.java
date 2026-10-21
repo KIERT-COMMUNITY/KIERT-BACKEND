@@ -3,6 +3,7 @@ package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
 import com.kiert.backend.entity.*;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.mapper.PostMapper;
 import com.kiert.backend.repository.ComentarioRepository;
@@ -33,10 +34,15 @@ public class PostService {
     private final PostMapper postMapper;
     private final CloudinaryService cloudinaryService;
 
-    // Nombres de caché
     private static final String CACHE_POSTS = "posts";
     private static final String CACHE_POST = "post";
     private static final String CACHE_COMMENTS = "comments";
+
+    private static final int MAX_TITULO = 200;
+    private static final int MAX_DESCRIPCION = 5000;
+    private static final int MAX_COMENTARIO = 2000;
+    private static final int MAX_ARCHIVOS = 5;
+    private static final long MAX_TOTAL_ARCHIVOS = 30L * 1024L * 1024L;
 
     // ============================================================
     // LISTAR POSTS
@@ -45,18 +51,10 @@ public class PostService {
     @Cacheable(value = CACHE_POSTS, key = "'all'")
     public List<PostDTO> listar() {
         log.info("[DB] Listando posts");
-        try {
-            List<Post> posts = postRepository.findAllActiveOrderByFechaCreacionDesc();
-            log.info("Se encontraron {} posts", posts.size());
-            List<PostDTO> result = posts.stream()
-                    .map(postMapper::aDTO)
-                    .toList();
-            log.info("Mapeados {} posts a DTO", result.size());
-            return result;
-        } catch (Exception e) {
-            log.error("Error al listar posts: {}", e.getMessage(), e);
-            throw new RuntimeException("Error al listar publicaciones: " + e.getMessage());
-        }
+        List<Post> posts = postRepository.findAllActiveOrderByFechaCreacionDesc();
+        return posts.stream()
+                .map(postMapper::aDTO)
+                .toList();
     }
 
     // ============================================================
@@ -67,36 +65,15 @@ public class PostService {
     public PostDTO obtenerPorId(Long id) {
         log.info("[DB] Obteniendo post {}", id);
 
-        try {
-            if (!postRepository.existsById(id)) {
-                log.warn("Post con ID {} no existe en la base de datos", id);
-                throw new RecursoNoEncontradoException("No se encontró la publicación con ID: " + id);
-            }
-
-            Optional<Post> postOpt = postRepository.findActiveById(id);
-
-            if (postOpt.isEmpty()) {
-                log.warn("Post con ID {} está eliminado o no existe", id);
-                throw new RecursoNoEncontradoException("No se encontró la publicación con ID: " + id);
-            }
-
-            Post post = postOpt.get();
-            log.info("Post encontrado: ID={}, Título={}, Categoría={}, Autor={}",
-                    post.getId(), post.getTitulo(), post.getCategoria(),
-                    post.getAutor() != null ? post.getAutor().getNombreUsuario() : "null");
-
-            PostDTO dto = postMapper.aDTO(post);
-            log.info("DTO mapeado: Categoría={}", dto.categoria());
-
-            return dto;
-
-        } catch (RecursoNoEncontradoException e) {
-            log.warn("Post no encontrado: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            log.error("Error al obtener post {}: {}", id, e.getMessage(), e);
-            throw new RuntimeException("Error al obtener publicación: " + e.getMessage());
+        if (id == null) {
+            throw new BadRequestException("ID requerido");
         }
+
+        Post post = postRepository.findActiveById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No se encontró la publicación"));
+
+        return postMapper.aDTO(post);
     }
 
     // ============================================================
@@ -109,28 +86,53 @@ public class PostService {
     })
     public PostDTO crear(Long autorId, CrearPostDTO datos, List<MultipartFile> archivos) {
         log.info("Creando post para usuario: {}", autorId);
-        log.info("Título: {}", datos.titulo());
-        log.info("Categoría ingresada por el usuario: '{}'", datos.categoria());
+
+        // Validaciones
+        if (autorId == null) {
+            throw new BadRequestException("Usuario requerido");
+        }
+        if (datos == null) {
+            throw new BadRequestException("Datos requeridos");
+        }
+        if (datos.titulo() == null || datos.titulo().isBlank()) {
+            throw new BadRequestException("El título es obligatorio");
+        }
+        if (datos.titulo().length() > MAX_TITULO) {
+            throw new BadRequestException("El título es demasiado largo");
+        }
+        if (datos.descripcion() != null && datos.descripcion().length() > MAX_DESCRIPCION) {
+            throw new BadRequestException("La descripción es demasiado larga");
+        }
+        if (archivos != null && archivos.size() > MAX_ARCHIVOS) {
+            throw new BadRequestException("Solo se permiten " + MAX_ARCHIVOS + " archivos");
+        }
+
+        // Validar tamaño total de archivos
+        if (archivos != null && !archivos.isEmpty()) {
+            long total = archivos.stream()
+                    .filter(a -> a != null && !a.isEmpty())
+                    .mapToLong(MultipartFile::getSize)
+                    .sum();
+            if (total > MAX_TOTAL_ARCHIVOS) {
+                throw new BadRequestException("Los archivos no pueden superar 30 MB");
+            }
+        }
 
         Usuario autor = usuarioRepository.findById(autorId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado."));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String categoriaUsuario = datos.categoria() != null ? datos.categoria().trim() : "otro";
-        log.info("Guardando categoría: '{}'", categoriaUsuario);
 
         Post post = Post.builder()
                 .autor(autor)
-                .titulo(datos.titulo())
+                .titulo(datos.titulo().trim())
                 .categoria(categoriaUsuario)
                 .descripcion(datos.descripcion())
                 .eliminado(false)
                 .fechaCreacion(Instant.now())
                 .build();
 
-        log.info("Post a guardar: Título={}, Categoría={}", post.getTitulo(), post.getCategoria());
-
         if (datos.link() != null && !datos.link().isBlank()) {
-            log.info("Agregando link: {}", datos.link());
             Adjunto adjunto = Adjunto.builder()
                     .post(post)
                     .tipo("link")
@@ -141,18 +143,13 @@ public class PostService {
         }
 
         post = postRepository.save(post);
-        log.info("Post guardado con ID: {}, Categoría: '{}'", post.getId(), post.getCategoria());
-
         postRepository.flush();
 
         if (archivos != null && !archivos.isEmpty()) {
             log.info("Procesando {} archivo(s)", archivos.size());
 
             for (MultipartFile archivo : archivos) {
-                if (archivo.isEmpty()) {
-                    log.warn("Archivo vacío, saltando...");
-                    continue;
-                }
+                if (archivo == null || archivo.isEmpty()) continue;
 
                 try {
                     String url;
@@ -162,7 +159,6 @@ public class PostService {
                     String formato = cloudinaryService.getFormato(archivo.getContentType());
 
                     if (cloudinaryService.esVideo(archivo)) {
-                        log.info("Subiendo video: {}", archivo.getOriginalFilename());
                         Map<String, Object> result = cloudinaryService.subirVideo(archivo, carpeta + "/videos");
                         url = result.get("secure_url").toString();
                         tipo = "video";
@@ -170,15 +166,12 @@ public class PostService {
                             duracionSegundos = ((Number) result.get("duration")).intValue();
                         }
                     } else if (cloudinaryService.esGif(archivo)) {
-                        log.info("Subiendo GIF: {}", archivo.getOriginalFilename());
                         url = cloudinaryService.subirGif(archivo, carpeta + "/gifs");
                         tipo = "gif";
                     } else if (cloudinaryService.esImagen(archivo)) {
-                        log.info("Subiendo imagen: {}", archivo.getOriginalFilename());
                         url = cloudinaryService.subirImagen(archivo, carpeta + "/imagenes");
                         tipo = "imagen";
                     } else {
-                        log.info("Subiendo archivo: {}", archivo.getOriginalFilename());
                         url = cloudinaryService.subirArchivo(archivo, carpeta + "/archivos");
                         tipo = "archivo";
                     }
@@ -194,19 +187,17 @@ public class PostService {
                             .build();
 
                     post.getAdjuntos().add(adjunto);
-                    log.info("{} subido exitosamente", tipo);
 
                 } catch (Exception e) {
-                    log.error("Error al subir archivo {}: {}", archivo.getOriginalFilename(), e.getMessage());
+                    log.error("Error al subir archivo: {}", e.getMessage());
+                    // No abortar el post por un archivo fallido
                 }
             }
 
             post = postRepository.save(post);
-            log.info("Post actualizado con {} adjunto(s)", post.getAdjuntos().size());
             postRepository.flush();
         }
 
-        log.info("Post completado exitosamente con ID: {}, Categoría: '{}'", post.getId(), post.getCategoria());
         return postMapper.aDTO(post);
     }
 
@@ -217,10 +208,13 @@ public class PostService {
     @Cacheable(value = CACHE_COMMENTS, key = "#postId")
     public List<ComentarioDTO> listarComentarios(Long postId) {
         log.info("[DB] Listando comentarios del post {}", postId);
-        if (!postRepository.existsById(postId)) {
-            throw new RecursoNoEncontradoException("No se encontró la publicación.");
+
+        if (!postRepository.existsActiveById(postId)) {
+            throw new RecursoNoEncontradoException("No se encontró la publicación");
         }
-        return comentarioRepository.findByPostIdAndEliminadoFalseOrderByFechaCreacionAsc(postId).stream()
+
+        return comentarioRepository.findByPostIdAndEliminadoFalseOrderByFechaCreacionAsc(postId)
+                .stream()
                 .map(postMapper::aDTO)
                 .toList();
     }
@@ -237,15 +231,28 @@ public class PostService {
     public ComentarioDTO comentar(Long postId, Long autorId, String contenido) {
         log.info("Comentando en post {} por usuario {}", postId, autorId);
 
-        Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
+        if (contenido == null || contenido.isBlank()) {
+            throw new BadRequestException("El comentario no puede estar vacío");
+        }
+        if (contenido.length() > MAX_COMENTARIO) {
+            throw new BadRequestException("El comentario es demasiado largo");
+        }
+
+        Post post = postRepository.findActiveById(postId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación"));
+
+        if (post.isEliminado()) {
+            throw new BadRequestException("La publicación ya no está disponible");
+        }
+
         Usuario autor = usuarioRepository.findById(autorId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado."));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         Comentario comentario = Comentario.builder()
                 .post(post)
                 .autor(autor)
-                .contenido(contenido)
+                .contenido(contenido.trim())
+                .eliminado(false)
                 .build();
 
         comentario = comentarioRepository.save(comentario);
@@ -264,11 +271,16 @@ public class PostService {
     public void eliminarPost(Long postId, Long autorId) {
         log.info("Eliminando post {} por usuario {}", postId, autorId);
 
-        Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación."));
+        if (postId == null || autorId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+
+        Post post = postRepository.findActiveById(postId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación"));
 
         if (!post.getAutor().getId().equals(autorId)) {
-            throw new SecurityException("No tienes permiso para eliminar esta publicación.");
+            // Mensaje genérico para no revelar existencia
+            throw new SecurityException("No tienes permiso para eliminar esta publicación");
         }
 
         post.setEliminado(true);

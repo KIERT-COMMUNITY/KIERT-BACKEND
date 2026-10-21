@@ -32,6 +32,7 @@ public class ChatController {
     public ResponseEntity<?> listarConversaciones() {
         Long usuarioId = usuarioActual.id();
         if (usuarioId == null) return noAuth();
+        // Solo devuelve las conversaciones DEL usuario autenticado.
         return ResponseEntity.ok(chatService.listarConversaciones(usuarioId));
     }
 
@@ -40,6 +41,14 @@ public class ChatController {
     public ResponseEntity<?> obtenerMensajes(@PathVariable Long usuarioId) {
         Long usuarioActualId = usuarioActual.id();
         if (usuarioActualId == null) return noAuth();
+
+        // Validar que el usuario no se esté pasando el ID de otro usuario
+        // El chat solo se puede ver entre el usuario autenticado y otro usuario
+        if (usuarioActualId.equals(usuarioId)) {
+            return ResponseEntity.badRequest()
+                    .body(new MensajeSimpleDTO("No puedes chatear contigo mismo"));
+        }
+
         return ResponseEntity.ok(chatService.obtenerMensajes(usuarioActualId, usuarioId));
     }
 
@@ -49,8 +58,15 @@ public class ChatController {
             @Valid @RequestBody EnviarMensajeDTO request) {
         Long usuarioActualId = usuarioActual.id();
         if (usuarioActualId == null) return noAuth();
+
+        if (usuarioActualId.equals(usuarioId)) {
+            return ResponseEntity.badRequest()
+                    .body(new MensajeSimpleDTO("No puedes enviarte mensajes a ti mismo"));
+        }
+
         try {
-            return ResponseEntity.ok(chatService.enviarMensaje(usuarioActualId, usuarioId, request.contenido()));
+            return ResponseEntity.ok(
+                    chatService.enviarMensaje(usuarioActualId, usuarioId, request.contenido()));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new MensajeSimpleDTO(e.getMessage()));
@@ -64,15 +80,16 @@ public class ChatController {
             @RequestParam(value = "archivos", required = false) List<MultipartFile> archivos) {
         Long usuarioActualId = usuarioActual.id();
         if (usuarioActualId == null) return noAuth();
+
         try {
-            return ResponseEntity.ok(chatService.enviarMensajeConArchivos(usuarioActualId, usuarioId, contenido, archivos));
+            return ResponseEntity.ok(
+                    chatService.enviarMensajeConArchivos(usuarioActualId, usuarioId, contenido, archivos));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new MensajeSimpleDTO(e.getMessage()));
         }
     }
 
-    // ========== ✅ NUEVO: ENVIAR STICKER ==========
     @PostMapping("/{usuarioId}/sticker")
     public ResponseEntity<?> enviarSticker(
             @PathVariable Long usuarioId,
@@ -88,14 +105,9 @@ public class ChatController {
 
         try {
             return ResponseEntity.ok(
-                    chatService.enviarSticker(usuarioActualId, usuarioId, stickerId)
-            );
+                    chatService.enviarSticker(usuarioActualId, usuarioId, stickerId));
         } catch (SecurityException | IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new MensajeSimpleDTO(e.getMessage()));
-        } catch (Exception e) {
-            log.error("Error al enviar sticker: {}", e.getMessage());
-            return ResponseEntity.badRequest()
                     .body(new MensajeSimpleDTO(e.getMessage()));
         }
     }

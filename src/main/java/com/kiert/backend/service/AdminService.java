@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -25,46 +26,78 @@ public class AdminService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    // ✅ Roles que pueden acceder al panel admin
     private static final List<String> ROLES_ADMIN = List.of("CEO", "ADMIN", "MODERADOR");
 
+    /**
+     * Login de administrador.
+     *
+     * MEDIDAS DE SEGURIDAD:
+     * - Mensaje genérico "Credenciales incorrectas" en TODOS los casos
+     *   (email no existe, contraseña incorrecta, cuenta inactiva, rol insuficiente).
+     * - Ejecuta BCrypt ficticio si el usuario no existe (evita timing attacks).
+     * - No revela si el email existe.
+     */
     @Transactional(readOnly = true)
     public AdminLoginResponseDTO login(AdminLoginRequestDTO req) {
         log.info("[ADMIN] Intento de login: {}", req.email());
 
-        // 1. Buscar usuario
-        Usuario usuario = usuarioRepository.findByEmail(req.email())
-                .orElseThrow(() -> {
-                    log.warn("[ADMIN] Email no encontrado: {}", req.email());
-                    return new BadCredentialsException("Credenciales incorrectas");
-                });
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(req.email());
 
-        // 2. Verificar contraseña
-        if (!passwordEncoder.matches(req.password(), usuario.getPasswordHash())) {
-            log.warn("[ADMIN] Password incorrecta para: {}", req.email());
+        // ============================================================
+        // TIMING ATTACK: si el usuario no existe, ejecutamos BCrypt
+        // ficticio para simular el mismo tiempo de respuesta.
+        // ============================================================
+        if (usuarioOpt.isEmpty()) {
+            passwordEncoder.matches(
+                    req.password(),
+                    "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+            );
+            log.warn("[ADMIN] Email no encontrado: {}", req.email());
             throw new BadCredentialsException("Credenciales incorrectas");
         }
 
-        // 3. Verificar cuenta activa
+        Usuario usuario = usuarioOpt.get();
+
+        // Validación de contraseña
+        if (!passwordEncoder.matches(req.password(), usuario.getPasswordHash())) {
+            log.warn("[ADMIN] Contraseña incorrecta para: {}", req.email());
+            throw new BadCredentialsException("Credenciales incorrectas");
+        }
+
+        // Validación de cuenta activa
         if (!Boolean.TRUE.equals(usuario.getActivo())) {
             log.warn("[ADMIN] Cuenta inactiva: {}", req.email());
-            throw new BadCredentialsException("Cuenta inactiva. Verifica tu correo.");
+            throw new BadCredentialsException("Credenciales incorrectas");
         }
 
-        // 4. ✅ Verificar rol de admin
+        // Validación de cuenta no eliminada
+        if (Boolean.TRUE.equals(usuario.getEliminado())) {
+            log.warn("[ADMIN] Cuenta eliminada: {}", req.email());
+            throw new BadCredentialsException("Credenciales incorrectas");
+        }
+
+        // Validación de cuenta no bloqueada
+        if (usuario.getBloqueadoHasta() != null
+                && usuario.getBloqueadoHasta().isAfter(java.time.Instant.now())) {
+            log.warn("[ADMIN] Cuenta bloqueada: {}", req.email());
+            throw new BadCredentialsException("Credenciales incorrectas");
+        }
+
+        // Validación de rol
         String rol = usuario.getRol() != null ? usuario.getRol() : "USER";
         if (!ROLES_ADMIN.contains(rol)) {
-            log.warn("[ADMIN] Usuario sin permisos: {} (rol={})", req.email(), rol);
-            throw new BadCredentialsException("No tienes permisos de administrador");
+            log.warn("[ADMIN] Sin permisos: {} (rol={})", req.email(), rol);
+            throw new BadCredentialsException("Credenciales incorrectas");
         }
 
-        // 5. ✅ Generar token — CORREGIDO: pasar (id, email)
-        String token = jwtService.generarToken(
+        // Generar token con rol
+        String token = jwtService.generarTokenConRol(
                 usuario.getId(),
-                usuario.getEmail()
+                usuario.getEmail(),
+                rol
         );
 
-        log.info("[ADMIN] ✅ Login exitoso: {} (rol={})", req.email(), rol);
+        log.info("[ADMIN] Login exitoso: {} (rol={})", req.email(), rol);
 
         return new AdminLoginResponseDTO(
                 token,
@@ -74,7 +107,7 @@ public class AdminService {
                         usuario.getNombreUsuario(),
                         rol
                 ),
-                86400L // 24h
+                86400L
         );
     }
 }

@@ -1,10 +1,14 @@
 // src/main/java/com/kiert/backend/config/RedisConfig.java
 package com.kiert.backend.config;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -32,22 +36,25 @@ import java.time.Duration;
 public class RedisConfig implements CachingConfigurer {
 
     // ============================================================
-    // OBJECT MAPPER PARA REDIS
+    // OBJECT MAPPER SEGURO PARA REDIS
     // ============================================================
     /**
-     * Este ObjectMapper es SOLO para Redis.
-     * NO lleva @Primary, así Spring Boot crea el suyo propio para REST
-     * (sin "@class" en las respuestas JSON).
+     * ObjectMapper seguro para Redis.
+     * - Restringe las clases que se pueden deserializar (evita RCE).
+     * - Solo permite clases de paquetes conocidos.
      */
     @Bean("redisObjectMapper")
     public ObjectMapper redisObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
-        // Solo este mapper lleva activateDefaultTyping
+        // Visibilidad para serializar getters y campos
+        mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
         mapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
+                // SEGURIDAD: Usar un validador estricto en lugar de LaissezFaire
+                buildPolymorphicTypeValidator(),
                 ObjectMapper.DefaultTyping.NON_FINAL,
                 JsonTypeInfo.As.PROPERTY
         );
@@ -56,9 +63,27 @@ public class RedisConfig implements CachingConfigurer {
     }
 
     /**
+     * Validador de tipos para Jackson.
+     * Solo permite deserializar clases de los paquetes de la aplicación y clases estándar de Java.
+     * Evita que se inyecten clases maliciosas.
+     */
+    private PolymorphicTypeValidator buildPolymorphicTypeValidator() {
+        return BasicPolymorphicTypeValidator.builder()
+                // Permitir solo clases del proyecto Kiert
+                .allowIfSubType("com.kiert.backend.")
+                // Permitir clases estándar de Java
+                .allowIfSubType("java.util.")
+                .allowIfSubType("java.time.")
+                .allowIfSubType("java.math.")
+                .allowIfSubType("java.lang.")
+                // Permitir DTOs de Spring
+                .allowIfSubType("org.springframework.data.domain.")
+                .build();
+    }
+
+    /**
      * ObjectMapper @Primary para REST.
-     * Spring Boot lo usará para serializar las respuestas HTTP.
-     * SIN activateDefaultTyping → las respuestas NO llevan "@class".
+     * SIN activateDefaultTyping → las respuestas JSON no llevan "@class".
      */
     @Bean
     @Primary
@@ -66,7 +91,6 @@ public class RedisConfig implements CachingConfigurer {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        // NO llamar activateDefaultTyping aquí
         return mapper;
     }
 
@@ -87,7 +111,6 @@ public class RedisConfig implements CachingConfigurer {
 
         GenericJackson2JsonRedisSerializer serializer = buildSerializer(redisObjectMapper);
 
-        // Configuración por defecto (para cachés no definidas explícitamente)
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(5))
                 .serializeKeysWith(
@@ -99,145 +122,78 @@ public class RedisConfig implements CachingConfigurer {
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
 
-                // ================================================
                 // POSTS Y COMENTARIOS
-                // ================================================
-                .withCacheConfiguration("posts",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("post",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("comments",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("respuestas",
-                        buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("posts", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("post", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("comments", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("respuestas", buildConfig(Duration.ofMinutes(5), serializer))
 
-                // ================================================
                 // REACCIONES
-                // ================================================
-                .withCacheConfiguration("reaccionesPost",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("reaccionesComentario",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("usuarioReaccionoPost",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("usuarioReaccionoComentario",
-                        buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("reaccionesPost", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("reaccionesComentario", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("usuarioReaccionoPost", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("usuarioReaccionoComentario", buildConfig(Duration.ofMinutes(10), serializer))
 
-                // ================================================
                 // PERFIL Y PERSONALIZACIÓN
-                // ================================================
-                .withCacheConfiguration("perfil",
-                        buildConfig(Duration.ofMinutes(30), serializer))
-                .withCacheConfiguration("personalizacion",
-                        buildConfig(Duration.ofMinutes(30), serializer))
-                .withCacheConfiguration("marcos",
-                        buildConfig(Duration.ofHours(24), serializer))
-                .withCacheConfiguration("fondos",
-                        buildConfig(Duration.ofHours(24), serializer))
+                .withCacheConfiguration("perfil", buildConfig(Duration.ofMinutes(30), serializer))
+                .withCacheConfiguration("personalizacion", buildConfig(Duration.ofMinutes(30), serializer))
+                .withCacheConfiguration("marcos", buildConfig(Duration.ofHours(24), serializer))
+                .withCacheConfiguration("fondos", buildConfig(Duration.ofHours(24), serializer))
 
-                // ================================================
                 // USUARIOS
-                // ================================================
-                .withCacheConfiguration("usuarios",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("busquedaUsuarios",
-                        buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("usuarios", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("busquedaUsuarios", buildConfig(Duration.ofMinutes(5), serializer))
 
-                // ================================================
                 // BLOQUEOS
-                // ================================================
-                .withCacheConfiguration("bloqueos",
-                        buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("bloqueos", buildConfig(Duration.ofMinutes(10), serializer))
 
-                // ================================================
                 // CHAT PRIVADO
-                // ================================================
-                .withCacheConfiguration("conversaciones",
-                        buildConfig(Duration.ofSeconds(30), serializer))
-                .withCacheConfiguration("mensajes",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("solicitudes",
-                        buildConfig(Duration.ofMinutes(2), serializer))
-                .withCacheConfiguration("contactos",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("usuariosDisponibles",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("contadores",
-                        buildConfig(Duration.ofSeconds(30), serializer))
+                .withCacheConfiguration("conversaciones", buildConfig(Duration.ofSeconds(30), serializer))
+                .withCacheConfiguration("mensajes", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("solicitudes", buildConfig(Duration.ofMinutes(2), serializer))
+                .withCacheConfiguration("contactos", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("usuariosDisponibles", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("contadores", buildConfig(Duration.ofSeconds(30), serializer))
 
-                // ================================================
                 // CHAT GRUPAL
-                // ================================================
-                .withCacheConfiguration("gruposUsuario",
-                        buildConfig(Duration.ofMinutes(2), serializer))
-                .withCacheConfiguration("gruposPublicos",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("grupo",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("miembrosGrupo",
-                        buildConfig(Duration.ofMinutes(3), serializer))
-                .withCacheConfiguration("mensajesGrupo",
-                        buildConfig(Duration.ofMinutes(2), serializer))
-                .withCacheConfiguration("historialGrupo",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("invitacionesPendientes",
-                        buildConfig(Duration.ofMinutes(1), serializer))
-                .withCacheConfiguration("linksGrupo",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("infoInvitacion",
-                        buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("gruposUsuario", buildConfig(Duration.ofMinutes(2), serializer))
+                .withCacheConfiguration("gruposPublicos", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("grupo", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("miembrosGrupo", buildConfig(Duration.ofMinutes(3), serializer))
+                .withCacheConfiguration("mensajesGrupo", buildConfig(Duration.ofMinutes(2), serializer))
+                .withCacheConfiguration("historialGrupo", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("invitacionesPendientes", buildConfig(Duration.ofMinutes(1), serializer))
+                .withCacheConfiguration("linksGrupo", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("infoInvitacion", buildConfig(Duration.ofMinutes(5), serializer))
 
-                // ================================================
                 // NOTIFICACIONES
-                // ================================================
-                .withCacheConfiguration("notificaciones",
-                        buildConfig(Duration.ofSeconds(60), serializer))
-                .withCacheConfiguration("contadorNotificaciones",
-                        buildConfig(Duration.ofSeconds(30), serializer))
+                .withCacheConfiguration("notificaciones", buildConfig(Duration.ofSeconds(60), serializer))
+                .withCacheConfiguration("contadorNotificaciones", buildConfig(Duration.ofSeconds(30), serializer))
 
-                // ================================================
                 // DOCUMENTOS Y BIBLIOTECA
-                // ================================================
-                .withCacheConfiguration("documentos",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("documento",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("categoriasDocumentos",
-                        buildConfig(Duration.ofHours(1), serializer))
-                .withCacheConfiguration("documentosUsuario",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("recursosBiblioteca",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("recursoBiblioteca",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("recursosDestacados",
-                        buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("categoriasBiblioteca",
-                        buildConfig(Duration.ofHours(1), serializer))
-                .withCacheConfiguration("nivelesBiblioteca",
-                        buildConfig(Duration.ofHours(1), serializer))
+                .withCacheConfiguration("documentos", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("documento", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("categoriasDocumentos", buildConfig(Duration.ofHours(1), serializer))
+                .withCacheConfiguration("documentosUsuario", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("recursosBiblioteca", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("recursoBiblioteca", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("recursosDestacados", buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("categoriasBiblioteca", buildConfig(Duration.ofHours(1), serializer))
+                .withCacheConfiguration("nivelesBiblioteca", buildConfig(Duration.ofHours(1), serializer))
 
-                // ================================================
                 // COMPARTIDOS
-                // ================================================
-                .withCacheConfiguration("compartidos",
-                        buildConfig(Duration.ofMinutes(5), serializer))
-                .withCacheConfiguration("contadorCompartidos",
-                        buildConfig(Duration.ofMinutes(10), serializer))
+                .withCacheConfiguration("compartidos", buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("contadorCompartidos", buildConfig(Duration.ofMinutes(10), serializer))
 
-                // ================================================
                 // REPORTES
-                // ================================================
-                .withCacheConfiguration("resumenReportes",
-                        buildConfig(Duration.ofMinutes(2), serializer))
-                .withCacheConfiguration("misReportes",
-                        buildConfig(Duration.ofMinutes(5), serializer))
+                .withCacheConfiguration("resumenReportes", buildConfig(Duration.ofMinutes(2), serializer))
+                .withCacheConfiguration("misReportes", buildConfig(Duration.ofMinutes(5), serializer))
 
                 .build();
     }
 
     // ============================================================
-    // HELPER PARA CONFIGURACIONES INDIVIDUALES
+    // HELPER
     // ============================================================
     private RedisCacheConfiguration buildConfig(
             Duration ttl,
@@ -252,7 +208,7 @@ public class RedisConfig implements CachingConfigurer {
     }
 
     // ============================================================
-    // REDIS TEMPLATE (para operaciones manuales con objetos)
+    // REDIS TEMPLATE
     // ============================================================
     @Bean
     public RedisTemplate<String, Object> redisTemplate(
@@ -274,9 +230,10 @@ public class RedisConfig implements CachingConfigurer {
     }
 
     // ============================================================
-    // STRING REDIS TEMPLATE (contadores, rate limiting, blacklist)
+    // STRING REDIS TEMPLATE
     // ============================================================
     @Bean
+    @Primary
     public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
         return new StringRedisTemplate(connectionFactory);
     }
@@ -284,12 +241,6 @@ public class RedisConfig implements CachingConfigurer {
     // ============================================================
     // ERROR HANDLER — Resiliencia ante caída de Redis
     // ============================================================
-    /**
-     * Si Redis cae, en lugar de tumbar la app, logueamos el error
-     * y la operación se ejecuta sin caché.
-     *
-     * CRÍTICO para producción.
-     */
     @Override
     public CacheErrorHandler errorHandler() {
         return new CacheErrorHandler() {

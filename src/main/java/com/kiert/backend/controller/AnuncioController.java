@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/controller/AnuncioController.java
 package com.kiert.backend.controller;
 
 import com.kiert.backend.entity.Anuncio;
@@ -13,7 +14,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/anuncios")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('CEO','ADMIN')")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+@PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
 public class AnuncioController {
 
     private final AnuncioService anuncioService;

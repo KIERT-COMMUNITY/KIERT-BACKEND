@@ -3,6 +3,7 @@ package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
 import com.kiert.backend.entity.*;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +29,6 @@ public class ReporteService {
     private final PostRepository postRepository;
     private final ComentarioRepository comentarioRepository;
     private final RespuestaComentarioRepository respuestaRepository;
-
-    // ✅ NUEVO: inyectar NotificacionService
     private final NotificacionService notificacionService;
 
     private static final String CACHE_RESUMEN_REPORTES = "resumenReportes";
@@ -44,6 +43,17 @@ public class ReporteService {
             "POST", "COMENTARIO", "RESPUESTA", "USUARIO"
     );
 
+    private static final List<String> ESTADOS_VALIDOS = List.of(
+            "PENDIENTE", "REVISANDO", "RESUELTO", "RECHAZADO"
+    );
+
+    private static final List<String> ACCIONES_VALIDAS = List.of(
+            "NINGUNA", "ADVERTENCIA", "ELIMINADO", "BANEADO"
+    );
+
+    private static final int MAX_DESCRIPCION = 1000;
+    private static final int MAX_NOTA = 1000;
+
     // ============================================================
     // CREAR REPORTE
     // ============================================================
@@ -57,23 +67,40 @@ public class ReporteService {
                 dto.tipoReporte(), dto.motivo(), usuarioReportanteId);
 
         // Validaciones
-        if (!TIPOS_VALIDOS.contains(dto.tipoReporte())) {
-            throw new IllegalArgumentException("Tipo de reporte inválido: " + dto.tipoReporte());
+        if (usuarioReportanteId == null || dto == null) {
+            throw new BadRequestException("Parámetros inválidos");
         }
-        if (!MOTIVOS_VALIDOS.contains(dto.motivo())) {
-            throw new IllegalArgumentException("Motivo inválido: " + dto.motivo());
+        if (dto.tipoReporte() == null || !TIPOS_VALIDOS.contains(dto.tipoReporte())) {
+            throw new BadRequestException("Tipo de reporte inválido");
+        }
+        if (dto.motivo() == null || !MOTIVOS_VALIDOS.contains(dto.motivo())) {
+            throw new BadRequestException("Motivo inválido");
         }
         if (dto.descripcion() == null || dto.descripcion().trim().length() < 10) {
-            throw new IllegalArgumentException("La descripción debe tener al menos 10 caracteres");
+            throw new BadRequestException("La descripción debe tener al menos 10 caracteres");
+        }
+        if (dto.descripcion().length() > MAX_DESCRIPCION) {
+            throw new BadRequestException("La descripción es demasiado larga");
         }
 
         Usuario reportante = usuarioRepository.findById(usuarioReportanteId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        if (reporteRepository.existeReporteDuplicado(
-                usuarioReportanteId, dto.tipoReporte(),
-                dto.postId(), dto.comentarioId(), dto.respuestaId(), dto.usuarioReportadoId())) {
-            throw new IllegalStateException("Ya has reportado este contenido anteriormente");
+        // Validar duplicados según el tipo (usando los métodos existentes del repository)
+        boolean yaReportado = switch (dto.tipoReporte()) {
+            case "POST" -> dto.postId() != null &&
+                    reporteRepository.existeReporteDePost(usuarioReportanteId, dto.postId());
+            case "COMENTARIO" -> dto.comentarioId() != null &&
+                    reporteRepository.existeReporteDeComentario(usuarioReportanteId, dto.comentarioId());
+            case "RESPUESTA" -> dto.respuestaId() != null &&
+                    reporteRepository.existeReporteDeRespuesta(usuarioReportanteId, dto.respuestaId());
+            case "USUARIO" -> dto.usuarioReportadoId() != null &&
+                    reporteRepository.existeReporteDeUsuario(usuarioReportanteId, dto.usuarioReportadoId());
+            default -> false;
+        };
+
+        if (yaReportado) {
+            throw new BadRequestException("Ya has reportado este contenido anteriormente");
         }
 
         Reporte reporte = Reporte.builder()
@@ -88,28 +115,28 @@ public class ReporteService {
 
         switch (dto.tipoReporte()) {
             case "POST" -> {
-                if (dto.postId() == null) throw new IllegalArgumentException("postId es requerido");
-                Post post = postRepository.findById(dto.postId())
+                if (dto.postId() == null) throw new BadRequestException("postId es requerido");
+                Post post = postRepository.findActiveById(dto.postId())
                         .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
                 reporte.setPost(post);
                 reporte.setUsuarioReportado(post.getAutor());
             }
             case "COMENTARIO" -> {
-                if (dto.comentarioId() == null) throw new IllegalArgumentException("comentarioId es requerido");
-                Comentario comentario = comentarioRepository.findById(dto.comentarioId())
+                if (dto.comentarioId() == null) throw new BadRequestException("comentarioId es requerido");
+                Comentario comentario = comentarioRepository.findActivoConAutor(dto.comentarioId())
                         .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
                 reporte.setComentario(comentario);
                 reporte.setUsuarioReportado(comentario.getAutor());
             }
             case "RESPUESTA" -> {
-                if (dto.respuestaId() == null) throw new IllegalArgumentException("respuestaId es requerido");
-                RespuestaComentario respuesta = respuestaRepository.findById(dto.respuestaId())
+                if (dto.respuestaId() == null) throw new BadRequestException("respuestaId es requerido");
+                RespuestaComentario respuesta = respuestaRepository.findActivaById(dto.respuestaId())
                         .orElseThrow(() -> new RecursoNoEncontradoException("Respuesta no encontrada"));
                 reporte.setRespuesta(respuesta);
                 reporte.setUsuarioReportado(respuesta.getAutor());
             }
             case "USUARIO" -> {
-                if (dto.usuarioReportadoId() == null) throw new IllegalArgumentException("usuarioReportadoId es requerido");
+                if (dto.usuarioReportadoId() == null) throw new BadRequestException("usuarioReportadoId es requerido");
                 Usuario reportado = usuarioRepository.findById(dto.usuarioReportadoId())
                         .orElseThrow(() -> new RecursoNoEncontradoException("Usuario reportado no encontrado"));
                 reporte.setUsuarioReportado(reportado);
@@ -118,13 +145,12 @@ public class ReporteService {
 
         if (reporte.getUsuarioReportado() != null &&
                 reporte.getUsuarioReportado().getId().equals(usuarioReportanteId)) {
-            throw new IllegalStateException("No puedes reportarte a ti mismo");
+            throw new BadRequestException("No puedes reportarte a ti mismo");
         }
 
         reporte = reporteRepository.save(reporte);
-        log.info("Reporte creado con ID: {}", reporte.getId());
 
-        // ✅ NUEVO: Notificar a TODOS los moderadores
+        // Notificar a moderadores
         try {
             notificacionService.notificarNuevoReporteAModeradores(
                     reportante,
@@ -134,8 +160,7 @@ public class ReporteService {
                     reporte.getId()
             );
         } catch (Exception e) {
-            log.error("[NOTIF] Error al notificar a moderadores: {}", e.getMessage(), e);
-            // No romper el flujo principal
+            log.error("[NOTIF] Error al notificar a moderadores: {}", e.getMessage());
         }
 
         return mapearADTO(reporte);
@@ -162,7 +187,7 @@ public class ReporteService {
     }
 
     // ============================================================
-    // ACTUALIZAR ESTADO (con notificaciones)
+    // ACTUALIZAR ESTADO
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -170,11 +195,30 @@ public class ReporteService {
             @CacheEvict(value = CACHE_MIS_REPORTES, allEntries = true)
     })
     public ReporteDTO actualizarEstado(Long reporteId, Long moderadorId, ActualizarReporteDTO dto) {
+        // Validaciones
+        if (reporteId == null || moderadorId == null || dto == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (dto.estado() == null || !ESTADOS_VALIDOS.contains(dto.estado())) {
+            throw new BadRequestException("Estado inválido");
+        }
+        if (dto.accionTomada() != null && !ACCIONES_VALIDAS.contains(dto.accionTomada())) {
+            throw new BadRequestException("Acción inválida");
+        }
+        if (dto.notaModerador() != null && dto.notaModerador().length() > MAX_NOTA) {
+            throw new BadRequestException("La nota es demasiado larga");
+        }
+
         Reporte reporte = reporteRepository.findById(reporteId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Reporte no encontrado"));
 
+        // Validar que el moderador sea válido
         Usuario moderador = usuarioRepository.findById(moderadorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Moderador no encontrado"));
+
+        if (!usuarioRepository.esAdministrador(moderadorId)) {
+            throw new SecurityException("No tienes permisos de moderador");
+        }
 
         String estadoAnterior = reporte.getEstado();
 
@@ -185,16 +229,13 @@ public class ReporteService {
         reporte.setFechaRevision(Instant.now());
 
         reporte = reporteRepository.save(reporte);
-        log.info("Reporte {} actualizado de {} a {}", reporteId, estadoAnterior, dto.estado());
 
-        // ============================================================
-        // ✅ NUEVO: Enviar notificaciones
-        // ============================================================
+        // Notificaciones
         boolean estadoFinal = "RESUELTO".equals(dto.estado()) || "RECHAZADO".equals(dto.estado());
         boolean cambioEstado = !dto.estado().equals(estadoAnterior);
 
         if (estadoFinal && cambioEstado) {
-            // ✅ 1. Notificar al REPORTANTE
+            // Notificar al reportante
             try {
                 notificacionService.notificarResultadoAlReportante(
                         reporte.getUsuarioReportante(),
@@ -206,10 +247,10 @@ public class ReporteService {
                         dto.accionTomada()
                 );
             } catch (Exception e) {
-                log.error("[NOTIF] Error al notificar reportante: {}", e.getMessage(), e);
+                log.error("[NOTIF] Error al notificar reportante: {}", e.getMessage());
             }
 
-            // ✅ 2. Notificar al USUARIO REPORTADO (si hay acción)
+            // Notificar al usuario reportado
             try {
                 if (reporte.getUsuarioReportado() != null
                         && dto.accionTomada() != null
@@ -225,7 +266,7 @@ public class ReporteService {
                     );
                 }
             } catch (Exception e) {
-                log.error("[NOTIF] Error al notificar usuario reportado: {}", e.getMessage(), e);
+                log.error("[NOTIF] Error al notificar usuario reportado: {}", e.getMessage());
             }
         }
 
@@ -238,7 +279,6 @@ public class ReporteService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_RESUMEN_REPORTES, key = "'all'")
     public ReporteResumenDTO obtenerResumen() {
-        log.info("[DB] Obteniendo resumen de reportes");
         return new ReporteResumenDTO(
                 reporteRepository.countByEstado("PENDIENTE"),
                 reporteRepository.countByEstado("REVISANDO"),

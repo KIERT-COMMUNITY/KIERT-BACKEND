@@ -110,16 +110,9 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     );
 
     // ============================================================
-    // ✅ NUEVO: BUSCAR POR ROL (para notificar a moderadores)
+    // BUSCAR POR ROL
     // ============================================================
 
-    /**
-     * Busca todos los usuarios que tengan uno de los roles indicados,
-     * estén activos y no eliminados.
-     *
-     * Uso típico:
-     *   usuarioRepository.findByRolIn(List.of("CEO", "ADMIN", "MODERADOR"));
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.rol IN :roles
@@ -129,9 +122,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     List<Usuario> findByRolIn(@Param("roles") List<String> roles);
 
-    /**
-     * ✅ NUEVO: Variante con paginación (por si algún día hay muchos admins).
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.rol IN :roles
@@ -144,9 +134,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             Pageable pageable
     );
 
-    /**
-     * ✅ NUEVO: Cuenta cuántos usuarios hay con un rol específico.
-     */
     @Query("""
             SELECT COUNT(u) FROM Usuario u
             WHERE u.rol = :rol
@@ -155,9 +142,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             """)
     long countByRol(@Param("rol") String rol);
 
-    /**
-     * ✅ NUEVO: Busca un usuario por email Y rol (útil para validar CEO).
-     */
     @Query("""
             SELECT u FROM Usuario u
             WHERE u.email = :email
@@ -339,4 +323,20 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
               AND u.fechaCreacion < :limite
             """)
     int eliminarNoVerificadosAntiguos(@Param("limite") Instant limite);
+
+    // ============================================================
+    // SEGURIDAD: Verificar si el usuario es admin
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si un usuario tiene rol de administrador.
+     */
+    @Query("""
+            SELECT COUNT(u) > 0 FROM Usuario u
+            WHERE u.id = :usuarioId
+              AND u.rol IN ('CEO', 'ADMIN', 'MODERADOR')
+              AND u.eliminado = false
+              AND u.activo = true
+            """)
+    boolean esAdministrador(@Param("usuarioId") Long usuarioId);
 }

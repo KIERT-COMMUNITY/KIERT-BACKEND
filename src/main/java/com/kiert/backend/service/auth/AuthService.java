@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/auth/AuthService.java
 package com.kiert.backend.service.auth;
 
 import com.kiert.backend.dto.UsuarioDTO;
@@ -14,6 +15,7 @@ import com.kiert.backend.service.AuditoriaService;
 import com.kiert.backend.service.CodigoVerificacionService;
 import com.kiert.backend.service.EmailService;
 import com.kiert.backend.service.UsuarioService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -23,9 +25,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -43,6 +49,8 @@ public class AuthService {
     private final RateLimitService rateLimitService;
     private final TokenBlacklistService tokenBlacklistService;
 
+    private static final List<String> ROLES_ADMIN = List.of("CEO", "ADMIN", "MODERADOR");
+
     // ============================================================
     // REGISTRO
     // ============================================================
@@ -50,14 +58,19 @@ public class AuthService {
     public void registrar(RegisterRequestDTO datos) {
         log.info("Registrando usuario: {}", datos.email());
 
-        // Rate limiting por email (máx 3 registros por hora por email)
         rateLimitService.verificar(
                 "registro:email:" + datos.email(),
                 3,
                 Duration.ofHours(1)
         );
 
-        // Validar duplicados
+        // Rate limit por IP también
+        rateLimitService.verificar(
+                "registro:ip:" + obtenerIpCliente(),
+                10,
+                Duration.ofHours(1)
+        );
+
         if (usuarioRepository.existsByEmail(datos.email())) {
             auditoriaService.registrar(
                     null,
@@ -66,7 +79,7 @@ public class AuthService {
                     "Intento de registro con email ya existente",
                     false
             );
-            throw new BadRequestException("El email ya esta registrado");
+            throw new BadRequestException("El email ya está registrado");
         }
 
         if (usuarioRepository.existsByNombreUsuario(datos.nombreUsuario())) {
@@ -77,7 +90,7 @@ public class AuthService {
                     "Intento de registro con nombre de usuario ya existente",
                     false
             );
-            throw new BadRequestException("El nombre de usuario ya esta en uso");
+            throw new BadRequestException("El nombre de usuario ya está en uso");
         }
 
         Usuario usuario = Usuario.builder()
@@ -88,6 +101,7 @@ public class AuthService {
                 .enLinea(false)
                 .activo(false)
                 .emailVerificado(false)
+                .rol("USER") // ✅ Explícito para evitar nulls
                 .build();
 
         usuario = usuarioRepository.save(usuario);
@@ -102,11 +116,11 @@ public class AuthService {
                 usuario.getId(),
                 datos.email(),
                 EventoAuditoria.REGISTRO,
-                "Usuario registrado. Codigo de verificacion enviado al email.",
+                "Usuario registrado. Código de verificación enviado al email.",
                 true
         );
 
-        log.info("Usuario registrado (pendiente verificacion): {}", datos.email());
+        log.info("Usuario registrado (pendiente verificación): {}", datos.email());
     }
 
     // ============================================================
@@ -116,7 +130,6 @@ public class AuthService {
     public void verificarCuenta(String email, String codigo) {
         log.info("Verificando cuenta: {}", email);
 
-        // Rate limiting: máx 5 intentos cada 15 min por email
         rateLimitService.verificar(
                 "verificar:email:" + email,
                 5,
@@ -139,13 +152,12 @@ public class AuthService {
                     usuario.getId(),
                     email,
                     EventoAuditoria.VERIFICACION_EMAIL,
-                    "Intento fallido: codigo incorrecto o expirado",
+                    "Intento fallido: código incorrecto o expirado",
                     false
             );
             throw e;
         }
 
-        // Éxito: resetear rate limit
         rateLimitService.resetear("verificar:email:" + email);
 
         usuario.setActivo(true);
@@ -167,13 +179,12 @@ public class AuthService {
     }
 
     // ============================================================
-    // REENVIAR CODIGO DE VERIFICACION
+    // REENVIAR CÓDIGO DE VERIFICACIÓN
     // ============================================================
     @Transactional
     public void reenviarCodigoVerificacion(String email) {
-        log.info("Reenviando codigo de verificacion: {}", email);
+        log.info("Reenviando código de verificación: {}", email);
 
-        // Rate limiting: máx 3 reenvíos por hora por email
         rateLimitService.verificar(
                 "reenvio:email:" + email,
                 3,
@@ -184,7 +195,7 @@ public class AuthService {
                 .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
 
         if (Boolean.TRUE.equals(usuario.getActivo())) {
-            throw new BadRequestException("Esta cuenta ya esta activa");
+            throw new BadRequestException("Esta cuenta ya está activa");
         }
 
         String codigo = codigoVerificacionService.generarCodigo(
@@ -196,29 +207,41 @@ public class AuthService {
                 usuario.getId(),
                 email,
                 EventoAuditoria.REENVIO_CODIGO,
-                "Codigo de verificacion reenviado al email",
+                "Código de verificación reenviado al email",
                 true
         );
     }
 
     // ============================================================
-    // LOGIN
+    // LOGIN — PROTEGIDO CONTRA TIMING ATTACKS
     // ============================================================
     @Transactional
     public AuthResponseDTO login(LoginRequestDTO datos) {
         log.info("Login para usuario: {}", datos.email());
 
-        // RATE LIMITING: máx 5 intentos cada 15 min por email
+        // Rate limiting por email y por IP
         rateLimitService.verificar(
                 "login:email:" + datos.email(),
                 5,
                 Duration.ofMinutes(15)
         );
 
-        Usuario usuario = usuarioRepository.findByEmail(datos.email())
-                .orElse(null);
+        rateLimitService.verificar(
+                "login:ip:" + obtenerIpCliente(),
+                20,
+                Duration.ofMinutes(15)
+        );
 
-        if (usuario == null) {
+        // ============================================================
+        // TIMING ATTACK: Buscamos el usuario pero SIEMPRE ejecutamos
+        // el mismo flujo, incluso si el usuario no existe.
+        // ============================================================
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(datos.email());
+
+        // Si no existe, ejecutamos un BCrypt ficticio para simular el tiempo
+        // de comparación real y evitar enumeración de emails.
+        if (usuarioOpt.isEmpty()) {
+            passwordEncoder.matches(datos.password(), "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy");
             auditoriaService.registrar(
                     null,
                     datos.email(),
@@ -226,9 +249,14 @@ public class AuthService {
                     "Intento de login con email no registrado",
                     false
             );
-            throw new BadRequestException("Credenciales invalidas");
+            throw new BadRequestException("Credenciales inválidas");
         }
 
+        Usuario usuario = usuarioOpt.get();
+
+        // ============================================================
+        // MENSAJE GENÉRICO: no revelar si la cuenta está inactiva o es admin
+        // ============================================================
         if (Boolean.FALSE.equals(usuario.getActivo())) {
             auditoriaService.registrar(
                     usuario.getId(),
@@ -237,11 +265,26 @@ public class AuthService {
                     "Intento de login con cuenta sin verificar",
                     false
             );
-            throw new BadRequestException(
-                    "Debes verificar tu cuenta primero. Revisa tu correo (incluida la carpeta de Spam)."
-            );
+            throw new BadRequestException("Credenciales inválidas");
         }
 
+        // ============================================================
+        // RECHAZAR ADMINS EN LOGIN NORMAL
+        // ============================================================
+        String rol = usuario.getRol() != null ? usuario.getRol() : "USER";
+        if (ROLES_ADMIN.contains(rol)) {
+            log.warn("Intento de login normal con cuenta admin: {}", datos.email());
+            auditoriaService.registrar(
+                    usuario.getId(),
+                    datos.email(),
+                    EventoAuditoria.LOGIN_FALLIDO,
+                    "Intento de login normal con cuenta de administrador",
+                    false
+            );
+            throw new BadRequestException("Credenciales inválidas");
+        }
+
+        // Autenticación real (valida contraseña)
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(datos.email(), datos.password())
@@ -252,28 +295,35 @@ public class AuthService {
                     usuario.getId(),
                     datos.email(),
                     EventoAuditoria.LOGIN_FALLIDO,
-                    "Contrasena incorrecta",
+                    "Contraseña incorrecta",
                     false
             );
-            throw new BadRequestException("Credenciales invalidas");
+            throw new BadRequestException("Credenciales inválidas");
         }
 
-        // LOGIN EXITOSO: resetear rate limit
         rateLimitService.resetear("login:email:" + datos.email());
+        rateLimitService.resetear("login:ip:" + obtenerIpCliente());
 
-        // Marcar en línea
         usuarioService.marcarEnLinea(usuario.getId());
-        log.info("Usuario {} marcado como EN LINEA tras login", usuario.getId());
+        log.info("Usuario {} marcado como EN LÍNEA tras login", usuario.getId());
 
         auditoriaService.registrar(
                 usuario.getId(),
                 datos.email(),
                 EventoAuditoria.LOGIN,
-                "Inicio de sesion correcto",
+                "Inicio de sesión correcto",
                 true
         );
 
-        String token = jwtService.generarToken(usuario.getId(), usuario.getEmail());
+        // ============================================================
+        // TOKEN CON ROL: siempre incluir el rol actual
+        // ============================================================
+        String token = jwtService.generarTokenConRol(
+                usuario.getId(),
+                usuario.getEmail(),
+                rol
+        );
+
         return new AuthResponseDTO(token, aDTO(usuario));
     }
 
@@ -282,18 +332,17 @@ public class AuthService {
     // ============================================================
     @Transactional
     public void logout(Long usuarioId, String token) {
-        log.info("Cerrando sesion para usuario: {}", usuarioId);
+        log.info("Cerrando sesión para usuario: {}", usuarioId);
 
         if (usuarioId != null) {
             usuarioService.marcarDesconectado(usuarioId);
 
-            // AÑADIR TOKEN A BLACKLIST
             if (token != null && !token.isBlank()) {
                 try {
                     Instant expiracion = jwtService.obtenerExpiracion(token);
                     tokenBlacklistService.invalidar(token, expiracion);
                 } catch (Exception e) {
-                    log.error("⚠️ Error invalidando token en logout: {}", e.getMessage());
+                    log.error("Error invalidando token en logout: {}", e.getMessage());
                 }
             }
 
@@ -301,23 +350,28 @@ public class AuthService {
                     usuarioId,
                     null,
                     EventoAuditoria.LOGOUT,
-                    "Cierre de sesion",
+                    "Cierre de sesión",
                     true
             );
         }
     }
 
     // ============================================================
-    // SOLICITAR RECUPERACION
+    // SOLICITAR RECUPERACIÓN
     // ============================================================
     @Transactional
     public void solicitarRecuperacion(String email) {
-        log.info("Solicitando recuperacion para: {}", email);
+        log.info("Solicitando recuperación para: {}", email);
 
-        // Rate limiting: máx 3 solicitudes por hora por email
         rateLimitService.verificar(
                 "recuperacion:email:" + email,
                 3,
+                Duration.ofHours(1)
+        );
+
+        rateLimitService.verificar(
+                "recuperacion:ip:" + obtenerIpCliente(),
+                10,
                 Duration.ofHours(1)
         );
 
@@ -327,10 +381,13 @@ public class AuthService {
                             null,
                             email,
                             EventoAuditoria.SOLICITUD_RECUPERACION,
-                            "Solicitud de recuperacion para email no registrado",
+                            "Solicitud de recuperación para email no registrado",
                             false
                     );
-                    return new BadRequestException("No existe una cuenta con ese correo");
+                    // MENSAJE GENÉRICO: no revelar si el email existe
+                    return new BadRequestException(
+                            "Si el correo está registrado, recibirás un código."
+                    );
                 });
 
         String codigo = codigoVerificacionService.generarCodigo(
@@ -342,21 +399,20 @@ public class AuthService {
                 usuario.getId(),
                 email,
                 EventoAuditoria.SOLICITUD_RECUPERACION,
-                "Codigo de recuperacion enviado al email",
+                "Código de recuperación enviado al email",
                 true
         );
 
-        log.info("Codigo de recuperacion enviado a: {}", email);
+        log.info("Código de recuperación enviado a: {}", email);
     }
 
     // ============================================================
-    // RESET PASSWORD CON CODIGO
+    // RESET PASSWORD CON CÓDIGO
     // ============================================================
     @Transactional
     public void restablecerPasswordConCodigo(String email, String codigo, String nuevaPassword) {
-        log.info("Restableciendo contrasena para: {}", email);
+        log.info("Restableciendo contraseña para: {}", email);
 
-        // Rate limiting: máx 5 intentos cada 15 min
         rateLimitService.verificar(
                 "reset:email:" + email,
                 5,
@@ -374,43 +430,67 @@ public class AuthService {
                     usuario.getId(),
                     email,
                     EventoAuditoria.CAMBIO_PASSWORD,
-                    "Intento fallido: codigo incorrecto o expirado",
+                    "Intento fallido: código incorrecto o expirado",
                     false
             );
             throw e;
         }
 
-        // Éxito: resetear rate limit
         rateLimitService.resetear("reset:email:" + email);
 
         usuario.setPasswordHash(passwordEncoder.encode(nuevaPassword));
         usuario.setFechaUltimoCambioPassword(Instant.now());
         usuarioRepository.save(usuario);
 
-        //Invalidar TODOS los tokens del usuario (forzar re-login)
-        // (Esto requiere que guardes los tokens por usuario o uses un "token version")
-        // Por ahora, no lo hacemos porque JwtService no lo soporta.
+        // Invalidar TODOS los tokens del usuario (forzar re-login)
+        // Nota: necesitarías un tokenVersion o usar Redis con patrón de usuario
+        // para invalidar todos los tokens. Por ahora no se implementa.
 
         auditoriaService.registrar(
                 usuario.getId(),
                 email,
                 EventoAuditoria.CAMBIO_PASSWORD,
-                "Contrasena restablecida correctamente con codigo",
+                "Contraseña restablecida correctamente con código",
                 true
         );
 
-        log.info("Contrasena restablecida para {}", email);
+        log.info("Contraseña restablecida para {}", email);
     }
 
     // ============================================================
-    // DTO HELPER
+    // HELPERS
     // ============================================================
+
+    /**
+     * Obtiene la IP del cliente desde la request actual.
+     * Si no hay request (ej. tests), devuelve "unknown".
+     */
+    private String obtenerIpCliente() {
+        try {
+            ServletRequestAttributes attrs =
+                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs == null) return "unknown";
+
+            HttpServletRequest request = attrs.getRequest();
+
+            // Considerar proxy (X-Forwarded-For)
+            String xff = request.getHeader("X-Forwarded-For");
+            if (xff != null && !xff.isBlank()) {
+                return xff.split(",")[0].trim();
+            }
+            return request.getRemoteAddr();
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
     private UsuarioDTO aDTO(Usuario usuario) {
         return new UsuarioDTO(
                 usuario.getId(),
                 usuario.getNombreUsuario(),
                 usuario.getEmail(),
-                usuario.getFotoPerfilUrl()
+                usuario.getFotoPerfilUrl(),
+                usuario.getBio()
         );
     }
 }

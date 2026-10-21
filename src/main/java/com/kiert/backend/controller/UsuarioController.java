@@ -10,10 +10,9 @@ import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.SolicitudContactoRepository;
 import com.kiert.backend.repository.UsuarioRepository;
 import com.kiert.backend.security.UsuarioActual;
+import com.kiert.backend.service.UsuarioService; // ✅ IMPORTANTE
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,7 +31,11 @@ public class UsuarioController {
     private final UsuarioRepository usuarioRepository;
     private final SolicitudContactoRepository solicitudContactoRepository;
     private final UsuarioActual usuarioActual;
+    private final UsuarioService usuarioService; // ✅ Inyectado
 
+    // ============================================================
+    // OBTENER USUARIO
+    // ============================================================
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerUsuario(@PathVariable Long id) {
         try {
@@ -45,7 +48,8 @@ public class UsuarioController {
                     usuario.getId(),
                     usuario.getNombreUsuario(),
                     usuario.getEmail(),
-                    usuario.getFotoPerfilUrl()
+                    usuario.getFotoPerfilUrl(),
+                    usuario.getBio() // ✅ Incluimos la bio
             );
 
             return ResponseEntity.ok(dto);
@@ -56,32 +60,53 @@ public class UsuarioController {
         }
     }
 
-    // BÚSQUEDA DE USUARIOS - CORREGIDA
+    // ============================================================
+    // ACTUALIZAR USUARIO (Guardar bio, nombre, etc.)
+    // ============================================================
+    @PutMapping("/{id}")
+    public ResponseEntity<?> actualizarUsuario(@PathVariable Long id, @RequestBody UsuarioDTO datos) {
+        try {
+            Long usuarioLogueadoId = usuarioActual.id();
+
+            if (usuarioLogueadoId == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
+            }
+
+            if (!usuarioLogueadoId.equals(id)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("No tienes permiso para editar este perfil");
+            }
+
+            UsuarioDTO actualizado = usuarioService.actualizarUsuario(id, datos);
+            return ResponseEntity.ok(actualizado);
+
+        } catch (Exception e) {
+            log.error("Error al actualizar usuario {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error al actualizar usuario: " + e.getMessage());
+        }
+    }
+
+    // ============================================================
+    // BÚSQUEDA DE USUARIOS
+    // ============================================================
     @GetMapping("/buscar")
     public ResponseEntity<?> buscarUsuarios(@RequestParam String q) {
         try {
             log.info("Buscando usuarios con: '{}'", q);
 
             Long usuarioActualId = usuarioActual.id();
-            log.info("Usuario actual ID: {}", usuarioActualId);
-
             if (usuarioActualId == null) {
                 log.warn("Usuario no autenticado para búsqueda");
                 return ResponseEntity.ok(List.of());
             }
 
-            // BUSCAR USUARIOS POR NOMBRE
             List<Usuario> usuarios = usuarioRepository.findByNombreUsuarioContainingIgnoreCase(q.trim());
             log.info("Usuarios encontrados en BD: {}", usuarios.size());
 
-            // FILTRAR PARA NO MOSTRAR AL USUARIO ACTUAL
             List<Usuario> usuariosFiltrados = usuarios.stream()
                     .filter(u -> !u.getId().equals(usuarioActualId))
                     .collect(Collectors.toList());
 
-            log.info("Usuarios filtrados (excluyendo actual): {}", usuariosFiltrados.size());
-
-            // CONVERTIR A DTO
             List<UsuarioDisponibleDTO> resultado = usuariosFiltrados.stream()
                     .map(u -> new UsuarioDisponibleDTO(
                             u.getId(),
@@ -90,7 +115,6 @@ public class UsuarioController {
                     ))
                     .collect(Collectors.toList());
 
-            log.info("Enviando {} usuarios", resultado.size());
             return ResponseEntity.ok(resultado);
 
         } catch (Exception e) {
@@ -100,17 +124,16 @@ public class UsuarioController {
         }
     }
 
+    // ============================================================
     // ENVIAR SOLICITUD DE CONTACTO
+    // ============================================================
     @PostMapping("/solicitud/{usuarioId}")
     public ResponseEntity<?> enviarSolicitud(@PathVariable Long usuarioId) {
         try {
             Long emisorId = usuarioActual.id();
             if (emisorId == null) {
-                log.error("Usuario no autenticado en enviarSolicitud");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
-
-            log.info("Enviando solicitud de {} a {}", emisorId, usuarioId);
 
             if (emisorId.equals(usuarioId)) {
                 return ResponseEntity.badRequest().body("No puedes enviarte solicitud a ti mismo");
@@ -143,7 +166,6 @@ public class UsuarioController {
                     .build();
 
             solicitud = solicitudContactoRepository.save(solicitud);
-            log.info("Solicitud creada con ID: {}", solicitud.getId());
 
             SolicitudContactoDTO dto = new SolicitudContactoDTO(
                     solicitud.getId(),
@@ -163,16 +185,16 @@ public class UsuarioController {
         }
     }
 
+    // ============================================================
+    // ACEPTAR SOLICITUD
+    // ============================================================
     @PutMapping("/solicitud/{solicitudId}/aceptar")
     public ResponseEntity<?> aceptarSolicitud(@PathVariable Long solicitudId) {
         try {
             Long receptorId = usuarioActual.id();
             if (receptorId == null) {
-                log.error("Usuario no autenticado en aceptarSolicitud");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
-
-            log.info("Aceptando solicitud {} para usuario {}", solicitudId, receptorId);
 
             SolicitudContacto solicitud = solicitudContactoRepository.findById(solicitudId)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
@@ -188,7 +210,6 @@ public class UsuarioController {
             solicitud.setEstado(EstadoSolicitud.ACEPTADA);
             solicitud.setFechaRespuesta(Instant.now());
             solicitud = solicitudContactoRepository.save(solicitud);
-            log.info("Solicitud aceptada");
 
             SolicitudContactoDTO dto = new SolicitudContactoDTO(
                     solicitud.getId(),
@@ -208,16 +229,16 @@ public class UsuarioController {
         }
     }
 
+    // ============================================================
+    // RECHAZAR SOLICITUD
+    // ============================================================
     @DeleteMapping("/solicitud/{solicitudId}")
     public ResponseEntity<?> rechazarSolicitud(@PathVariable Long solicitudId) {
         try {
             Long receptorId = usuarioActual.id();
             if (receptorId == null) {
-                log.error("Usuario no autenticado en rechazarSolicitud");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
-
-            log.info("Rechazando solicitud {} para usuario {}", solicitudId, receptorId);
 
             SolicitudContacto solicitud = solicitudContactoRepository.findById(solicitudId)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Solicitud no encontrada"));
@@ -229,7 +250,6 @@ public class UsuarioController {
             solicitud.setEstado(EstadoSolicitud.RECHAZADA);
             solicitud.setFechaRespuesta(Instant.now());
             solicitudContactoRepository.save(solicitud);
-            log.info("Solicitud rechazada");
 
             return ResponseEntity.ok().build();
 
@@ -240,16 +260,16 @@ public class UsuarioController {
         }
     }
 
+    // ============================================================
+    // SOLICITUDES PENDIENTES
+    // ============================================================
     @GetMapping("/solicitudes/pendientes")
     public ResponseEntity<?> obtenerSolicitudesPendientes() {
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) {
-                log.error("Usuario no autenticado en obtenerSolicitudesPendientes");
                 return ResponseEntity.ok(List.of());
             }
-
-            log.info("Obteniendo solicitudes pendientes para usuario: {}", usuarioId);
 
             List<SolicitudContacto> solicitudes = solicitudContactoRepository
                     .findByReceptorIdAndEstado(usuarioId, EstadoSolicitud.PENDIENTE);
@@ -274,16 +294,16 @@ public class UsuarioController {
         }
     }
 
+    // ============================================================
+    // CONTACTOS
+    // ============================================================
     @GetMapping("/contactos")
     public ResponseEntity<?> obtenerContactos() {
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) {
-                log.error("Usuario no autenticado en obtenerContactos");
                 return ResponseEntity.ok(List.of());
             }
-
-            log.info("Obteniendo contactos de usuario: {}", usuarioId);
 
             List<SolicitudContacto> solicitudes = solicitudContactoRepository
                     .findAllByUsuarioIdAndEstado(usuarioId, EstadoSolicitud.ACEPTADA);

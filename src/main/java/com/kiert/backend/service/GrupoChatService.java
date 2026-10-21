@@ -3,6 +3,7 @@ package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
 import com.kiert.backend.entity.*;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -31,17 +32,18 @@ public class GrupoChatService {
     private final MensajeGrupoRepository mensajeRepository;
     private final UsuarioRepository usuarioRepository;
     private final NotificacionService notificacionService;
-    private final NotificacionRepository notificacionRepository;   // ✅ NUEVO
+    private final NotificacionRepository notificacionRepository;
     private final InvitacionLinkRepository invitacionLinkRepository;
     private final GrupoHistorialRepository historialRepository;
     private final StorageService storageService;
     private final PresenciaService presenciaService;
 
     private static final String BASE_URL = "https://kiert.app/join/";
+    private static final int MAX_NOMBRE_GRUPO = 100;
+    private static final int MAX_DESCRIPCION = 500;
+    private static final int MAX_MENSAJE = 5000;
+    private static final long MAX_FOTO_SIZE = 5 * 1024 * 1024;
 
-    // ============================================================
-    // CACHÉS
-    // ============================================================
     private static final String CACHE_GRUPOS_USUARIO = "gruposUsuario";
     private static final String CACHE_GRUPOS_PUBLICOS = "gruposPublicos";
     private static final String CACHE_GRUPO = "grupo";
@@ -146,18 +148,32 @@ public class GrupoChatService {
     public GrupoDTO crearGrupo(Long creadorId, CrearGrupoDTO dto) {
         log.info("Usuario {} creando grupo: {}", creadorId, dto.nombre());
 
+        if (creadorId == null) throw new BadRequestException("Usuario requerido");
+        if (dto == null) throw new BadRequestException("Datos requeridos");
         if (dto.nombre() == null || dto.nombre().trim().isEmpty()) {
-            throw new IllegalArgumentException("El nombre del grupo es obligatorio");
+            throw new BadRequestException("El nombre del grupo es obligatorio");
+        }
+        if (dto.nombre().trim().length() > MAX_NOMBRE_GRUPO) {
+            throw new BadRequestException("El nombre es demasiado largo");
+        }
+        if (dto.descripcion() != null && dto.descripcion().length() > MAX_DESCRIPCION) {
+            throw new BadRequestException("La descripción es demasiado larga");
         }
 
         Usuario creador = usuarioRepository.findById(creadorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
+        // Validar tipo
+        String tipo = dto.tipo() != null ? dto.tipo().trim().toUpperCase() : "PRIVADO";
+        if (!tipo.equals("PUBLICO") && !tipo.equals("PRIVADO")) {
+            throw new BadRequestException("Tipo de grupo inválido");
+        }
+
         GrupoChat grupo = GrupoChat.builder()
                 .nombre(dto.nombre().trim())
                 .descripcion(dto.descripcion())
                 .creador(creador)
-                .tipo(dto.tipo() != null ? dto.tipo() : "PRIVADO")
+                .tipo(tipo)
                 .fechaCreacion(Instant.now())
                 .activo(true)
                 .build();
@@ -178,7 +194,7 @@ public class GrupoChatService {
 
         if (dto.usuariosInvitados() != null && !dto.usuariosInvitados().isEmpty()) {
             for (Long usuarioId : dto.usuariosInvitados()) {
-                if (usuarioId.equals(creadorId)) continue;
+                if (usuarioId == null || usuarioId.equals(creadorId)) continue;
 
                 Usuario invitado = usuarioRepository.findById(usuarioId).orElse(null);
                 if (invitado == null) continue;
@@ -325,7 +341,7 @@ public class GrupoChatService {
     }
 
     // ============================================================
-    // ✅ ACEPTAR INVITACIÓN — elimina la notificación
+    // ACEPTAR INVITACIÓN
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -338,23 +354,22 @@ public class GrupoChatService {
             @CacheEvict(value = CACHE_GRUPOS_PUBLICOS, allEntries = true)
     })
     public void aceptarInvitacion(Long grupoId, Long usuarioId) {
-        log.info("📥 Aceptando invitación — grupo: {}, usuario: {}", grupoId, usuarioId);
+        log.info("Aceptando invitación — grupo: {}, usuario: {}", grupoId, usuarioId);
 
         MiembroGrupo miembro = miembroRepository.findByGrupoIdAndUsuarioId(grupoId, usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Invitación no encontrada"));
 
         String estado = miembro.getEstado();
-        log.info("📊 Estado actual del miembro: {}", estado);
 
         if ("ACTIVO".equals(estado)) {
-            throw new IllegalArgumentException("Ya eres miembro de este grupo");
+            throw new BadRequestException("Ya eres miembro de este grupo");
         }
 
         if (!"PENDIENTE".equals(estado)
                 && !"SALIO".equals(estado)
                 && !"RECHAZADO".equals(estado)
                 && !"EXPULSADO".equals(estado)) {
-            throw new IllegalArgumentException("Esta invitación no se puede aceptar");
+            throw new BadRequestException("Esta invitación no se puede aceptar");
         }
 
         miembro.setEstado("ACTIVO");
@@ -362,20 +377,11 @@ public class GrupoChatService {
         miembroRepository.save(miembro);
         miembroRepository.flush();
 
-        log.info("✅ Miembro {} actualizado a ACTIVO en grupo {}", usuarioId, grupoId);
-
-        // ✅ CRÍTICO: eliminar la notificación de invitación
         try {
-            int eliminadas = notificacionRepository
-                    .eliminarNotificacionesInvitacionGrupo(usuarioId, grupoId);
-            log.info("🗑️ Notificaciones de invitación eliminadas: {}", eliminadas);
+            notificacionRepository.eliminarNotificacionesInvitacionGrupo(usuarioId, grupoId);
         } catch (Exception e) {
             log.error("Error al eliminar notificación: {}", e.getMessage());
         }
-
-        // ✅ Verificar
-        boolean verificado = miembroRepository.esMiembroActivo(grupoId, usuarioId);
-        log.info("🔍 Verificación post-accept: esMiembroActivo = {}", verificado);
 
         registrarHistorial(grupoId, usuarioId, "MIEMBRO_UNIDO",
                 null, miembro.getUsuario().getNombreUsuario(),
@@ -391,7 +397,7 @@ public class GrupoChatService {
             @CacheEvict(value = CACHE_MIEMBROS_GRUPO, allEntries = true)
     })
     public void rechazarInvitacion(Long grupoId, Long usuarioId) {
-        log.info("❌ Rechazando invitación — grupo: {}, usuario: {}", grupoId, usuarioId);
+        log.info("Rechazando invitación — grupo: {}, usuario: {}", grupoId, usuarioId);
 
         MiembroGrupo miembro = miembroRepository.findByGrupoIdAndUsuarioId(grupoId, usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Invitación no encontrada"));
@@ -400,11 +406,8 @@ public class GrupoChatService {
         miembroRepository.save(miembro);
         miembroRepository.flush();
 
-        // ✅ CRÍTICO: eliminar la notificación
         try {
-            int eliminadas = notificacionRepository
-                    .eliminarNotificacionesInvitacionGrupo(usuarioId, grupoId);
-            log.info("🗑️ Notificaciones de invitación eliminadas: {}", eliminadas);
+            notificacionRepository.eliminarNotificacionesInvitacionGrupo(usuarioId, grupoId);
         } catch (Exception e) {
             log.error("Error al eliminar notificación: {}", e.getMessage());
         }
@@ -423,8 +426,12 @@ public class GrupoChatService {
         GrupoChat grupo = grupoRepository.findById(grupoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Grupo no encontrado"));
 
-        if (!grupo.getTipo().equals("PUBLICO")) {
-            throw new IllegalArgumentException("Este grupo no es público");
+        if (!grupo.isActivo()) {
+            throw new BadRequestException("El grupo no está activo");
+        }
+
+        if (!"PUBLICO".equals(grupo.getTipo())) {
+            throw new BadRequestException("Este grupo no es público");
         }
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
@@ -433,8 +440,8 @@ public class GrupoChatService {
         var existente = miembroRepository.findByGrupoIdAndUsuarioId(grupoId, usuarioId);
         if (existente.isPresent()) {
             MiembroGrupo m = existente.get();
-            if (m.getEstado().equals("ACTIVO")) {
-                throw new IllegalArgumentException("Ya eres miembro de este grupo");
+            if ("ACTIVO".equals(m.getEstado())) {
+                throw new BadRequestException("Ya eres miembro de este grupo");
             }
             m.setEstado("ACTIVO");
             m.setFechaUnion(Instant.now());
@@ -513,7 +520,7 @@ public class GrupoChatService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Grupo no encontrado"));
 
         if (!grupo.isActivo()) {
-            throw new IllegalArgumentException("El grupo ya fue eliminado");
+            throw new BadRequestException("El grupo ya fue eliminado");
         }
 
         MiembroGrupo miembro = miembroRepository.findByGrupoIdAndUsuarioId(grupoId, usuarioId)
@@ -530,7 +537,6 @@ public class GrupoChatService {
         grupo.setActivo(false);
         grupoRepository.save(grupo);
 
-        // ✅ Eliminar notificaciones del grupo
         try {
             notificacionRepository.eliminarPorGrupo(grupoId);
         } catch (Exception e) {
@@ -538,8 +544,7 @@ public class GrupoChatService {
         }
 
         registrarHistorial(grupoId, usuarioId, "ELIMINAR",
-                nombreAntes, null,
-                "Eliminó el grupo");
+                nombreAntes, null, "Eliminó el grupo");
     }
 
     @Transactional
@@ -554,7 +559,7 @@ public class GrupoChatService {
         log.info("Admin {} expulsa a {} del grupo {}", adminId, usuarioAExpulsarId, grupoId);
 
         if (adminId.equals(usuarioAExpulsarId)) {
-            throw new IllegalArgumentException("No puedes expulsarte a ti mismo. Usa 'Salir del grupo'.");
+            throw new BadRequestException("No puedes expulsarte a ti mismo. Usa 'Salir del grupo'.");
         }
 
         GrupoChat grupo = grupoRepository.findById(grupoId)
@@ -571,7 +576,7 @@ public class GrupoChatService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no pertenece al grupo"));
 
         if (!"ACTIVO".equals(miembro.getEstado())) {
-            throw new IllegalArgumentException("El usuario no es miembro activo del grupo");
+            throw new BadRequestException("El usuario no es miembro activo del grupo");
         }
 
         if (grupo.getCreador().getId().equals(usuarioAExpulsarId)) {
@@ -585,8 +590,7 @@ public class GrupoChatService {
         miembroRepository.flush();
 
         registrarHistorial(grupoId, adminId, "EXPULSAR",
-                nombreExpulsado, null,
-                "Expulsó a @" + nombreExpulsado);
+                nombreExpulsado, null, "Expulsó a @" + nombreExpulsado);
 
         crearMensajeSistema(grupoId, adminId,
                 "@" + nombreExpulsado + " fue expulsado del grupo");
@@ -623,7 +627,6 @@ public class GrupoChatService {
                 .stream()
                 .map(m -> {
                     Usuario u = m.getUsuario();
-
                     Boolean online = presenciaService.estaEnLinea(u.getId());
                     Instant ultima = presenciaService.obtenerUltimaConexion(u.getId());
 
@@ -679,6 +682,12 @@ public class GrupoChatService {
     @Transactional(readOnly = true)
     public List<MensajeGrupoDTO> obtenerMensajes(Long grupoId, Long usuarioActualId) {
         log.info("[DB] Obteniendo mensajes del grupo: {}", grupoId);
+
+        // Validar que el usuario sea miembro (si se pasa usuarioActualId)
+        if (usuarioActualId != null && !miembroRepository.esMiembroActivo(grupoId, usuarioActualId)) {
+            throw new SecurityException("No eres miembro activo del grupo");
+        }
+
         List<MensajeGrupo> mensajes = mensajeRepository.findMensajesDeGrupo(grupoId);
         return mensajes.stream()
                 .map(m -> {
@@ -706,20 +715,27 @@ public class GrupoChatService {
 
     @Transactional
     public MensajeGrupoDTO enviarMensaje(Long grupoId, Long emisorId, String contenido) {
-        log.info("📨 Enviando mensaje — grupo: {}, emisor: {}", grupoId, emisorId);
+        log.info("Enviando mensaje — grupo: {}, emisor: {}", grupoId, emisorId);
+
+        if (grupoId == null || emisorId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (contenido == null || contenido.isBlank()) {
+            throw new BadRequestException("El contenido no puede estar vacío");
+        }
+        if (contenido.length() > MAX_MENSAJE) {
+            throw new BadRequestException("El mensaje es demasiado largo");
+        }
 
         GrupoChat grupo = grupoRepository.findById(grupoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Grupo no encontrado"));
 
-        boolean esMiembro = miembroRepository.esMiembroActivo(grupoId, emisorId);
-        log.info("🔍 esMiembroActivo({}, {}) = {}", grupoId, emisorId, esMiembro);
+        if (!grupo.isActivo()) {
+            throw new BadRequestException("El grupo ya no está activo");
+        }
 
-        if (!esMiembro) {
-            miembroRepository.findByGrupoIdAndUsuarioId(grupoId, emisorId).ifPresentOrElse(
-                    m -> log.warn("⚠️ Usuario {} tiene estado '{}' en grupo {}", emisorId, m.getEstado(), grupoId),
-                    () -> log.warn("⚠️ Usuario {} NO TIENE REGISTRO en grupo {}", emisorId, grupoId)
-            );
-            throw new SecurityException("No eres miembro de este grupo");
+        if (!miembroRepository.esMiembroActivo(grupoId, emisorId)) {
+            throw new SecurityException("No eres miembro activo de este grupo");
         }
 
         Usuario emisor = usuarioRepository.findById(emisorId)
@@ -728,7 +744,7 @@ public class GrupoChatService {
         MensajeGrupo mensaje = MensajeGrupo.builder()
                 .grupo(grupo)
                 .emisor(emisor)
-                .contenido(contenido)
+                .contenido(contenido.trim())
                 .tipoMensaje("TEXTO")
                 .fechaEnvio(Instant.now())
                 .eliminado(false)
@@ -760,8 +776,12 @@ public class GrupoChatService {
         GrupoChat grupo = grupoRepository.findById(grupoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Grupo no encontrado"));
 
+        if (!grupo.isActivo()) {
+            throw new BadRequestException("El grupo ya no está activo");
+        }
+
         if (!miembroRepository.esMiembroActivo(grupoId, emisorId)) {
-            throw new SecurityException("No eres miembro de este grupo");
+            throw new SecurityException("No eres miembro activo de este grupo");
         }
 
         Usuario emisor = usuarioRepository.findById(emisorId)
@@ -778,14 +798,14 @@ public class GrupoChatService {
                 tipoMensaje = determinarTipoArchivo(archivo);
             } catch (Exception e) {
                 log.error("Error al subir archivo: {}", e.getMessage());
-                throw new RuntimeException("Error al subir archivo: " + e.getMessage());
+                throw new BadRequestException("No se pudo subir el archivo");
             }
         }
 
         MensajeGrupo mensaje = MensajeGrupo.builder()
                 .grupo(grupo)
                 .emisor(emisor)
-                .contenido(contenido != null ? contenido : "")
+                .contenido(contenido != null ? contenido.trim() : "")
                 .tipoMensaje(tipoMensaje)
                 .urlArchivo(urlArchivo)
                 .nombreArchivo(nombreArchivo)
@@ -850,16 +870,16 @@ public class GrupoChatService {
         }
 
         if (foto == null || foto.isEmpty()) {
-            throw new IllegalArgumentException("La foto es obligatoria");
+            throw new BadRequestException("La foto es obligatoria");
         }
 
         String contentType = foto.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("Solo se permiten imágenes");
+            throw new BadRequestException("Solo se permiten imágenes");
         }
 
-        if (foto.getSize() > 5 * 1024 * 1024) {
-            throw new IllegalArgumentException("La imagen no debe superar 5MB");
+        if (foto.getSize() > MAX_FOTO_SIZE) {
+            throw new BadRequestException("La imagen no debe superar 5MB");
         }
 
         try {
@@ -868,13 +888,12 @@ public class GrupoChatService {
             grupoRepository.save(grupo);
 
             registrarHistorial(grupoId, usuarioId, "CAMBIAR_FOTO",
-                    null, url,
-                    "Cambió la foto del grupo");
+                    null, url, "Cambió la foto del grupo");
 
             return mapearADTO(grupo, usuarioId);
         } catch (Exception e) {
             log.error("Error al subir foto: {}", e.getMessage());
-            throw new RuntimeException("Error al subir la foto: " + e.getMessage());
+            throw new BadRequestException("No se pudo subir la foto");
         }
     }
 
@@ -901,8 +920,7 @@ public class GrupoChatService {
         grupoRepository.save(grupo);
 
         registrarHistorial(grupoId, usuarioId, "ELIMINAR_FOTO",
-                fotoAntes, null,
-                "Eliminó la foto del grupo");
+                fotoAntes, null, "Eliminó la foto del grupo");
 
         return mapearADTO(grupo, usuarioId);
     }
@@ -934,19 +952,24 @@ public class GrupoChatService {
 
         if (nombre != null && !nombre.trim().isEmpty()) {
             String nombreNuevo = nombre.trim();
+            if (nombreNuevo.length() > MAX_NOMBRE_GRUPO) {
+                throw new BadRequestException("El nombre es demasiado largo");
+            }
             String nombreAnterior = grupo.getNombre();
 
             if (!nombreNuevo.equals(nombreAnterior)) {
                 grupo.setNombre(nombreNuevo);
                 registrarHistorial(grupoId, usuarioId, "EDITAR_NOMBRE",
-                        nombreAnterior, nombreNuevo,
-                        "Cambió el nombre del grupo");
+                        nombreAnterior, nombreNuevo, "Cambió el nombre del grupo");
                 cambio = true;
             }
         }
 
         if (descripcion != null) {
             String descNueva = descripcion.trim();
+            if (descNueva.length() > MAX_DESCRIPCION) {
+                throw new BadRequestException("La descripción es demasiado larga");
+            }
             String descAnterior = grupo.getDescripcion() != null ? grupo.getDescripcion() : "";
 
             if (!descNueva.equals(descAnterior)) {
@@ -982,7 +1005,7 @@ public class GrupoChatService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Grupo no encontrado"));
 
         if (!grupo.isActivo()) {
-            throw new IllegalArgumentException("El grupo no está activo");
+            throw new BadRequestException("El grupo no está activo");
         }
 
         MiembroGrupo miembro = miembroRepository.findByGrupoIdAndUsuarioId(grupoId, usuarioId)
@@ -1064,6 +1087,11 @@ public class GrupoChatService {
     @Transactional(readOnly = true)
     public InfoInvitacionDTO obtenerInfoInvitacion(String token) {
         log.info("[DB] Obteniendo info de invitación: {}", token);
+
+        if (token == null || token.isBlank()) {
+            return new InfoInvitacionDTO(false, "Token inválido", null, null, null, null, null, null, null);
+        }
+
         Optional<InvitacionLink> opt = invitacionLinkRepository.findByToken(token);
 
         if (opt.isEmpty()) {
@@ -1118,13 +1146,13 @@ public class GrupoChatService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Link inválido"));
 
         if (!link.esValido()) {
-            throw new IllegalArgumentException("Este link ya no es válido");
+            throw new BadRequestException("Este link ya no es válido");
         }
 
         GrupoChat grupo = link.getGrupo();
 
         if (!grupo.isActivo()) {
-            throw new IllegalArgumentException("El grupo ya no está activo");
+            throw new BadRequestException("El grupo ya no está activo");
         }
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
@@ -1135,7 +1163,7 @@ public class GrupoChatService {
         if (existente.isPresent()) {
             MiembroGrupo m = existente.get();
             if ("ACTIVO".equals(m.getEstado())) {
-                throw new IllegalArgumentException("Ya eres miembro de este grupo");
+                throw new BadRequestException("Ya eres miembro de este grupo");
             }
             m.setEstado("ACTIVO");
             m.setFechaUnion(Instant.now());
@@ -1195,7 +1223,6 @@ public class GrupoChatService {
                 link.getFechaUltimoUso()
         );
     }
-    // En src/main/java/com/kiert/backend/service/GrupoChatService.java
 
     @Transactional
     @CacheEvict(value = CACHE_MENSAJES_GRUPO, key = "'grupo:' + #grupoId")
@@ -1203,11 +1230,19 @@ public class GrupoChatService {
                                               String stickerUrl, String stickerNombre) {
         log.info("Enviando sticker al grupo {} de {}", grupoId, emisorId);
 
+        if (grupoId == null || emisorId == null || stickerUrl == null || stickerUrl.isBlank()) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+
         GrupoChat grupo = grupoRepository.findById(grupoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Grupo no encontrado"));
 
+        if (!grupo.isActivo()) {
+            throw new BadRequestException("El grupo ya no está activo");
+        }
+
         if (!miembroRepository.esMiembroActivo(grupoId, emisorId)) {
-            throw new SecurityException("No eres miembro de este grupo");
+            throw new SecurityException("No eres miembro activo de este grupo");
         }
 
         Usuario emisor = usuarioRepository.findById(emisorId)

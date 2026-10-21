@@ -21,30 +21,16 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
     // LISTADOS BÁSICOS
     // ============================================================
 
-    /**
-     * Lista todos los anuncios activos (para la vista pública simple).
-     * Ordenados por fecha DESC. Sin filtro de expiración.
-     */
     List<Anuncio> findByActivoTrueOrderByFechaCreacionDesc();
 
-    /**
-     * Lista todos los anuncios (activos e inactivos) ordenados por fecha DESC.
-     * Uso: panel de administración.
-     */
     List<Anuncio> findAllByOrderByFechaCreacionDesc();
 
-    /**
-     * Versión paginada para el panel admin (recomendado si hay muchos).
-     */
     @Query("""
             SELECT a FROM Anuncio a
             ORDER BY a.fechaCreacion DESC
             """)
     Page<Anuncio> findAllPaginado(Pageable pageable);
 
-    /**
-     * Versión paginada solo de activos.
-     */
     @Query("""
             SELECT a FROM Anuncio a
             WHERE a.activo = true
@@ -53,15 +39,9 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
     Page<Anuncio> findActivosPaginado(Pageable pageable);
 
     // ============================================================
-    // VISTA PÚBLICA (usuarios normales)
+    // VISTA PÚBLICA (filtrado estricto)
     // ============================================================
 
-    /**
-     * ✅ Anuncios visibles para usuarios:
-     *   - activo = true
-     *   - sin fecha de expiración O fecha_expiracion > ahora
-     * Ordenados por destacados primero, luego fecha DESC.
-     */
     @Query("""
             SELECT a FROM Anuncio a
             WHERE a.activo = true
@@ -70,9 +50,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
             """)
     List<Anuncio> findActivosVigentes(@Param("ahora") LocalDateTime ahora);
 
-    /**
-     * Versión paginada de los vigentes (para scroll infinito / paginación).
-     */
     @Query("""
             SELECT a FROM Anuncio a
             WHERE a.activo = true
@@ -84,9 +61,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
             Pageable pageable
     );
 
-    /**
-     * Solo los destacados vigentes (para un carrusel superior, por ejemplo).
-     */
     @Query("""
             SELECT a FROM Anuncio a
             WHERE a.activo = true
@@ -100,9 +74,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
     // BÚSQUEDAS POR ID / ESTADO
     // ============================================================
 
-    /**
-     * Busca un anuncio por ID solo si está activo (para vista pública).
-     */
     @Query("""
             SELECT a FROM Anuncio a
             WHERE a.id = :id
@@ -110,9 +81,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
             """)
     Optional<Anuncio> findActivoPorId(@Param("id") Long id);
 
-    /**
-     * Anuncios creados por un admin específico (auditoría).
-     */
     @Query("""
             SELECT a FROM Anuncio a
             WHERE a.creadoPorId = :adminId
@@ -120,9 +88,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
             """)
     List<Anuncio> findByCreadoPorId(@Param("adminId") Long adminId);
 
-    /**
-     * Anuncios actualizados por un admin específico (auditoría).
-     */
     @Query("""
             SELECT a FROM Anuncio a
             WHERE a.actualizadoPorId = :adminId
@@ -134,10 +99,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
     // EXPIRACIÓN
     // ============================================================
 
-    /**
-     * ✅ Anuncios ya expirados que siguen activos.
-     * Uso: job programado que los desactive automáticamente.
-     */
     @Query("""
             SELECT a FROM Anuncio a
             WHERE a.activo = true
@@ -146,10 +107,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
             """)
     List<Anuncio> findExpiradosActivos(@Param("ahora") LocalDateTime ahora);
 
-    /**
-     * Desactiva en bloque todos los anuncios expirados.
-     * Devuelve cuántos se actualizaron.
-     */
     @Modifying
     @Query("""
             UPDATE Anuncio a
@@ -161,9 +118,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
             """)
     int desactivarExpirados(@Param("ahora") LocalDateTime ahora);
 
-    /**
-     * Cuenta cuántos están expirados pero activos (para dashboard admin).
-     */
     @Query("""
             SELECT COUNT(a) FROM Anuncio a
             WHERE a.activo = true
@@ -173,22 +127,12 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
     long countExpiradosActivos(@Param("ahora") LocalDateTime ahora);
 
     // ============================================================
-    // ESTADÍSTICAS (dashboard admin)
+    // ESTADÍSTICAS
     // ============================================================
 
-    /**
-     * Total de anuncios activos.
-     */
     long countByActivoTrue();
-
-    /**
-     * Total de anuncios inactivos.
-     */
     long countByActivoFalse();
 
-    /**
-     * Total de anuncios destacados y activos.
-     */
     @Query("""
             SELECT COUNT(a) FROM Anuncio a
             WHERE a.activo = true
@@ -196,9 +140,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
             """)
     long countDestacadosActivos();
 
-    /**
-     * Total de anuncios vigentes (activos y no expirados).
-     */
     @Query("""
             SELECT COUNT(a) FROM Anuncio a
             WHERE a.activo = true
@@ -206,9 +147,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
             """)
     long countVigentes(@Param("ahora") LocalDateTime ahora);
 
-    /**
-     * Total de anuncios creados en un rango de fechas.
-     */
     @Query("""
             SELECT COUNT(a) FROM Anuncio a
             WHERE a.fechaCreacion BETWEEN :desde AND :hasta
@@ -222,15 +160,8 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
     // VALIDACIONES DE NEGOCIO
     // ============================================================
 
-    /**
-     * ¿Existe un anuncio con este título? (para evitar duplicados)
-     */
     boolean existsByTituloIgnoreCase(String titulo);
 
-    /**
-     * ¿Existe otro anuncio con este título distinto al ID dado?
-     * Uso: al actualizar, para permitir mantener el mismo título.
-     */
     @Query("""
             SELECT COUNT(a) > 0 FROM Anuncio a
             WHERE LOWER(a.titulo) = LOWER(:titulo)
@@ -245,10 +176,6 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
     // MANTENIMIENTO
     // ============================================================
 
-    /**
-     * Elimina anuncios inactivos creados antes de una fecha.
-     * Uso: limpieza de anuncios viejos.
-     */
     @Modifying
     @Query("""
             DELETE FROM Anuncio a

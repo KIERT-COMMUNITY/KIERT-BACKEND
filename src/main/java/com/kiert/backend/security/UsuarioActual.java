@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -16,53 +15,72 @@ public class UsuarioActual {
 
     private final UsuarioRepository usuarioRepository;
 
+    /**
+     * Devuelve el ID del usuario autenticado, o null si no hay sesión.
+     *
+     * Solo confía en:
+     * - UsuarioPrincipal (el UserDetails custom, que es lo que inyecta JwtAuthFilter)
+     *
+     * No confía en:
+     * - Strings sueltos
+     * - UserDetails genéricos que no sean UsuarioPrincipal
+     */
     public Long id() {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth == null || !auth.isAuthenticated()) {
-                log.debug("UsuarioActual: sin autenticación");
                 return null;
             }
 
             Object principal = auth.getPrincipal();
-            if (principal == null) {
-                log.warn("UsuarioActual: principal null");
-                return null;
-            }
 
-            // CASO PRINCIPAL: UsuarioPrincipal (tu UserDetails custom)
+            // Caso principal y ÚNICO válido: UsuarioPrincipal
             if (principal instanceof UsuarioPrincipal up) {
-                log.debug("UsuarioActual (UsuarioPrincipal): {}", up.getId());
                 return up.getId();
             }
 
-            // Fallback 1: String (email o ID)
-            if (principal instanceof String s) {
-                try {
-                    return Long.parseLong(s);
-                } catch (NumberFormatException ignored) {
-                    return usuarioRepository.findByEmail(s)
-                            .map(u -> u.getId())
-                            .orElse(null);
-                }
-            }
-
-            // Fallback 2: UserDetails estándar (por si acaso)
-            if (principal instanceof UserDetails ud) {
-                String username = ud.getUsername();
-                try {
-                    return Long.parseLong(username);
-                } catch (NumberFormatException ignored) {
-                    return usuarioRepository.findByEmail(username)
-                            .map(u -> u.getId())
-                            .orElse(null);
-                }
-            }
-
-            log.warn("UsuarioActual: tipo no soportado: {}",
-                    principal.getClass().getName());
+            log.warn("UsuarioActual: principal no reconocido ({})",
+                    principal != null ? principal.getClass().getName() : "null");
             return null;
 
+        } catch (Exception e) {
+            log.error("UsuarioActual error: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Devuelve el email del usuario autenticado, o null.
+     */
+    public String email() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated()) return null;
+
+            Object principal = auth.getPrincipal();
+            if (principal instanceof UsuarioPrincipal up) {
+                return up.getUsername();
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("UsuarioActual error: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Devuelve el rol del usuario autenticado, o null.
+     */
+    public String rol() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated()) return null;
+
+            Object principal = auth.getPrincipal();
+            if (principal instanceof UsuarioPrincipal up) {
+                return up.getRol();
+            }
+            return null;
         } catch (Exception e) {
             log.error("UsuarioActual error: {}", e.getMessage(), e);
             return null;

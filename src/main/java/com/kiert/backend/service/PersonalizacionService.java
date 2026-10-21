@@ -3,6 +3,7 @@ package com.kiert.backend.service;
 
 import com.kiert.backend.dto.*;
 import com.kiert.backend.entity.*;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -30,9 +32,29 @@ public class PersonalizacionService {
     private static final String CACHE_MARCOS = "marcos";
     private static final String CACHE_FONDOS = "fondos";
 
+    // Whitelist de temas válidos
+    private static final Set<String> TEMAS_VALIDOS = Set.of(
+            "default", "dark", "light", "sunset", "ocean", "aurora", "galaxy",
+            "lava", "forest", "candy", "cyber", "blood", "royal", "gold", "pastel"
+    );
+
+    // Whitelist de marcos válidos
+    private static final Set<String> MARCOS_VALIDOS = Set.of(
+            "none", "classic", "gold", "silver", "rainbow", "pastel", "neon",
+            "ocean", "sunset", "galaxy", "fire", "ice", "rose", "cyber",
+            "crystal", "double", "star", "moon", "sun", "elite"
+    );
+
+    // Whitelist de fondos válidos
+    private static final Set<String> FONDOS_VALIDOS = Set.of(
+            "default", "dark", "light", "sunset", "ocean", "aurora", "galaxy",
+            "lava", "forest", "candy", "cyber", "blood", "royal", "gold", "pastel"
+    );
+
+    private static final long MAX_IMAGE_SIZE = 15 * 1024 * 1024;
+
     // ============================================================
     // OBTENER PERSONALIZACIÓN
-    // ✅ La foto SIEMPRE viene de Usuario.fotoPerfilUrl
     // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(
@@ -44,7 +66,7 @@ public class PersonalizacionService {
         log.info("[DB] Obteniendo personalización para usuario: {}", usuarioId);
 
         if (usuarioId == null) {
-            throw new IllegalArgumentException("Usuario ID no puede ser null");
+            throw new BadRequestException("Usuario ID requerido");
         }
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
@@ -85,11 +107,21 @@ public class PersonalizacionService {
             @CacheEvict(value = "documentos", allEntries = true)
     })
     public PersonalizacionDTO guardarPersonalizacion(Long usuarioId, String temaId, String marcoId, String fondoId) {
-        log.info("Guardando personalización para usuario: {} con tema={}, marco={}, fondo={}",
-                usuarioId, temaId, marcoId, fondoId);
+        log.info("Guardando personalización para usuario: {}", usuarioId);
 
         if (usuarioId == null) {
-            throw new IllegalArgumentException("Usuario ID no puede ser null");
+            throw new BadRequestException("Usuario ID requerido");
+        }
+
+        // Validar valores contra whitelist
+        if (temaId != null && !temaId.isEmpty() && !TEMAS_VALIDOS.contains(temaId)) {
+            throw new BadRequestException("Tema no válido");
+        }
+        if (marcoId != null && !marcoId.isEmpty() && !MARCOS_VALIDOS.contains(marcoId)) {
+            throw new BadRequestException("Marco no válido");
+        }
+        if (fondoId != null && !fondoId.isEmpty() && !FONDOS_VALIDOS.contains(fondoId)) {
+            throw new BadRequestException("Fondo no válido");
         }
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
@@ -114,7 +146,6 @@ public class PersonalizacionService {
 
     // ============================================================
     // SUBIR FOTO DE PERFIL
-    // ✅ Solo actualiza USUARIO (fuente de verdad)
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -132,25 +163,48 @@ public class PersonalizacionService {
     public PersonalizacionDTO subirFotoPerfil(Long usuarioId, MultipartFile archivo) {
         log.info("Subiendo foto de perfil para usuario: {}", usuarioId);
 
+        if (usuarioId == null) {
+            throw new BadRequestException("Usuario ID requerido");
+        }
+        if (archivo == null || archivo.isEmpty()) {
+            throw new BadRequestException("El archivo es obligatorio");
+        }
+
+        String contentType = archivo.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new BadRequestException("Solo se permiten imágenes");
+        }
+        if (archivo.getSize() > MAX_IMAGE_SIZE) {
+            throw new BadRequestException("La imagen no debe superar 15MB");
+        }
+
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String urlAnterior = usuario.getFotoPerfilUrl();
 
-        // ✅ Subir nueva a Cloudinary
-        String url = cloudinaryService.subirArchivo(archivo, "perfiles");
-
-        // ✅ Eliminar la anterior de Cloudinary
-        if (urlAnterior != null && !urlAnterior.isBlank()) {
-            log.info("Eliminando foto anterior de Cloudinary: {}", urlAnterior);
-            cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+        // Subir nueva a Cloudinary
+        String url;
+        try {
+            url = cloudinaryService.subirArchivo(archivo, "perfiles");
+        } catch (Exception e) {
+            log.error("Error al subir foto: {}", e.getMessage());
+            throw new BadRequestException("No se pudo subir la foto");
         }
 
-        // ✅ Actualizar en usuario (fuente de verdad)
+        // Eliminar la anterior
+        if (urlAnterior != null && !urlAnterior.isBlank()) {
+            try {
+                cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+            } catch (Exception e) {
+                log.warn("No se pudo eliminar foto anterior: {}", e.getMessage());
+            }
+        }
+
+        // Actualizar en usuario (fuente de verdad)
         usuario.setFotoPerfilUrl(url);
         usuarioRepository.save(usuario);
 
-        // Devolver DTO (la personalización ya no guarda foto)
         PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
                 .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
 
@@ -158,8 +212,7 @@ public class PersonalizacionService {
     }
 
     // ============================================================
-    // ✅ ELIMINAR FOTO DE PERFIL
-    // ✅ Solo actualiza USUARIO (fuente de verdad)
+    // ELIMINAR FOTO DE PERFIL
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -177,25 +230,30 @@ public class PersonalizacionService {
     public PersonalizacionDTO eliminarFotoPerfil(Long usuarioId) {
         log.info("Eliminando foto de perfil para usuario: {}", usuarioId);
 
+        if (usuarioId == null) {
+            throw new BadRequestException("Usuario ID requerido");
+        }
+
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String urlAnterior = usuario.getFotoPerfilUrl();
 
         if (urlAnterior != null && !urlAnterior.isBlank()) {
-            log.info("Eliminando foto de Cloudinary: {}", urlAnterior);
-            cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+            try {
+                cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+            } catch (Exception e) {
+                log.warn("No se pudo eliminar foto: {}", e.getMessage());
+            }
         }
 
-        // ✅ Poner null en usuario (ÚNICA fuente de verdad)
         usuario.setFotoPerfilUrl(null);
         usuarioRepository.save(usuario);
 
-        // Devolver DTO
         PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
                 .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
 
-        log.info("✅ Foto de perfil eliminada para el usuario {}", usuarioId);
+        log.info("Foto de perfil eliminada para el usuario {}", usuarioId);
         return toDTO(personalizacion, usuario);
     }
 
@@ -210,6 +268,21 @@ public class PersonalizacionService {
     public PersonalizacionDTO subirFotoPortada(Long usuarioId, MultipartFile archivo) {
         log.info("Subiendo foto de portada para usuario: {}", usuarioId);
 
+        if (usuarioId == null) {
+            throw new BadRequestException("Usuario ID requerido");
+        }
+        if (archivo == null || archivo.isEmpty()) {
+            throw new BadRequestException("El archivo es obligatorio");
+        }
+
+        String contentType = archivo.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new BadRequestException("Solo se permiten imágenes");
+        }
+        if (archivo.getSize() > MAX_IMAGE_SIZE) {
+            throw new BadRequestException("La imagen no debe superar 15MB");
+        }
+
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
@@ -217,10 +290,21 @@ public class PersonalizacionService {
                 .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
 
         String urlAnterior = personalizacion.getFotoPortadaUrl();
-        String url = cloudinaryService.subirArchivo(archivo, "portadas");
+
+        String url;
+        try {
+            url = cloudinaryService.subirArchivo(archivo, "portadas");
+        } catch (Exception e) {
+            log.error("Error al subir portada: {}", e.getMessage());
+            throw new BadRequestException("No se pudo subir la portada");
+        }
 
         if (urlAnterior != null && !urlAnterior.isBlank()) {
-            cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+            try {
+                cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
+            } catch (Exception e) {
+                log.warn("No se pudo eliminar portada anterior: {}", e.getMessage());
+            }
         }
 
         personalizacion.setFotoPortadaUrl(url);
@@ -319,16 +403,9 @@ public class PersonalizacionService {
         return personalizacionRepository.save(personalizacion);
     }
 
-    /**
-     * ✅ toDTO: la foto SIEMPRE viene del USUARIO, no de la personalización.
-     */
     private PersonalizacionDTO toDTO(PersonalizacionUsuario entity, Usuario usuario) {
-        if (entity == null) {
-            log.warn("Entity es null en toDTO");
-            return null;
-        }
+        if (entity == null) return null;
 
-        // ✅ La foto se toma del USUARIO (fuente de verdad)
         String fotoActual = usuario != null ? usuario.getFotoPerfilUrl() : null;
 
         return new PersonalizacionDTO(
@@ -337,7 +414,7 @@ public class PersonalizacionService {
                 entity.getTemaId() != null ? entity.getTemaId() : "default",
                 entity.getMarcoId() != null ? entity.getMarcoId() : "none",
                 entity.getFondoId() != null ? entity.getFondoId() : "default",
-                fotoActual,   // ✅ Foto del usuario
+                fotoActual,
                 entity.getFotoPortadaUrl(),
                 entity.getMarcoPersonalizadoUrl()
         );

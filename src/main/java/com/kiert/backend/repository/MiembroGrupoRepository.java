@@ -17,10 +17,6 @@ import java.util.Optional;
 @Repository
 public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long> {
 
-    // ============================================================
-    // MIEMBROS ACTIVOS
-    // ============================================================
-
     @Query("""
             SELECT m FROM MiembroGrupo m
             JOIN FETCH m.usuario
@@ -44,10 +40,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             Pageable pageable
     );
 
-    // ============================================================
-    // BUSCAR MIEMBRO ESPECÍFICO
-    // ============================================================
-
     @Query("""
             SELECT m FROM MiembroGrupo m
             JOIN FETCH m.usuario
@@ -64,16 +56,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
         return findByGrupoIdAndUsuarioId(grupoId, usuarioId);
     }
 
-    // ============================================================
-    // ✅ MÉTODO CRÍTICO — SIN @Cacheable, siempre va a BD
-    // ============================================================
-
-    /**
-     * Verifica si el usuario es miembro ACTIVO del grupo.
-     * ⚠️ IMPORTANTE: NO cachear este método. Los cambios de estado
-     * (aceptar invitación, salir del grupo, etc.) deben reflejarse
-     * de inmediato, no en 5 minutos.
-     */
     @Query("""
             SELECT COUNT(m) > 0 FROM MiembroGrupo m
             WHERE m.grupo.id = :grupoId
@@ -84,10 +66,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             @Param("grupoId") Long grupoId,
             @Param("usuarioId") Long usuarioId
     );
-
-    // ============================================================
-    // INVITACIONES PENDIENTES
-    // ============================================================
 
     @Query("""
             SELECT m FROM MiembroGrupo m
@@ -119,10 +97,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             """)
     long countInvitacionesPendientes(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // FILTRO POR ROL
-    // ============================================================
-
     @Query("""
             SELECT m FROM MiembroGrupo m
             JOIN FETCH m.usuario
@@ -151,10 +125,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             ORDER BY m.fechaUnion DESC
             """)
     List<MiembroGrupo> findGruposComoAdmin(@Param("usuarioId") Long usuarioId);
-
-    // ============================================================
-    // CONTADORES
-    // ============================================================
 
     @Query("""
             SELECT COUNT(m) FROM MiembroGrupo m
@@ -200,10 +170,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             """)
     long countGruposDeUsuario(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // VERIFICACIONES EXTRA
-    // ============================================================
-
     @Query("""
             SELECT COUNT(m) > 0 FROM MiembroGrupo m
             WHERE m.grupo.id = :grupoId
@@ -227,10 +193,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             @Param("usuarioId") Long usuarioId
     );
 
-    // ============================================================
-    // BÚSQUEDA DE MIEMBROS
-    // ============================================================
-
     @Query("""
             SELECT m FROM MiembroGrupo m
             JOIN FETCH m.usuario u
@@ -243,10 +205,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             @Param("grupoId") Long grupoId,
             @Param("query") String query
     );
-
-    // ============================================================
-    // USUARIOS DISPONIBLES PARA INVITAR
-    // ============================================================
 
     @Query("""
             SELECT u.id FROM Usuario u
@@ -262,10 +220,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             @Param("grupoId") Long grupoId,
             Pageable pageable
     );
-
-    // ============================================================
-    // BULK UPDATES
-    // ============================================================
 
     @Modifying
     @Query("""
@@ -295,10 +249,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             @Param("rol") String rol
     );
 
-    // ============================================================
-    // LIMPIEZA (para @Scheduled)
-    // ============================================================
-
     @Modifying
     @Query("""
             DELETE FROM MiembroGrupo m
@@ -306,10 +256,6 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
               AND m.fechaUnion < :limite
             """)
     int eliminarMiembrosInactivos(@Param("limite") Instant limite);
-
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
 
     @Query("""
             SELECT COUNT(m) FROM MiembroGrupo m
@@ -325,4 +271,36 @@ public interface MiembroGrupoRepository extends JpaRepository<MiembroGrupo, Long
             ORDER BY total DESC
             """)
     List<Object[]> topGruposConMasMiembros(Pageable pageable);
+
+    // ============================================================
+    // SEGURIDAD: Validar que el usuario puede gestionar miembros
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si el usuario puede expulsar a otro miembro.
+     * Solo si es ADMIN del grupo o el creador del grupo.
+     */
+    @Query("""
+            SELECT COUNT(m) > 0 FROM MiembroGrupo m
+            WHERE m.grupo.id = :grupoId
+              AND m.usuario.id = :usuarioId
+              AND m.estado = 'ACTIVO'
+              AND (m.rol = 'ADMIN' OR m.grupo.creador.id = :usuarioId)
+            """)
+    boolean puedeGestionarMiembros(
+            @Param("grupoId") Long grupoId,
+            @Param("usuarioId") Long usuarioId
+    );
+
+    /**
+     * NUEVO: Verifica si el usuario es el único admin del grupo.
+     * Se usa para evitar que el último admin salga y deje el grupo huérfano.
+     */
+    @Query("""
+            SELECT COUNT(m) = 1 FROM MiembroGrupo m
+            WHERE m.grupo.id = :grupoId
+              AND m.estado = 'ACTIVO'
+              AND m.rol = 'ADMIN'
+            """)
+    boolean esUnicoAdmin(@Param("grupoId") Long grupoId);
 }

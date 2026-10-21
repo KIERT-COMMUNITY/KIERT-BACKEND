@@ -17,10 +17,6 @@ import java.util.Optional;
 @Repository
 public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long> {
 
-    // ============================================================
-    // LISTAR MARCOS
-    // ============================================================
-
     @Query("""
             SELECT m FROM MarcoPersonalizado m
             WHERE m.activo = true
@@ -34,10 +30,6 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             ORDER BY m.fechaCreacion DESC
             """)
     Page<MarcoPersonalizado> findByActivoTruePaginado(Pageable pageable);
-
-    // ============================================================
-    // FILTRAR POR GRATIS / PAGO
-    // ============================================================
 
     @Query("""
             SELECT m FROM MarcoPersonalizado m
@@ -54,10 +46,6 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             ORDER BY m.fechaCreacion DESC
             """)
     List<MarcoPersonalizado> findDePago();
-
-    // ============================================================
-    // FILTRAR POR TIPO
-    // ============================================================
 
     @Query("""
             SELECT m FROM MarcoPersonalizado m
@@ -79,10 +67,6 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             @Param("gratis") Boolean gratis
     );
 
-    // ============================================================
-    // FILTRAR POR PRECIO
-    // ============================================================
-
     @Query("""
             SELECT m FROM MarcoPersonalizado m
             WHERE m.activo = true
@@ -95,14 +79,6 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             @Param("max") BigDecimal max
     );
 
-    // ============================================================
-    // MARCOS POR USUARIO (CORREGIDO: usa m.usuario.id)
-    // ============================================================
-
-    /**
-     * Lista marcos creados por un usuario específico.
-     * Usa `m.usuario.id` en lugar de `m.usuarioId`.
-     */
     @Query("""
             SELECT m FROM MarcoPersonalizado m
             WHERE m.usuario.id = :usuarioId
@@ -110,9 +86,6 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             """)
     List<MarcoPersonalizado> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * Marcos activos de un usuario.
-     */
     @Query("""
             SELECT m FROM MarcoPersonalizado m
             WHERE m.usuario.id = :usuarioId
@@ -121,18 +94,11 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             """)
     List<MarcoPersonalizado> findActivosByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * Cuenta marcos creados por un usuario.
-     */
     @Query("""
             SELECT COUNT(m) FROM MarcoPersonalizado m
             WHERE m.usuario.id = :usuarioId
             """)
     long countByUsuarioId(@Param("usuarioId") Long usuarioId);
-
-    // ============================================================
-    // OBTENER POR ID
-    // ============================================================
 
     @Query("""
             SELECT m FROM MarcoPersonalizado m
@@ -148,10 +114,6 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             """)
     Optional<MarcoPersonalizado> findActivoByNombre(@Param("nombre") String nombre);
 
-    // ============================================================
-    // BÚSQUEDA
-    // ============================================================
-
     @Query("""
             SELECT m FROM MarcoPersonalizado m
             WHERE m.activo = true
@@ -165,10 +127,6 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             @Param("query") String query,
             Pageable pageable
     );
-
-    // ============================================================
-    // TOP MARCOS
-    // ============================================================
 
     @Query("""
             SELECT m FROM MarcoPersonalizado m
@@ -184,10 +142,6 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             ORDER BY m.fechaCreacion DESC
             """)
     List<MarcoPersonalizado> findGratuitosRecientes(Pageable pageable);
-
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
 
     @Query("SELECT COUNT(m) FROM MarcoPersonalizado m WHERE m.activo = true")
     long countActivos();
@@ -215,20 +169,12 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             """)
     List<String> findDistinctTipos();
 
-    // ============================================================
-    // VALIDACIONES
-    // ============================================================
-
     @Query("""
             SELECT COUNT(m) > 0 FROM MarcoPersonalizado m
             WHERE m.activo = true
               AND m.nombre = :nombre
             """)
     boolean existePorNombre(@Param("nombre") String nombre);
-
-    // ============================================================
-    // ADMIN: DESACTIVAR / ACTIVAR EN LOTE
-    // ============================================================
 
     @Modifying
     @Query("""
@@ -245,4 +191,21 @@ public interface MarcoRepository extends JpaRepository<MarcoPersonalizado, Long>
             WHERE m.id IN :ids
             """)
     int activarEnLote(@Param("ids") List<Long> ids);
+
+    // ============================================================
+    // SEGURIDAD: Validar propiedad del marco
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si un usuario es el creador del marco.
+     */
+    @Query("""
+            SELECT COUNT(m) > 0 FROM MarcoPersonalizado m
+            WHERE m.id = :marcoId
+              AND m.usuario.id = :usuarioId
+            """)
+    boolean esCreadorDelMarco(
+            @Param("marcoId") Long marcoId,
+            @Param("usuarioId") Long usuarioId
+    );
 }

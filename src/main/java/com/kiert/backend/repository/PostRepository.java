@@ -17,14 +17,6 @@ import java.util.Optional;
 @Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
 
-    // ============================================================
-    // FEED — LISTADO GENERAL
-    // ============================================================
-
-    /**
-     *  LEGACY: Carga TODOS los posts activos (con autor, personalización y adjuntos).
-     * Usar solo en casos puntuales. Para el feed usar `findAllActivePaginado`.
-     */
     @Deprecated
     @Query("""
             SELECT DISTINCT p FROM Post p
@@ -36,10 +28,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     List<Post> findAllActiveOrderByFechaCreacionDesc();
 
-    /**
-     * NUEVO: Feed paginado SIN adjuntos (evita el bug de HHH000104).
-     * Los adjuntos se cargan en una query separada (`findAdjuntosByPostIds`).
-     */
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -49,13 +37,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     Page<Post> findAllActivePaginado(Pageable pageable);
 
-    // ============================================================
-    // OBTENER POR ID
-    // ============================================================
-
-    /**
-     * Carga un post por ID con autor, personalización y adjuntos.
-     */
     @Query("""
             SELECT DISTINCT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -66,9 +47,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     Optional<Post> findActiveById(@Param("id") Long id);
 
-    /**
-     * Verifica si existe un post activo.
-     */
     @Query("""
             SELECT COUNT(p) > 0 FROM Post p
             WHERE p.id = :id
@@ -76,13 +54,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     boolean existsActiveById(@Param("id") Long id);
 
-    // ============================================================
-    // POSTS POR CATEGORÍA
-    // ============================================================
-
-    /**
-     * NUEVO: Posts por categoría paginados (sin adjuntos).
-     */
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -96,9 +67,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Categorías distintas con al menos 1 post activo.
-     */
     @Query("""
             SELECT DISTINCT p.categoria FROM Post p
             WHERE p.eliminado = false
@@ -106,13 +74,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     List<String> findDistinctCategorias();
 
-    // ============================================================
-    // POSTS POR USUARIO
-    // ============================================================
-
-    /**
-     * NUEVO: Posts de un usuario paginados (para el perfil).
-     */
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -126,9 +87,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Cuenta posts activos de un usuario.
-     */
     @Query("""
             SELECT COUNT(p) FROM Post p
             WHERE p.autor.id = :usuarioId
@@ -136,13 +94,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     long countByAutorId(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // BÚSQUEDA POR TEXTO
-    // ============================================================
-
-    /**
-     * NUEVO: Buscar posts por título o descripción.
-     */
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -159,14 +110,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Pageable pageable
     );
 
-    // ============================================================
-    // POSTS CON ADJUNTOS (para cargar en 1 query tras paginar)
-    // ============================================================
-
-    /**
-     * CRÍTICO: Carga los adjuntos de varios posts en 1 query.
-     * Se usa DESPUÉS de `findAllActivePaginado` para evitar el bug HHH000104.
-     */
     @Query("""
             SELECT DISTINCT p FROM Post p
             LEFT JOIN FETCH p.adjuntos
@@ -174,13 +117,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     List<Post> findAdjuntosByPostIds(@Param("postIds") List<Long> postIds);
 
-    // ============================================================
-    // TOP POSTS (home, recomendaciones)
-    // ============================================================
-
-    /**
-     *NUEVO: Top N posts con más compartidos.
-     */
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -190,9 +126,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     List<Post> findTopMasCompartidos(Pageable pageable);
 
-    /**
-     * NUEVO: Posts más recientes (para home).
-     */
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -202,14 +135,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     List<Post> findRecientes(Pageable pageable);
 
-    // ============================================================
-    // POSTS POR ADJUNTO (galería)
-    // ============================================================
-
-    /**
-     * NUEVO: Posts que tienen adjuntos de un tipo específico.
-     * Útil para "galería de imágenes" o "videos".
-     */
     @Query("""
             SELECT DISTINCT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -225,14 +150,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Pageable pageable
     );
 
-    // ============================================================
-    // CONTADORES AGRUPADOS
-    // ============================================================
-
-    /**
-     * NUEVO: Cuenta posts agrupados por categoría.
-     * Devuelve [categoria, count].
-     */
     @Query("""
             SELECT p.categoria, COUNT(p)
             FROM Post p
@@ -242,10 +159,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     List<Object[]> contarPorCategoria();
 
-    /**
-     * NUEVO: Cuenta posts por usuario (bulk, para feed).
-     * Devuelve [usuarioId, count].
-     */
     @Query("""
             SELECT p.autor.id, COUNT(p)
             FROM Post p
@@ -255,13 +168,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     List<Object[]> contarPorUsuarios(@Param("usuarioIds") List<Long> usuarioIds);
 
-    // ============================================================
-    // ADMIN / MODERACIÓN
-    // ============================================================
-
-    /**
-     *NUEVO: Todos los posts (incluyendo eliminados) para admin.
-     */
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.autor
@@ -269,9 +175,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     Page<Post> findAllParaAdmin(Pageable pageable);
 
-    /**
-     * NUEVO: Posts eliminados (soft-deleted) para restaurar.
-     */
     @Query("""
             SELECT p FROM Post p
             LEFT JOIN FETCH p.autor
@@ -280,9 +183,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     Page<Post> findEliminados(Pageable pageable);
 
-    /**
-     * NUEVO: Restaurar un post eliminado.
-     */
     @Modifying
     @Query("""
             UPDATE Post p
@@ -292,13 +192,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """)
     int restaurarPost(@Param("id") Long id);
 
-    // ============================================================
-    // BULK UPDATES
-    // ============================================================
-
-    /**
-     * NUEVO: Soft-delete en lote (útil para moderación).
-     */
     @Modifying
     @Query("""
             UPDATE Post p
@@ -312,9 +205,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("fecha") Instant fecha
     );
 
-    /**
-     * NUEVO: Elimina posts borrados hace más de N días (hard delete).
-     */
     @Modifying
     @Query(value = """
             DELETE FROM posts
@@ -323,19 +213,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             """, nativeQuery = true)
     int eliminarPostsBorradosAntiguos(@Param("limite") Instant limite);
 
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
-
-    /**
-     * NUEVO: Total de posts activos.
-     */
     @Query("SELECT COUNT(p) FROM Post p WHERE p.eliminado = false")
     long countActivos();
 
-    /**
-     * NUEVO: Total de posts creados en un rango de fechas (para reportes).
-     */
     @Query("""
             SELECT COUNT(p) FROM Post p
             WHERE p.fechaCreacion >= :desde
@@ -345,5 +225,24 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     long countEnRango(
             @Param("desde") Instant desde,
             @Param("hasta") Instant hasta
+    );
+
+    // ============================================================
+    // SEGURIDAD: Validar autoría
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si un usuario es el autor del post.
+     * Se usa para prevenir que un usuario edite/elimine posts ajenos.
+     */
+    @Query("""
+            SELECT COUNT(p) > 0 FROM Post p
+            WHERE p.id = :postId
+              AND p.autor.id = :usuarioId
+              AND p.eliminado = false
+            """)
+    boolean esAutorDelPost(
+            @Param("postId") Long postId,
+            @Param("usuarioId") Long usuarioId
     );
 }

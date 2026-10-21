@@ -16,10 +16,6 @@ import java.util.List;
 @Repository
 public interface NotificacionRepository extends JpaRepository<Notificacion, Long> {
 
-    // ============================================================
-    // LISTAR NOTIFICACIONES
-    // ============================================================
-
     @Query("""
             SELECT DISTINCT n FROM Notificacion n
             LEFT JOIN FETCH n.usuarioOrigen
@@ -62,10 +58,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             Pageable pageable
     );
 
-    // ============================================================
-    // NO LEÍDAS
-    // ============================================================
-
     @Query("""
             SELECT COUNT(n) FROM Notificacion n
             WHERE n.usuarioDestino.id = :usuarioId
@@ -99,10 +91,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             Pageable pageable
     );
 
-    // ============================================================
-    // CONTADORES POR TIPO
-    // ============================================================
-
     @Query("""
             SELECT n.tipo, COUNT(n)
             FROM Notificacion n
@@ -122,10 +110,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("usuarioId") Long usuarioId,
             @Param("tipo") String tipo
     );
-
-    // ============================================================
-    // MARCAR COMO LEÍDAS (bulk)
-    // ============================================================
 
     @Modifying
     @Query("""
@@ -187,15 +171,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("fecha") Instant fecha
     );
 
-    // ============================================================
-    // ✅ NUEVO: ELIMINAR NOTIFICACIONES DE INVITACIÓN A GRUPO
-    // ============================================================
-
-    /**
-     * Elimina TODAS las notificaciones de tipo INVITACION_GRUPO
-     * que el usuario tenga para ese grupo.
-     * Se usa al ACEPTAR o RECHAZAR una invitación.
-     */
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -207,10 +182,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("usuarioId") Long usuarioId,
             @Param("grupoId") Long grupoId
     );
-
-    // ============================================================
-    // ELIMINAR
-    // ============================================================
 
     @Modifying
     @Query("""
@@ -258,10 +229,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             """)
     int eliminarPorGrupo(@Param("grupoId") Long grupoId);
 
-    // ============================================================
-    // LIMPIEZA
-    // ============================================================
-
     @Modifying
     @Query("""
             DELETE FROM Notificacion n
@@ -269,10 +236,6 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
               AND n.fechaCreacion < :limite
             """)
     int eliminarLeidasAntiguas(@Param("limite") Instant limite);
-
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
 
     @Query("SELECT COUNT(n) FROM Notificacion n")
     long countTotal();
@@ -290,5 +253,23 @@ public interface NotificacionRepository extends JpaRepository<Notificacion, Long
             @Param("desde") Instant desde,
             @Param("hasta") Instant hasta,
             Pageable pageable
+    );
+
+    // ============================================================
+    // SEGURIDAD: Validar que la notificación pertenece al usuario
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si el usuario es el dueño de la notificación.
+     * Se usa para evitar que un usuario marque/elimine notificaciones ajenas.
+     */
+    @Query("""
+            SELECT COUNT(n) > 0 FROM Notificacion n
+            WHERE n.id = :notificacionId
+              AND n.usuarioDestino.id = :usuarioId
+            """)
+    boolean esNotificacionDelUsuario(
+            @Param("notificacionId") Long notificacionId,
+            @Param("usuarioId") Long usuarioId
     );
 }

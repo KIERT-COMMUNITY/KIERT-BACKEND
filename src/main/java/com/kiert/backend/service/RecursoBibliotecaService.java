@@ -6,6 +6,7 @@ import com.kiert.backend.dto.request.RecursoUsuarioRequest;
 import com.kiert.backend.entity.RecursoBiblioteca;
 import com.kiert.backend.entity.Usuario;
 import com.kiert.backend.exception.AccesoDenegadoException;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.RecursoBibliotecaRepository;
 import com.kiert.backend.repository.UsuarioRepository;
@@ -37,38 +38,34 @@ public class RecursoBibliotecaService {
     private static final String CACHE_CATEGORIAS = "categoriasBiblioteca";
     private static final String CACHE_NIVELES = "nivelesBiblioteca";
 
-    // ============================================================
-    // ✅ LISTA BLANCA DE DOMINIOS PERMITIDOS
-    // ============================================================
+    // Límites de validación
+    private static final int MAX_TITULO = 200;
+    private static final int MAX_DESCRIPCION = 1000;
+    private static final int MAX_URL = 500;
+    private static final int MAX_TAGS = 10;
+    private static final int MAX_TAG_LENGTH = 30;
+
+    // Whitelist de dominios permitidos
     private static final List<String> DOMINIOS_PERMITIDOS = List.of(
-            // Cursos / educación
             "coursera.org", "edx.org", "udemy.com", "udacity.com", "platzi.com",
             "domestika.org", "crehana.com", "khanacademy.org", "classcentral.com",
             "freecodecamp.org", "codecademy.com", "aprendesql.dev", "midu.link",
             "mygreatlearning.com", "exceedlms.com", "nobook.com",
-            // Documentación técnica
             "developer.mozilla.org", "docs.microsoft.com", "docs.python.org",
             "docs.oracle.com", "docs.spring.io", "angular.io", "react.dev",
             "vuejs.org", "nodejs.org", "kotlinlang.org", "go.dev", "rust-lang.org",
             "minecraft.wiki", "wikipedia.org",
-            // Repositorios y herramientas
             "github.com", "gitlab.com", "bitbucket.org", "stackoverflow.com",
             "figma.com", "notion.so", "trello.com", "miro.com",
             "photopea.com", "ninite.com", "ventoy.net", "rufus.ie",
             "optijuegos.net", "4download.net", "technical.city", "ifixit.com",
-            // Idiomas
             "duolingo.com", "babbel.com", "busuu.com", "lingoda.com",
-            // Video
             "youtube.com", "vimeo.com", "ted.com",
-            // Artículos
             "medium.com", "dev.to", "vidaextra.com", "scholar.google.com",
-            // Ciberseguridad
             "hackthebox.com", "tryhackme.com", "netacad.com",
-            // IA
             "openai.com", "anthropic.com", "claude.ai", "chatgpt.com",
             "gemini.google.com", "perplexity.ai", "deepseek.com", "kimi.ai",
             "grok.com", "toolify.ai", "opencode.ai", "pippit.ai",
-            // Otros
             "kaggle.com", "hackerrank.com", "leetcode.com", "codewars.com",
             "encoded.pe", "rebajitas.com", "itsfree.dev", "minecraftsearch.com",
             "frivlegend.com", "kawaiianimes.app", "moewalls.com",
@@ -120,20 +117,17 @@ public class RecursoBibliotecaService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_CATEGORIAS, key = "'all'")
     public List<String> obtenerCategorias() {
-        log.info("[DB] Obteniendo categorías de la biblioteca");
         return recursoRepository.findDistinctCategorias();
     }
 
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_NIVELES, key = "'all'")
     public List<String> obtenerNiveles() {
-        log.info("[DB] Obteniendo niveles de la biblioteca");
         return recursoRepository.findDistinctNiveles();
     }
 
     @Transactional(readOnly = true)
     public List<RecursoBibliotecaDTO> buscar(Long usuarioId, String query) {
-        log.info("Buscando recursos query={} para usuario {}", query, usuarioId);
         if (query == null || query.trim().isEmpty()) {
             return listarTodos(usuarioId);
         }
@@ -145,7 +139,6 @@ public class RecursoBibliotecaService {
 
     @Transactional(readOnly = true)
     public List<RecursoBibliotecaDTO> buscarPorCategoria(String categoria, String query) {
-        log.info("Buscando recursos en categoría {}: {}", categoria, query);
         if (query == null || query.trim().isEmpty()) {
             return recursoRepository.findByCategoriaOrderByFechaAgregadoDesc(categoria)
                     .stream()
@@ -161,8 +154,10 @@ public class RecursoBibliotecaService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_RECURSO, key = "#id")
     public RecursoBibliotecaDTO obtenerPorId(Long id) {
-        log.info("[DB] Obteniendo recurso: {}", id);
-        RecursoBiblioteca recurso = recursoRepository.findById(id)
+        if (id == null) {
+            throw new BadRequestException("ID requerido");
+        }
+        RecursoBiblioteca recurso = recursoRepository.findActivoById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Recurso no encontrado"));
         return toDTO(recurso);
     }
@@ -181,11 +176,18 @@ public class RecursoBibliotecaService {
     public RecursoBibliotecaDTO crear(Long usuarioId, RecursoUsuarioRequest request) {
         log.info("Creando recurso para usuario {}", usuarioId);
 
+        if (usuarioId == null) {
+            throw new BadRequestException("Usuario requerido");
+        }
+        if (request == null) {
+            throw new BadRequestException("Datos requeridos");
+        }
+
+        validarRequest(request);
         validarUrl(request.getUrl());
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new RecursoNoEncontradoException(
-                        "Usuario no encontrado: " + usuarioId));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         RecursoBiblioteca recurso = RecursoBiblioteca.builder()
                 .usuario(usuario)
@@ -199,13 +201,12 @@ public class RecursoBibliotecaService {
                 .plataforma(trimOrNull(request.getPlataforma()))
                 .duracion(trimOrNull(request.getDuracion()))
                 .nivel(trimOrNull(request.getNivel()))
-                .destacado(Boolean.TRUE.equals(request.getDestacado()))
+                .destacado(false) // Solo admin puede destacar
                 .activo(true)
                 .tags(tagsToString(request.getTags()))
                 .build();
 
         RecursoBiblioteca guardado = recursoRepository.save(recurso);
-        log.info("Recurso {} creado por usuario {}", guardado.getId(), usuarioId);
         return toDTO(guardado);
     }
 
@@ -220,11 +221,18 @@ public class RecursoBibliotecaService {
     public RecursoBibliotecaDTO actualizar(Long usuarioId, Long recursoId, RecursoUsuarioRequest request) {
         log.info("Actualizando recurso {} del usuario {}", recursoId, usuarioId);
 
+        if (usuarioId == null || recursoId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (request == null) {
+            throw new BadRequestException("Datos requeridos");
+        }
+
+        validarRequest(request);
         validarUrl(request.getUrl());
 
-        RecursoBiblioteca recurso = recursoRepository.findById(recursoId)
-                .orElseThrow(() -> new RecursoNoEncontradoException(
-                        "Recurso no encontrado: " + recursoId));
+        RecursoBiblioteca recurso = recursoRepository.findActivoById(recursoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Recurso no encontrado"));
 
         validarPropiedad(recurso, usuarioId);
 
@@ -237,11 +245,11 @@ public class RecursoBibliotecaService {
         recurso.setPlataforma(trimOrNull(request.getPlataforma()));
         recurso.setDuracion(trimOrNull(request.getDuracion()));
         recurso.setNivel(trimOrNull(request.getNivel()));
-        recurso.setDestacado(Boolean.TRUE.equals(request.getDestacado()));
+        // NO permitir que el usuario se auto-destaque
+        // recurso.setDestacado(...) — solo admin
         recurso.setTags(tagsToString(request.getTags()));
 
         RecursoBiblioteca actualizado = recursoRepository.save(recurso);
-        log.info("Recurso {} actualizado", recursoId);
         return toDTO(actualizado);
     }
 
@@ -254,11 +262,12 @@ public class RecursoBibliotecaService {
             @CacheEvict(value = CACHE_NIVELES, allEntries = true)
     })
     public void eliminar(Long usuarioId, Long recursoId) {
-        log.info("Eliminando recurso {} del usuario {}", recursoId, usuarioId);
+        if (usuarioId == null || recursoId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
 
-        RecursoBiblioteca recurso = recursoRepository.findById(recursoId)
-                .orElseThrow(() -> new RecursoNoEncontradoException(
-                        "Recurso no encontrado: " + recursoId));
+        RecursoBiblioteca recurso = recursoRepository.findActivoById(recursoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Recurso no encontrado"));
 
         validarPropiedad(recurso, usuarioId);
 
@@ -268,75 +277,95 @@ public class RecursoBibliotecaService {
     }
 
     // ============================================================
-    // ✅ VALIDACIÓN DE URL (CORREGIDA: variables final para lambdas)
+    // VALIDACIONES
     // ============================================================
+    private void validarRequest(RecursoUsuarioRequest request) {
+        if (request.getTitulo() == null || request.getTitulo().isBlank()) {
+            throw new BadRequestException("El título es obligatorio");
+        }
+        if (request.getTitulo().length() > MAX_TITULO) {
+            throw new BadRequestException("El título es demasiado largo");
+        }
+        if (request.getDescripcion() != null && request.getDescripcion().length() > MAX_DESCRIPCION) {
+            throw new BadRequestException("La descripción es demasiado larga");
+        }
+        if (request.getUrl() == null || request.getUrl().isBlank()) {
+            throw new BadRequestException("La URL es obligatoria");
+        }
+        if (request.getUrl().length() > MAX_URL) {
+            throw new BadRequestException("La URL es demasiado larga");
+        }
+        if (request.getCategoria() == null || request.getCategoria().isBlank()) {
+            throw new BadRequestException("La categoría es obligatoria");
+        }
+        if (request.getTags() != null && request.getTags().size() > MAX_TAGS) {
+            throw new BadRequestException("Máximo " + MAX_TAGS + " tags");
+        }
+        if (request.getTags() != null) {
+            for (String tag : request.getTags()) {
+                if (tag != null && tag.length() > MAX_TAG_LENGTH) {
+                    throw new BadRequestException("Cada tag debe tener máximo " + MAX_TAG_LENGTH + " caracteres");
+                }
+            }
+        }
+    }
+
     private void validarUrl(String url) {
         if (url == null || url.trim().isEmpty()) {
-            throw new IllegalArgumentException("La URL es obligatoria");
+            throw new BadRequestException("La URL es obligatoria");
         }
 
         final String urlLimpia = url.trim();
 
-        // 1. Protocolo: SOLO https://
+        // Protocolo: SOLO https://
         if (!urlLimpia.startsWith("https://")) {
-            throw new IllegalArgumentException(
-                    "La URL debe comenzar con https:// (no se permite http://)"
-            );
+            throw new BadRequestException("La URL debe comenzar con https://");
         }
 
-        // 2. Validar formato
         final URI uri;
         try {
             uri = URI.create(urlLimpia);
         } catch (Exception e) {
-            throw new IllegalArgumentException("La URL no tiene un formato válido");
+            throw new BadRequestException("La URL no tiene un formato válido");
         }
 
         final String hostRaw = uri.getHost();
         if (hostRaw == null || hostRaw.isBlank()) {
-            throw new IllegalArgumentException("URL inválida: no tiene dominio");
+            throw new BadRequestException("URL inválida: no tiene dominio");
         }
 
-        // ✅ IMPORTANTE: usar variable FINAL para los lambdas
         final String host = hostRaw.toLowerCase();
 
-        // 3. Bloquear IPs directas
+        // Bloquear IPs directas
         if (host.matches("^\\d{1,3}(\\.\\d{1,3}){3}$")) {
-            throw new IllegalArgumentException(
-                    "No se permiten IPs directas, usa un dominio"
-            );
+            throw new BadRequestException("No se permiten IPs directas");
         }
 
-        // 4. Bloquear localhost / IPs privadas
+        // Bloquear localhost / IPs privadas
         if (host.equals("localhost") || host.startsWith("127.") ||
                 host.startsWith("192.168.") || host.startsWith("10.") ||
                 host.startsWith("172.")) {
-            throw new IllegalArgumentException(
-                    "No se permiten URLs internas o locales"
-            );
+            throw new BadRequestException("No se permiten URLs internas");
         }
 
-        // 5. Bloquear acortadores
+        // Bloquear acortadores
         final List<String> acortadores = List.of(
                 "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly",
                 "is.gd", "buff.ly", "shorturl.at", "cutt.ly", "rb.gy"
         );
         for (final String acortador : acortadores) {
             if (host.equals(acortador) || host.endsWith("." + acortador)) {
-                throw new IllegalArgumentException(
-                        "No se permiten acortadores de URL (ocultan el destino real)"
-                );
+                throw new BadRequestException("No se permiten acortadores de URL");
             }
         }
 
-        // 6. Lista blanca de dominios — ✅ host es FINAL, se puede usar en lambda
+        // Lista blanca de dominios
         final boolean permitido = DOMINIOS_PERMITIDOS.stream()
                 .anyMatch(d -> host.equals(d) || host.endsWith("." + d));
 
         if (!permitido) {
-            throw new IllegalArgumentException(
-                    "El dominio '" + host + "' no está en la lista de sitios permitidos. " +
-                            "Si crees que es un sitio legítimo, contacta al administrador."
+            throw new BadRequestException(
+                    "El dominio '" + host + "' no está en la lista de sitios permitidos"
             );
         }
     }
@@ -344,7 +373,6 @@ public class RecursoBibliotecaService {
     // ============================================================
     // HELPERS
     // ============================================================
-
     private void validarPropiedad(RecursoBiblioteca recurso, Long usuarioId) {
         if (!Boolean.TRUE.equals(recurso.getEsUsuario())
                 || recurso.getUsuario() == null

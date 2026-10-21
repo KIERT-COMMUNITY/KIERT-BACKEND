@@ -16,9 +16,6 @@ import java.util.Optional;
 @Repository
 public interface PersonalizacionRepository extends JpaRepository<PersonalizacionUsuario, Long> {
 
-    // ============================================================
-    // BUSCAR POR USUARIO
-    // ============================================================
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             LEFT JOIN FETCH p.usuario
@@ -32,9 +29,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     boolean existeByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // BUSCAR POR VALORES
-    // ============================================================
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             WHERE p.marcoId = :marcoId
@@ -56,9 +50,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     List<PersonalizacionUsuario> findByTemaId(@Param("temaId") String temaId);
 
-    // ============================================================
-    // CONTADORES
-    // ============================================================
     @Query("""
             SELECT p.marcoId, COUNT(p)
             FROM PersonalizacionUsuario p
@@ -98,9 +89,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     long countByFondoId(@Param("fondoId") String fondoId);
 
-    // ============================================================
-    // USUARIOS CON PORTADA / MARCO PERSONALIZADO
-    // ============================================================
     @Query("""
             SELECT p FROM PersonalizacionUsuario p
             WHERE p.fotoPortadaUrl IS NOT NULL
@@ -115,9 +103,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     Page<PersonalizacionUsuario> findConMarcoPersonalizado(Pageable pageable);
 
-    // ============================================================
-    // BULK UPDATES
-    // ============================================================
     @Modifying
     @Query("""
             UPDATE PersonalizacionUsuario p
@@ -157,9 +142,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     int desasignarTemaDeUsuarios(@Param("temaId") String temaId);
 
-    // ============================================================
-    // LIMPIEZA
-    // ============================================================
     @Modifying
     @Query("""
             DELETE FROM PersonalizacionUsuario p
@@ -167,9 +149,6 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
             """)
     int eliminarHuerfanas();
 
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
     @Query("SELECT COUNT(p) FROM PersonalizacionUsuario p")
     long countTotal();
 
@@ -180,6 +159,4 @@ public interface PersonalizacionRepository extends JpaRepository<Personalizacion
                OR p.fondoId <> 'default'
             """)
     long countPersonalizados();
-
-    // ⚠️ ELIMINADO: countConFotoPerfil() — ya no existe el campo
 }

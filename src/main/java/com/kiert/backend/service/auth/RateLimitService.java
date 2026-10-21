@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/auth/RateLimitService.java
 package com.kiert.backend.service.auth;
 
 import com.kiert.backend.exception.BadRequestException;
@@ -47,7 +48,7 @@ public class RateLimitService {
             throw e;
         } catch (Exception e) {
             // Fail-open: si Redis falla, permitimos la acción
-            log.error("⚠️ Error en rate limit ({}): {}", clave, e.getMessage());
+            log.error("[RATE LIMIT] Error en {}: {}", clave, e.getMessage());
         }
     }
 
@@ -58,7 +59,7 @@ public class RateLimitService {
         try {
             redis.delete("ratelimit:" + clave);
         } catch (Exception e) {
-            log.error("Error reseteando rate limit ({}): {}", clave, e.getMessage());
+            log.error("[RATE LIMIT] Error reseteando {}: {}", clave, e.getMessage());
         }
     }
 

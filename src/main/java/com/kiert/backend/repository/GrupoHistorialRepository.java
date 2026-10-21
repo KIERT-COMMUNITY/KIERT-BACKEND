@@ -16,15 +16,6 @@ import java.util.List;
 @Repository
 public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, Long> {
 
-    // ============================================================
-    // LISTAR HISTORIAL DE UN GRUPO
-    // ============================================================
-
-    /**
-     * Lista el historial completo de un grupo ordenado por fecha DESC.
-     * MEJORA: incluye JOIN FETCH del usuario para evitar N+1.
-     * Para grupos con muchas acciones, usa `findByGrupoIdPaginado`.
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.usuario
@@ -33,9 +24,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             """)
     List<GrupoHistorial> findByGrupoIdOrderByFechaDesc(@Param("grupoId") Long grupoId);
 
-    /**
-     *  NUEVO: Versión paginada (recomendada para grupos activos).
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.usuario
@@ -47,14 +35,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             Pageable pageable
     );
 
-    // ============================================================
-    // FILTRAR POR ACCIÓN
-    // ============================================================
-
-    /**
-     *  NUEVO: Historial filtrado por tipo de acción.
-     * Ej: "EXPULSAR", "INVITAR", "EDITAR_NOMBRE", etc.
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.usuario
@@ -67,10 +47,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             @Param("accion") String accion
     );
 
-    /**
-     *  NUEVO: Contar acciones por tipo en un grupo.
-     * Devuelve [accion, count].
-     */
     @Query("""
             SELECT h.accion, COUNT(h)
             FROM GrupoHistorial h
@@ -80,13 +56,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             """)
     List<Object[]> contarAccionesPorTipo(@Param("grupoId") Long grupoId);
 
-    // ============================================================
-    // FILTRAR POR USUARIO
-    // ============================================================
-
-    /**
-     *  NUEVO: Historial de acciones hechas por un usuario específico en un grupo.
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.usuario
@@ -99,9 +68,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             @Param("usuarioId") Long usuarioId
     );
 
-    /**
-     *  NUEVO: Todas las acciones hechas por un usuario (en todos los grupos).
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.grupo
@@ -113,14 +79,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             Pageable pageable
     );
 
-    // ============================================================
-    // FILTRAR POR RANGO DE FECHAS
-    // ============================================================
-
-    /**
-     *  NUEVO: Historial de un grupo en un rango de fechas.
-     * Útil para auditorías o reportes.
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.usuario
@@ -135,9 +93,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             @Param("hasta") Instant hasta
     );
 
-    /**
-     *  NUEVO: Últimas N acciones de un grupo (para el resumen rápido).
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.usuario
@@ -149,14 +104,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             Pageable pageable
     );
 
-    // ============================================================
-    // BÚSQUEDA AVANZADA
-    // ============================================================
-
-    /**
-     *  NUEVO: Búsqueda por detalle (texto).
-     * Ej: buscar "expulsó a juan" o "cambió el nombre".
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.usuario
@@ -170,22 +117,12 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             Pageable pageable
     );
 
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
-
-    /**
-     *  NUEVO: Total de acciones registradas en un grupo.
-     */
     @Query("""
             SELECT COUNT(h) FROM GrupoHistorial h
             WHERE h.grupo.id = :grupoId
             """)
     long countAccionesDeGrupo(@Param("grupoId") Long grupoId);
 
-    /**
-     *  NUEVO: Total de acciones hechas por un usuario en un grupo.
-     */
     @Query("""
             SELECT COUNT(h) FROM GrupoHistorial h
             WHERE h.grupo.id = :grupoId
@@ -196,9 +133,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             @Param("usuarioId") Long usuarioId
     );
 
-    /**
-     * NUEVO: Acciones más recientes en todos los grupos (para admin).
-     */
     @Query("""
             SELECT h FROM GrupoHistorial h
             LEFT JOIN FETCH h.usuario
@@ -207,14 +141,6 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             """)
     Page<GrupoHistorial> findAccionesRecientes(Pageable pageable);
 
-    // ============================================================
-    // LIMPIEZA (para @Scheduled)
-    // ============================================================
-
-    /**
-     *  NUEVO: Elimina acciones antiguas (por ejemplo, > 1 año).
-     * Se ejecuta con un @Scheduled para mantener la tabla pequeña.
-     */
     @Modifying
     @Query("""
             DELETE FROM GrupoHistorial h
@@ -222,23 +148,12 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
             """)
     int eliminarAccionesAntiguas(@Param("limite") Instant limite);
 
-    /**
-     *  NUEVO: Cuenta cuántas acciones antiguas se eliminarán.
-     * Útil para saber el impacto antes de borrar.
-     */
     @Query("""
             SELECT COUNT(h) FROM GrupoHistorial h
             WHERE h.fecha < :limite
             """)
     long countAccionesAntiguas(@Param("limite") Instant limite);
 
-    // ============================================================
-    // VALIDACIONES
-    // ============================================================
-
-    /**
-     *  NUEVO: Verifica si existe alguna acción de un tipo específico en un grupo.
-     */
     @Query("""
             SELECT COUNT(h) > 0 FROM GrupoHistorial h
             WHERE h.grupo.id = :grupoId
@@ -247,5 +162,28 @@ public interface GrupoHistorialRepository extends JpaRepository<GrupoHistorial, 
     boolean existeAccion(
             @Param("grupoId") Long grupoId,
             @Param("accion") String accion
+    );
+
+    // ============================================================
+    // SEGURIDAD: Validar que el usuario pertenece al grupo
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si el usuario puede ver el historial de un grupo.
+     * Solo si es miembro activo o creador.
+     */
+    @Query("""
+            SELECT COUNT(h) > 0 FROM GrupoHistorial h
+            WHERE h.grupo.id = :grupoId
+              AND EXISTS (
+                SELECT 1 FROM MiembroGrupo m
+                WHERE m.grupo.id = :grupoId
+                  AND m.usuario.id = :usuarioId
+                  AND m.estado = 'ACTIVO'
+              )
+            """)
+    boolean usuarioPuedeVerHistorial(
+            @Param("grupoId") Long grupoId,
+            @Param("usuarioId") Long usuarioId
     );
 }

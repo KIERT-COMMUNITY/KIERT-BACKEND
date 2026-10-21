@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/security/UsuarioDetailsService.java
 package com.kiert.backend.security;
 
 import com.kiert.backend.repository.UsuarioRepository;
@@ -16,7 +17,8 @@ public class UsuarioDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         return usuarioRepository.findByEmail(email)
-                .map(usuario -> new UsuarioPrincipal(usuario))
-                .orElseThrow(() -> new UsernameNotFoundException("No existe un usuario con ese correo"));
+                .map(UsuarioPrincipal::new)
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        "No existe un usuario con ese correo"));
     }
 }

@@ -17,14 +17,6 @@ import java.util.Optional;
 @Repository
 public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, Long> {
 
-    // ============================================================
-    // BUSCAR POR TOKEN
-    // ============================================================
-
-    /**
-     * Busca un link por su token, cargando grupo y creador.
-     * MEJORA: incluye JOIN FETCH para evitar N+1.
-     */
     @Query("""
             SELECT i FROM InvitacionLink i
             LEFT JOIN FETCH i.grupo g
@@ -33,10 +25,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     Optional<InvitacionLink> findByToken(@Param("token") String token);
 
-    /**
-     * NUEVO: Busca un link VÁLIDO por token.
-     * Filtra activo, no expirado, y con usos disponibles EN LA QUERY.
-     */
     @Query("""
             SELECT i FROM InvitacionLink i
             LEFT JOIN FETCH i.grupo g
@@ -51,14 +39,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // LINKS ACTIVOS POR GRUPO
-    // ============================================================
-
-    /**
-     * Lista todos los links activos de un grupo.
-     * MEJORA: incluye JOIN FETCH del creador.
-     */
     @Query("""
             SELECT i FROM InvitacionLink i
             LEFT JOIN FETCH i.creador
@@ -68,9 +48,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     List<InvitacionLink> findActivosByGrupo(@Param("grupoId") Long grupoId);
 
-    /**
-     * NUEVO: Versión paginada.
-     */
     @Query("""
             SELECT i FROM InvitacionLink i
             LEFT JOIN FETCH i.creador
@@ -83,9 +60,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Solo links vigentes de un grupo (no expirados, con usos).
-     */
     @Query("""
             SELECT i FROM InvitacionLink i
             LEFT JOIN FETCH i.creador
@@ -100,13 +74,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // LINKS POR CREADOR
-    // ============================================================
-
-    /**
-     * NUEVO: Links creados por un usuario (en todos los grupos).
-     */
     @Query("""
             SELECT i FROM InvitacionLink i
             LEFT JOIN FETCH i.grupo g
@@ -118,9 +85,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Links vigentes creados por un usuario en un grupo específico.
-     */
     @Query("""
             SELECT i FROM InvitacionLink i
             WHERE i.creador.id = :usuarioId
@@ -136,13 +100,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // VALIDACIONES
-    // ============================================================
-
-    /**
-     * Verifica si un token existe y está activo.
-     */
     @Query("""
             SELECT COUNT(i) > 0 FROM InvitacionLink i
             WHERE i.token = :token
@@ -150,9 +107,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     boolean existeTokenActivo(@Param("token") String token);
 
-    /**
-     * NUEVO: Verifica si un token es VIGENTE (activo + no expirado + con usos).
-     */
     @Query("""
             SELECT COUNT(i) > 0 FROM InvitacionLink i
             WHERE i.token = :token
@@ -165,13 +119,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // CONTADORES
-    // ============================================================
-
-    /**
-     *NUEVO: Cuenta links activos de un grupo.
-     */
     @Query("""
             SELECT COUNT(i) FROM InvitacionLink i
             WHERE i.grupo.id = :grupoId
@@ -179,9 +126,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     long countActivosByGrupo(@Param("grupoId") Long grupoId);
 
-    /**
-     * NUEVO: Cuenta links vigentes de un grupo.
-     */
     @Query("""
             SELECT COUNT(i) FROM InvitacionLink i
             WHERE i.grupo.id = :grupoId
@@ -194,17 +138,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             @Param("ahora") Instant ahora
     );
 
-    // ============================================================
-    // INCREMENTAR USOS (bulk update atómico)
-    // ============================================================
-
-    /**
-     * NUEVO: Incrementa usos y actualiza fecha_ultimo_uso EN 1 QUERY.
-     * Mucho más eficiente que cargar la entidad y guardarla.
-     *
-     * IMPORTANTE: usa `WHERE usos_maximos = 0 OR usos_actuales < usos_maximos`
-     * para garantizar que no se exceda el límite, incluso con concurrencia.
-     */
     @Modifying
     @Query("""
             UPDATE InvitacionLink i
@@ -220,9 +153,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             @Param("ahora") Instant ahora
     );
 
-    /**
-     * NUEVO: Desactiva todos los links de un grupo (útil al eliminar grupo).
-     */
     @Modifying
     @Query("""
             UPDATE InvitacionLink i
@@ -232,9 +162,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     int desactivarPorGrupo(@Param("grupoId") Long grupoId);
 
-    /**
-     * NUEVO: Desactiva un link específico.
-     */
     @Modifying
     @Query("""
             UPDATE InvitacionLink i
@@ -243,13 +170,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     int desactivar(@Param("linkId") Long linkId);
 
-    // ============================================================
-    // LIMPIEZA (para @Scheduled)
-    // ============================================================
-
-    /**
-     * NUEVO: Elimina links expirados hace más de N días.
-     */
     @Modifying
     @Query("""
             DELETE FROM InvitacionLink i
@@ -258,9 +178,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     int eliminarExpirados(@Param("limite") Instant limite);
 
-    /**
-     * NUEVO: Elimina links agotados (usos = usos_maximos) hace más de N días.
-     */
     @Modifying
     @Query("""
             DELETE FROM InvitacionLink i
@@ -271,19 +188,9 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     int eliminarAgotados(@Param("limite") Instant limite);
 
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
-
-    /**
-     * NUEVO: Total de links activos en el sistema.
-     */
     @Query("SELECT COUNT(i) FROM InvitacionLink i WHERE i.activo = true")
     long countActivosGlobales();
 
-    /**
-     * NUEVO: Top N links más usados.
-     */
     @Query("""
             SELECT i FROM InvitacionLink i
             LEFT JOIN FETCH i.grupo
@@ -293,10 +200,6 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             """)
     List<InvitacionLink> findMasUsados(Pageable pageable);
 
-    /**
-     * NUEVO: Links con más usos agrupados por grupo.
-     * Devuelve [grupoId, totalUsos].
-     */
     @Query("""
             SELECT i.grupo.id, SUM(i.usosActuales)
             FROM InvitacionLink i
@@ -304,4 +207,31 @@ public interface InvitacionLinkRepository extends JpaRepository<InvitacionLink, 
             GROUP BY i.grupo.id
             """)
     List<Object[]> contarUsosPorGrupos(@Param("grupoIds") List<Long> grupoIds);
+
+    // ============================================================
+    // SEGURIDAD: Validar permisos
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si el usuario puede gestionar los links de un grupo.
+     * Solo el creador del link o un admin del grupo.
+     */
+    @Query("""
+            SELECT COUNT(i) > 0 FROM InvitacionLink i
+            WHERE i.id = :linkId
+              AND (
+                i.creador.id = :usuarioId
+                OR EXISTS (
+                  SELECT 1 FROM MiembroGrupo m
+                  WHERE m.grupo.id = i.grupo.id
+                    AND m.usuario.id = :usuarioId
+                    AND m.rol = 'ADMIN'
+                    AND m.estado = 'ACTIVO'
+                )
+              )
+            """)
+    boolean puedeGestionarLink(
+            @Param("linkId") Long linkId,
+            @Param("usuarioId") Long usuarioId
+    );
 }

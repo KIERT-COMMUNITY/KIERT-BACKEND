@@ -5,6 +5,7 @@ import com.kiert.backend.entity.Reaccion;
 import com.kiert.backend.entity.Usuario;
 import com.kiert.backend.entity.Post;
 import com.kiert.backend.entity.Comentario;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.ReaccionRepository;
 import com.kiert.backend.repository.UsuarioRepository;
@@ -22,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -34,33 +36,52 @@ public class ReaccionService {
     private final ComentarioRepository comentarioRepository;
     private final NotificacionService notificationService;
 
-    // Nombres de caché centralizados
     private static final String CACHE_REACCIONES_POST = "reaccionesPost";
     private static final String CACHE_REACCIONES_COMENTARIO = "reaccionesComentario";
     private static final String CACHE_USUARIO_REACCIONO_POST = "usuarioReaccionoPost";
     private static final String CACHE_USUARIO_REACCIONO_COMENTARIO = "usuarioReaccionoComentario";
 
+    // Whitelist de tipos de reacción válidos (para posts)
+    private static final Set<String> TIPOS_POST = Set.of(
+            "like", "love", "haha", "wow", "sad", "angry"
+    );
+
+    // Whitelist de tipos de reacción válidos (para comentarios)
+    private static final Set<String> TIPOS_COMENTARIO = Set.of(
+            "like", "love"
+    );
+
     // ============================================================
-    // REACCIONES A POSTS (escritura)
+    // REACCIONES A POSTS
     // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_REACCIONES_POST, key = "#postId"),
-            // Invalidar el flag "usuario reaccionó" para este par (usuario, post)
             @CacheEvict(value = CACHE_USUARIO_REACCIONO_POST,
                     key = "#usuarioId + ':' + #postId"),
-            // Invalidar cachés de posts (contadores de reacciones)
             @CacheEvict(value = "posts", allEntries = true),
             @CacheEvict(value = "post", key = "#postId")
     })
     public Map<String, Long> reaccionarPost(Long usuarioId, Long postId, String tipo) {
         log.info("Usuario {} reaccionando a post {} con tipo {}", usuarioId, postId, tipo);
 
+        // Validaciones
+        if (usuarioId == null || postId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (tipo == null || !TIPOS_POST.contains(tipo)) {
+            throw new BadRequestException("Tipo de reacción inválido");
+        }
+
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        Post post = postRepository.findById(postId)
+        Post post = postRepository.findActiveById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
+
+        if (post.isEliminado()) {
+            throw new BadRequestException("La publicación ya no está disponible");
+        }
 
         Optional<Reaccion> reaccionExistente = reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId);
         boolean esNuevaReaccion = false;
@@ -87,17 +108,20 @@ public class ReaccionService {
             log.info("Nueva reacción {} creada para usuario {} en post {}", tipo, usuarioId, postId);
         }
 
-        // Notificación de like
-        if (esNuevaReaccion && !usuarioId.equals(post.getAutor().getId())) {
-            notificationService.crearNotificacionLike(usuarioId, postId);
+        // Notificación de like (solo para likes, no para los demás)
+        if (esNuevaReaccion && "like".equals(tipo) && !usuarioId.equals(post.getAutor().getId())) {
+            try {
+                notificationService.crearNotificacionLike(usuarioId, postId);
+            } catch (Exception e) {
+                log.warn("Error creando notificación: {}", e.getMessage());
+            }
         }
 
-        // Consultar directo a BD (el caché ya fue invalidado arriba)
         return calcularReaccionesPostDesdeDB(postId);
     }
 
     // ============================================================
-    // REACCIONES A COMENTARIOS (escritura)
+    // REACCIONES A COMENTARIOS
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -109,11 +133,23 @@ public class ReaccionService {
     public Map<String, Long> reaccionarComentario(Long usuarioId, Long comentarioId, String tipo) {
         log.info("Usuario {} reaccionando a comentario {} con tipo {}", usuarioId, comentarioId, tipo);
 
+        // Validaciones
+        if (usuarioId == null || comentarioId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (tipo == null || !TIPOS_COMENTARIO.contains(tipo)) {
+            throw new BadRequestException("Tipo de reacción inválido");
+        }
+
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        Comentario comentario = comentarioRepository.findById(comentarioId)
+        Comentario comentario = comentarioRepository.findActivoConAutor(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
+
+        if (comentario.isEliminado()) {
+            throw new BadRequestException("El comentario ya no está disponible");
+        }
 
         Optional<Reaccion> reaccionExistente = reaccionRepository
                 .findByUsuarioIdAndComentarioId(usuarioId, comentarioId);
@@ -142,7 +178,7 @@ public class ReaccionService {
     }
 
     // ============================================================
-    // OBTENER REACCIONES (lectura cacheada)
+    // OBTENER REACCIONES
     // ============================================================
     @Cacheable(value = CACHE_REACCIONES_POST, key = "#postId")
     public Map<String, Long> obtenerReaccionesPost(Long postId) {
@@ -157,7 +193,7 @@ public class ReaccionService {
     }
 
     // ============================================================
-    // HELPERS — cálculo directo desde BD
+    // HELPERS
     // ============================================================
     private Map<String, Long> calcularReaccionesPostDesdeDB(Long postId) {
         Map<String, Long> reacciones = new HashMap<>();
@@ -202,7 +238,7 @@ public class ReaccionService {
     }
 
     // ============================================================
-    // VERIFICAR SI USUARIO REACCIONÓ (lectura cacheada)
+    // VERIFICAR SI USUARIO REACCIONÓ
     // ============================================================
     @Cacheable(
             value = CACHE_USUARIO_REACCIONO_POST,

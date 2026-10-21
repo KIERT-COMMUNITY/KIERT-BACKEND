@@ -196,7 +196,8 @@ public class PerfilService {
                 usuario.getId(),
                 usuario.getNombreUsuario(),
                 usuario.getEmail(),
-                usuario.getFotoPerfilUrl()
+                usuario.getFotoPerfilUrl(),
+                usuario.getBio()
         );
     }
 }

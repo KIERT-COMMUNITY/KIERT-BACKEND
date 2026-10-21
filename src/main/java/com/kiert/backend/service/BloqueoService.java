@@ -30,17 +30,20 @@ public class BloqueoService {
     private static final String CACHE_BLOQUEOS = "bloqueos";
 
     // ============================================================
-    // ESCRITURA — invalida caché
+    // BLOQUEAR
     // ============================================================
-
-    /**
-     * Bloquear a un usuario
-     */
     @Transactional
     @CacheEvict(value = CACHE_BLOQUEOS, allEntries = true)
     public BloqueoDTO bloquear(Long usuarioBloqueadorId, CrearBloqueoDTO dto) {
-        log.info(" Usuario {} bloquea a {}", usuarioBloqueadorId, dto.usuarioBloqueadoId());
+        log.info("Usuario {} bloquea a {}", usuarioBloqueadorId, dto.usuarioBloqueadoId());
 
+        // Validaciones básicas
+        if (usuarioBloqueadorId == null) {
+            throw new IllegalArgumentException("Usuario autenticado requerido");
+        }
+        if (dto.usuarioBloqueadoId() == null) {
+            throw new IllegalArgumentException("ID del usuario a bloquear requerido");
+        }
         if (usuarioBloqueadorId.equals(dto.usuarioBloqueadoId())) {
             throw new IllegalArgumentException("No puedes bloquearte a ti mismo");
         }
@@ -51,64 +54,72 @@ public class BloqueoService {
         Usuario bloqueado = usuarioRepository.findById(dto.usuarioBloqueadoId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario a bloquear no encontrado"));
 
-        // Si ya existe un bloqueo activo, devolverlo
+        // Si ya existe un bloqueo activo, devolverlo (idempotencia)
         var existente = bloqueoRepository.findBloqueoActivo(
                 usuarioBloqueadorId, dto.usuarioBloqueadoId());
         if (existente.isPresent()) {
-            log.info(" Ya existe bloqueo activo");
+            log.info("Ya existe bloqueo activo entre {} y {}",
+                    usuarioBloqueadorId, dto.usuarioBloqueadoId());
             return mapearADTO(existente.get());
+        }
+
+        // Sanitizar motivo
+        String motivo = dto.motivo() != null && !dto.motivo().isBlank()
+                ? dto.motivo().trim()
+                : "Sin motivo especificado";
+
+        if (motivo.length() > 500) {
+            motivo = motivo.substring(0, 500);
         }
 
         Bloqueo bloqueo = Bloqueo.builder()
                 .usuarioBloqueador(bloqueador)
                 .usuarioBloqueado(bloqueado)
                 .tipo("BLOQUEO")
-                .motivo(dto.motivo() != null && !dto.motivo().isBlank()
-                        ? dto.motivo()
-                        : "Sin motivo especificado")
+                .motivo(motivo)
                 .fechaCreacion(Instant.now())
                 .activo(true)
                 .build();
 
         bloqueo = bloqueoRepository.save(bloqueo);
-        log.info(" Usuario bloqueado con ID: {}", bloqueo.getId());
+        log.info("Usuario bloqueado con ID: {}", bloqueo.getId());
 
         return mapearADTO(bloqueo);
     }
 
-    /**
-     * Desbloquear a un usuario
-     */
+    // ============================================================
+    // DESBLOQUEAR
+    // ============================================================
     @Transactional
     @CacheEvict(value = CACHE_BLOQUEOS, allEntries = true)
     public void desbloquear(Long usuarioBloqueadorId, Long usuarioBloqueadoId) {
-        log.info(" Usuario {} desbloquea a {}", usuarioBloqueadorId, usuarioBloqueadoId);
+        log.info("Usuario {} desbloquea a {}", usuarioBloqueadorId, usuarioBloqueadoId);
+
+        if (usuarioBloqueadorId == null || usuarioBloqueadoId == null) {
+            throw new IllegalArgumentException("Parámetros inválidos");
+        }
 
         Bloqueo bloqueo = bloqueoRepository
                 .findBloqueoActivo(usuarioBloqueadorId, usuarioBloqueadoId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("No existe bloqueo activo"));
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe bloqueo activo entre estos usuarios"));
 
         bloqueo.setActivo(false);
         bloqueoRepository.save(bloqueo);
 
-        log.info(" Usuario desbloqueado correctamente");
+        log.info("Usuario desbloqueado correctamente");
     }
 
     // ============================================================
-    // LECTURA — cacheada
+    // VERIFICAR ESTADO (direccional)
     // ============================================================
-
-    /**
-     * Verificar si un usuario está bloqueado por el actual
-     * Clave direccional: (A bloquea a B) ≠ (B bloquea a A)
-     */
     @Transactional(readOnly = true)
     @Cacheable(
             value = CACHE_BLOQUEOS,
             key = "'estado:' + #usuarioActualId + ':' + #otroUsuarioId"
     )
     public EstadoBloqueoDTO verificarEstado(Long usuarioActualId, Long otroUsuarioId) {
-        log.debug(" Consultando estado de bloqueo: {} → {}", usuarioActualId, otroUsuarioId);
+        log.debug("Consultando estado de bloqueo: {} → {}", usuarioActualId, otroUsuarioId);
 
         var bloqueo = bloqueoRepository.findBloqueoActivo(usuarioActualId, otroUsuarioId);
         if (bloqueo.isPresent()) {
@@ -123,16 +134,16 @@ public class BloqueoService {
         return new EstadoBloqueoDTO(false, null, null, null);
     }
 
-    /**
-     * Listar todos los usuarios bloqueados por el actual
-     */
+    // ============================================================
+    // LISTAR BLOQUEADOS
+    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(
             value = CACHE_BLOQUEOS,
             key = "'lista:' + #usuarioId"
     )
     public List<BloqueoDTO> listarBloqueados(Long usuarioId) {
-        log.debug(" Listando bloqueados de usuario {}", usuarioId);
+        log.debug("Listando bloqueados de usuario {}", usuarioId);
 
         return bloqueoRepository.findBloqueosActivosDeUsuario(usuarioId)
                 .stream()
@@ -140,17 +151,20 @@ public class BloqueoService {
                 .toList();
     }
 
-    /**
-     * Verificar si hay bloqueo entre dos usuarios (en cualquier dirección)
-     *  Clave normalizada con min/max para que (A,B) y (B,A) compartan caché
-     */
+    // ============================================================
+    // VERIFICAR SI HAY BLOQUEO BIDIRECCIONAL
+    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(
             value = CACHE_BLOQUEOS,
             key = "'entre:' + T(java.lang.Math).min(#usuarioA, #usuarioB) + ':' + T(java.lang.Math).max(#usuarioA, #usuarioB)"
     )
     public boolean hayBloqueoEntre(Long usuarioA, Long usuarioB) {
-        log.debug(" Verificando bloqueo entre {} y {}", usuarioA, usuarioB);
+        log.debug("Verificando bloqueo entre {} y {}", usuarioA, usuarioB);
+
+        if (usuarioA == null || usuarioB == null) {
+            return false;
+        }
 
         return bloqueoRepository.existeBloqueoEntre(usuarioA, usuarioB);
     }
@@ -158,7 +172,6 @@ public class BloqueoService {
     // ============================================================
     // HELPERS
     // ============================================================
-
     private BloqueoDTO mapearADTO(Bloqueo b) {
         return new BloqueoDTO(
                 b.getId(),

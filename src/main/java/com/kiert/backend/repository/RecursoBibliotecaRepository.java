@@ -21,10 +21,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     // LISTADOS GLOBALES
     // ============================================================
 
-    /**
-     * Lista TODOS los recursos activos (globales + de todos los usuarios).
-     * ✅ FIX: incluye recursos de todos los usuarios, no solo los propios.
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
@@ -33,9 +29,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             """)
     List<RecursoBiblioteca> findAllActiveOrderByFechaAgregadoDesc();
 
-    /**
-     * Versión paginada.
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
@@ -44,9 +37,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             """)
     Page<RecursoBiblioteca> findAllActivePaginado(Pageable pageable);
 
-    /**
-     * Recursos por categoría (TODOS los usuarios).
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
@@ -58,9 +48,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             @Param("categoria") String categoria
     );
 
-    /**
-     * Recursos por categoría paginados.
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
@@ -73,9 +60,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             Pageable pageable
     );
 
-    /**
-     * Recursos destacados.
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
@@ -85,9 +69,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             """)
     List<RecursoBiblioteca> findDestacados();
 
-    /**
-     * Recursos destacados paginados.
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
@@ -128,14 +109,9 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     List<String> findDistinctSubcategoriasByCategoria(@Param("categoria") String categoria);
 
     // ============================================================
-    // LISTADOS VISIBLES PARA EL USUARIO (TODOS los activos)
-    // ✅ FIX: ahora muestra recursos de TODOS los usuarios
+    // LISTADOS VISIBLES PARA EL USUARIO
     // ============================================================
 
-    /**
-     * ✅ Muestra TODOS los recursos activos.
-     * Los del usuario indicado aparecen primero (para UX).
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
@@ -146,9 +122,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             """)
     List<RecursoBiblioteca> findVisiblesParaUsuario(@Param("usuarioId") Long usuarioId);
 
-    /**
-     * Versión paginada.
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
@@ -162,9 +135,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             Pageable pageable
     );
 
-    /**
-     * ✅ Recursos visibles por categoría (TODOS los usuarios).
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
@@ -179,9 +149,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             @Param("categoria") String categoria
     );
 
-    /**
-     * Visibles por categoría paginados.
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
@@ -303,9 +270,6 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             @Param("query") String query
     );
 
-    /**
-     * ✅ Búsqueda que incluye recursos de TODOS los usuarios.
-     */
     @Query("""
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
@@ -464,4 +428,23 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
               AND r.esUsuario = true
             """)
     long countDeUsuariosActivos();
+
+    // ============================================================
+    // SEGURIDAD: Validar autoría del recurso
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si un usuario es el autor del recurso.
+     * Se usa para impedir que un usuario edite/elimine recursos ajenos.
+     */
+    @Query("""
+            SELECT COUNT(r) > 0 FROM RecursoBiblioteca r
+            WHERE r.id = :recursoId
+              AND r.usuario.id = :usuarioId
+              AND r.activo = true
+            """)
+    boolean esAutorDelRecurso(
+            @Param("recursoId") Long recursoId,
+            @Param("usuarioId") Long usuarioId
+    );
 }

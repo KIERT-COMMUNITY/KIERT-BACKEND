@@ -12,7 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -26,6 +28,19 @@ public class CloudinaryService {
     private static final long MAX_VIDEO_SIZE = 50 * 1024 * 1024;
     private static final long MAX_GIF_SIZE   = 15 * 1024 * 1024;
     private static final long MAX_DOC_SIZE   = 20 * 1024 * 1024;
+
+    // Tipos de recurso válidos (whitelist para evitar IDOR)
+    private static final Set<String> RESOURCE_TYPES_VALIDOS = Set.of(
+            "image", "video", "raw"
+    );
+
+    // Carpetas permitidas (evita que un atacante suba archivos a carpetas críticas)
+    private static final Set<String> CARPETAS_PERMITIDAS = Set.of(
+            "chat", "chat/imagenes", "chat/archivos", "chat/stickers",
+            "anuncios", "documentos", "imagenes", "videos", "gifs",
+            "marcos", "portadas", "avatares", "perfil", "biblioteca",
+            "reportes", "temp"
+    );
 
     // ========== SUBIR ARCHIVO (CHAT) ==========
     public String subirArchivo(MultipartFile archivo) {
@@ -51,8 +66,9 @@ public class CloudinaryService {
             return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
-            log.error("Error al subir archivo a Cloudinary: {}", e.getMessage());
-            throw new BadRequestException("Error al subir el archivo: " + e.getMessage());
+            log.error("Error al subir archivo a Cloudinary: {}", e.getMessage(), e);
+            // ⚠️ NO exponer e.getMessage()
+            throw new BadRequestException("Error al subir el archivo");
         }
     }
 
@@ -60,6 +76,8 @@ public class CloudinaryService {
     public String subirArchivo(MultipartFile archivo, String carpeta) {
         try {
             log.info("Subiendo archivo a Cloudinary en carpeta: {}", carpeta);
+
+            validarCarpeta(carpeta);
 
             String contentType = archivo.getContentType();
             String resourceType = "auto";
@@ -83,11 +101,11 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir archivo: {}", e.getMessage(), e);
-            throw new BadRequestException("Error al subir el archivo: " + e.getMessage());
+            throw new BadRequestException("Error al subir el archivo");
         }
     }
 
-    // ========== ✅ SUBIR DOCUMENTO ==========
+    // ========== SUBIR DOCUMENTO ==========
     public String subirDocumento(MultipartFile archivo, String carpeta) {
         try {
             log.info("Subiendo documento a Cloudinary: {} (tipo: {})",
@@ -96,6 +114,8 @@ public class CloudinaryService {
             if (archivo.getSize() > MAX_DOC_SIZE) {
                 throw new BadRequestException("El documento no puede exceder los 20MB");
             }
+
+            validarCarpeta(carpeta);
 
             String contentType = archivo.getContentType();
             String resourceType = resolverResourceTypeDocumento(contentType);
@@ -120,7 +140,7 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir documento: {}", e.getMessage(), e);
-            throw new BadRequestException("Error al subir el documento: " + e.getMessage());
+            throw new BadRequestException("Error al subir el documento");
         }
     }
 
@@ -136,6 +156,8 @@ public class CloudinaryService {
     public ArchivoSubidoDTO subirArchivoChat(MultipartFile archivo, String carpeta, String tipoArchivo) {
         try {
             log.info("Subiendo archivo de chat tipo {} a Cloudinary en carpeta: {}", tipoArchivo, carpeta);
+
+            validarCarpeta(carpeta);
 
             String resourceType = resolverResourceType(tipoArchivo);
 
@@ -153,16 +175,27 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir archivo de chat: {}", e.getMessage(), e);
-            throw new BadRequestException("Error al subir el archivo: " + e.getMessage());
+            throw new BadRequestException("Error al subir el archivo");
         }
     }
 
     // ========== ELIMINAR POR PUBLIC ID ==========
     public void eliminarArchivo(String publicId, String resourceType) {
-        if (publicId == null || publicId.isBlank()) return;
+        if (publicId == null || publicId.isBlank()) {
+            return;
+        }
+
+        // ⚠️ SEGURIDAD: validar resourceType contra whitelist
+        String tipo = (resourceType == null || resourceType.isBlank())
+                ? "image"
+                : resourceType.trim().toLowerCase();
+
+        if (!RESOURCE_TYPES_VALIDOS.contains(tipo)) {
+            log.warn("resourceType inválido: '{}'. Usando 'image' por defecto", tipo);
+            tipo = "image";
+        }
 
         try {
-            String tipo = (resourceType == null || resourceType.isBlank()) ? "image" : resourceType;
             log.info("Eliminando archivo de Cloudinary: {} (tipo {})", publicId, tipo);
 
             cloudinary.uploader().destroy(
@@ -172,7 +205,8 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al eliminar archivo {}: {}", publicId, e.getMessage(), e);
-            throw new BadRequestException("Error al eliminar el archivo: " + e.getMessage());
+            // ⚠️ NO exponer e.getMessage()
+            throw new BadRequestException("Error al eliminar el archivo");
         }
     }
 
@@ -208,13 +242,25 @@ public class CloudinaryService {
         }
     }
 
+    /**
+     * Extrae el public_id de una URL de Cloudinary.
+     * Más robusto: toma el ÚLTIMO `/upload/` para evitar inyecciones.
+     */
     private String extraerPublicId(String url) {
         try {
-            int uploadIdx = url.indexOf("/upload/");
+            // Validar que sea una URL de Cloudinary
+            if (!url.contains("res.cloudinary.com")) {
+                log.warn("URL no es de Cloudinary: {}", url);
+                return null;
+            }
+
+            // Tomar el ÚLTIMO /upload/ para evitar URLs maliciosas
+            int uploadIdx = url.lastIndexOf("/upload/");
             if (uploadIdx == -1) return null;
 
             String resto = url.substring(uploadIdx + "/upload/".length());
 
+            // Quitar transformaciones (v1234567890 o w_100,h_100)
             if (resto.startsWith("v")) {
                 int slashIdx = resto.indexOf("/");
                 if (slashIdx != -1) {
@@ -222,6 +268,7 @@ public class CloudinaryService {
                 }
             }
 
+            // Quitar extensión
             int dotIdx = resto.lastIndexOf(".");
             if (dotIdx != -1) {
                 resto = resto.substring(0, dotIdx);
@@ -249,6 +296,8 @@ public class CloudinaryService {
                 throw new BadRequestException("El archivo debe ser una imagen (no GIF)");
             }
 
+            validarCarpeta(carpeta);
+
             Map<String, Object> uploadResult = cloudinary.uploader().upload(
                     imagen.getBytes(),
                     ObjectUtils.asMap(
@@ -263,15 +312,11 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir imagen: {}", e.getMessage(), e);
-            throw new BadRequestException("Error al subir la imagen: " + e.getMessage());
+            throw new BadRequestException("Error al subir la imagen");
         }
     }
 
-    // ========== ✅ SUBIR IMAGEN CON DETALLES (para anuncios) ==========
-    /**
-     * Sube una imagen y devuelve todos los metadatos necesarios
-     * para guardarlos en la base de datos (URL, public_id, formato, peso, ancho, alto).
-     */
+    // ========== SUBIR IMAGEN CON DETALLES ==========
     public ImagenSubidaDTO subirImagenConDetalles(MultipartFile imagen, String carpeta) {
         try {
             log.info("Subiendo imagen con detalles a Cloudinary: {}", imagen.getOriginalFilename());
@@ -284,6 +329,8 @@ public class CloudinaryService {
             if (contentType == null || !contentType.startsWith("image/") || contentType.equals("image/gif")) {
                 throw new BadRequestException("El archivo debe ser una imagen (no GIF)");
             }
+
+            validarCarpeta(carpeta);
 
             Map<String, Object> uploadResult = cloudinary.uploader().upload(
                     imagen.getBytes(),
@@ -310,7 +357,7 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir imagen con detalles: {}", e.getMessage(), e);
-            throw new BadRequestException("Error al subir la imagen: " + e.getMessage());
+            throw new BadRequestException("Error al subir la imagen");
         }
     }
 
@@ -328,6 +375,8 @@ public class CloudinaryService {
                 throw new BadRequestException("El archivo debe ser un video");
             }
 
+            validarCarpeta(carpeta);
+
             Map<String, Object> uploadResult = cloudinary.uploader().upload(
                     video.getBytes(),
                     ObjectUtils.asMap(
@@ -344,7 +393,7 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir video: {}", e.getMessage(), e);
-            throw new BadRequestException("Error al subir el video: " + e.getMessage());
+            throw new BadRequestException("Error al subir el video");
         }
     }
 
@@ -362,6 +411,8 @@ public class CloudinaryService {
                 throw new BadRequestException("El archivo debe ser un GIF");
             }
 
+            validarCarpeta(carpeta);
+
             Map<String, Object> uploadResult = cloudinary.uploader().upload(
                     gif.getBytes(),
                     ObjectUtils.asMap(
@@ -376,7 +427,7 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir GIF: {}", e.getMessage(), e);
-            throw new BadRequestException("Error al subir el GIF: " + e.getMessage());
+            throw new BadRequestException("Error al subir el GIF");
         }
     }
 
@@ -398,8 +449,8 @@ public class CloudinaryService {
             return uploadResult.get("secure_url").toString();
 
         } catch (IOException e) {
-            log.error("Error al subir marco: {}", e.getMessage());
-            throw new BadRequestException("Error al subir el marco: " + e.getMessage());
+            log.error("Error al subir marco: {}", e.getMessage(), e);
+            throw new BadRequestException("Error al subir el marco");
         }
     }
 
@@ -445,7 +496,7 @@ public class CloudinaryService {
         return nombre.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
-    // ========== ✅ GENERAR URL DE DESCARGA FORZADA ==========
+    // ========== GENERAR URL DE DESCARGA FORZADA ==========
     public String generarUrlDescarga(String urlOriginal) {
         if (urlOriginal == null || urlOriginal.isBlank()) return urlOriginal;
 
@@ -467,6 +518,33 @@ public class CloudinaryService {
     }
 
     // ========== HELPERS PRIVADOS ==========
+
+    /**
+     * Valida que la carpeta esté en la whitelist.
+     * Evita que un atacante suba archivos a carpetas críticas (ej. ../config).
+     */
+    private void validarCarpeta(String carpeta) {
+        if (carpeta == null || carpeta.isBlank()) {
+            return; // se usará la carpeta por defecto
+        }
+
+        String carpetaNormalizada = carpeta.trim().toLowerCase();
+
+        // Rechazar rutas con caracteres peligrosos
+        if (carpetaNormalizada.contains("..")
+                || carpetaNormalizada.contains("/etc")
+                || carpetaNormalizada.contains("\\")
+                || carpetaNormalizada.startsWith("/")) {
+            log.warn("Carpeta rechazada por seguridad: {}", carpeta);
+            throw new BadRequestException("Carpeta no permitida");
+        }
+
+        if (!CARPETAS_PERMITIDAS.contains(carpetaNormalizada)) {
+            log.warn("Carpeta no está en la whitelist: {}", carpeta);
+            throw new BadRequestException("Carpeta no permitida");
+        }
+    }
+
     private String resolverResourceType(String tipoArchivo) {
         if (tipoArchivo == null) return "auto";
         return switch (tipoArchivo) {

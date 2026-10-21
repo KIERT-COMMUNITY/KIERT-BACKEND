@@ -23,6 +23,9 @@ public class AnuncioService {
     private final AnuncioRepository anuncioRepository;
     private final CloudinaryService cloudinaryService;
 
+    // ============================================================
+    // LISTADOS
+    // ============================================================
     public List<Anuncio> listarActivos() {
         return anuncioRepository.findActivosVigentes(LocalDateTime.now());
     }
@@ -36,13 +39,28 @@ public class AnuncioService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Anuncio no encontrado"));
     }
 
+    // ============================================================
+    // CREAR
+    // ============================================================
     @Transactional
     public Anuncio crear(String titulo, String texto, String enlaceUrl, MultipartFile imagen) {
-        log.info("Creando anuncio: titulo='{}', tieneImagen={}", titulo, imagen != null && !imagen.isEmpty());
+        log.info("Creando anuncio: titulo='{}', tieneImagen={}",
+                titulo, imagen != null && !imagen.isEmpty());
+
+        // Validación básica
+        if (titulo == null || titulo.isBlank()) {
+            throw new BadRequestException("El título es obligatorio");
+        }
+        if (texto == null || texto.isBlank()) {
+            throw new BadRequestException("El texto es obligatorio");
+        }
+        if (titulo.length() > 200) {
+            throw new BadRequestException("El título no debe exceder 200 caracteres");
+        }
 
         Anuncio anuncio = Anuncio.builder()
-                .titulo(titulo)
-                .texto(texto)
+                .titulo(titulo.trim())
+                .texto(texto.trim())
                 .enlaceUrl(enlaceUrl)
                 .activo(true)
                 .destacado(false)
@@ -55,8 +73,9 @@ public class AnuncioService {
                 ImagenSubidaDTO meta = cloudinaryService.subirImagenConDetalles(imagen, "anuncios");
                 aplicarMetaImagen(anuncio, meta);
             } catch (Exception e) {
-                log.error("Error al subir la imagen del anuncio a Cloudinary: {}", e.getMessage(), e);
-                throw new BadRequestException("No se pudo subir la imagen: " + e.getMessage());
+                log.error("Error al subir la imagen: {}", e.getMessage(), e);
+                // ⚠️ NO exponer e.getMessage() al cliente
+                throw new BadRequestException("No se pudo subir la imagen");
             }
         }
 
@@ -65,8 +84,8 @@ public class AnuncioService {
             log.info("Anuncio creado con id={}", guardado.getId());
             return guardado;
         } catch (Exception e) {
-            log.error("Error al guardar el anuncio en BD: {}", e.getMessage(), e);
-            // Si la imagen se subió pero el guardado falló, la borramos para no dejar huérfanos
+            log.error("Error al guardar el anuncio: {}", e.getMessage(), e);
+            // Limpiar imagen huérfana
             if (anuncio.getImagenPublicId() != null) {
                 try {
                     cloudinaryService.eliminarArchivo(anuncio.getImagenPublicId(), "image");
@@ -74,18 +93,31 @@ public class AnuncioService {
                     log.warn("No se pudo limpiar la imagen huérfana: {}", ex.getMessage());
                 }
             }
-            throw new BadRequestException("No se pudo guardar el anuncio: " + e.getMessage());
+            // ⚠️ NO exponer e.getMessage() al cliente
+            throw new BadRequestException("No se pudo guardar el anuncio");
         }
     }
 
+    // ============================================================
+    // ACTUALIZAR
+    // ============================================================
     @Transactional
-    public Anuncio actualizar(Long id, String titulo, String texto, String enlaceUrl, MultipartFile nuevaImagen) {
-        log.info("Actualizando anuncio id={}, tieneNuevaImagen={}", id, nuevaImagen != null && !nuevaImagen.isEmpty());
+    public Anuncio actualizar(Long id, String titulo, String texto,
+                              String enlaceUrl, MultipartFile nuevaImagen) {
+        log.info("Actualizando anuncio id={}, tieneNuevaImagen={}",
+                id, nuevaImagen != null && !nuevaImagen.isEmpty());
 
         Anuncio anuncio = obtenerPorId(id);
 
-        anuncio.setTitulo(titulo);
-        anuncio.setTexto(texto);
+        if (titulo == null || titulo.isBlank()) {
+            throw new BadRequestException("El título es obligatorio");
+        }
+        if (texto == null || texto.isBlank()) {
+            throw new BadRequestException("El texto es obligatorio");
+        }
+
+        anuncio.setTitulo(titulo.trim());
+        anuncio.setTexto(texto.trim());
         anuncio.setEnlaceUrl(enlaceUrl);
         anuncio.setFechaActualizacion(LocalDateTime.now());
 
@@ -97,15 +129,16 @@ public class AnuncioService {
                 aplicarMetaImagen(anuncio, meta);
             } catch (Exception e) {
                 log.error("Error al subir la nueva imagen: {}", e.getMessage(), e);
-                throw new BadRequestException("No se pudo subir la nueva imagen: " + e.getMessage());
+                throw new BadRequestException("No se pudo subir la nueva imagen");
             }
 
-            // Borrar la anterior solo si la nueva se subió bien
+            // Borrar la imagen anterior
             if (publicIdAnterior != null) {
                 try {
                     cloudinaryService.eliminarArchivo(publicIdAnterior, "image");
                 } catch (Exception e) {
-                    log.warn("No se pudo borrar la imagen anterior ({}): {}", publicIdAnterior, e.getMessage());
+                    log.warn("No se pudo borrar la imagen anterior ({}): {}",
+                            publicIdAnterior, e.getMessage());
                 }
             }
         }
@@ -114,10 +147,13 @@ public class AnuncioService {
             return anuncioRepository.save(anuncio);
         } catch (Exception e) {
             log.error("Error al guardar el anuncio actualizado: {}", e.getMessage(), e);
-            throw new BadRequestException("No se pudo actualizar el anuncio: " + e.getMessage());
+            throw new BadRequestException("No se pudo actualizar el anuncio");
         }
     }
 
+    // ============================================================
+    // ELIMINAR
+    // ============================================================
     @Transactional
     public void eliminar(Long id) {
         log.info("Eliminando anuncio id={}", id);
@@ -136,6 +172,9 @@ public class AnuncioService {
         log.info("Anuncio {} eliminado", id);
     }
 
+    // ============================================================
+    // HELPERS
+    // ============================================================
     private void aplicarMetaImagen(Anuncio anuncio, ImagenSubidaDTO meta) {
         anuncio.setImagenUrl(meta.url());
         anuncio.setImagenPublicId(meta.publicId());

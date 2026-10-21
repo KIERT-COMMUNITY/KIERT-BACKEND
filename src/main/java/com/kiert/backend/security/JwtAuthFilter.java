@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -17,6 +19,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -26,23 +30,26 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String PREFIJO_BEARER = "Bearer ";
     private final JwtService jwtService;
     private final UsuarioDetailsService usuarioDetailsService;
-    private final TokenBlacklistService tokenBlacklistService;  // NUEVO
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getRequestURI();
         String metodo = request.getMethod();
 
-        if (path.startsWith("/ws")) return true;
-        if ("OPTIONS".equalsIgnoreCase(metodo)) return true;
+        if (path.startsWith("/ws") || "OPTIONS".equalsIgnoreCase(metodo)) {
+            return true;
+        }
 
         if (path.startsWith("/api/auth/")
+                || path.startsWith("/api/admin/auth/login")
                 || path.startsWith("/swagger")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/api-docs")
                 || path.startsWith("/webjars")
-                || path.startsWith("/api/archivos/")) {
+                || path.startsWith("/api/archivos/")
+                || path.startsWith("/api/presencia/")) {
             return true;
         }
 
@@ -54,66 +61,94 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        String path = request.getRequestURI();
         String header = request.getHeader("Authorization");
 
-        log.debug("[JWT] Procesando: {} - Header: {}",
-                path, header != null ? "presente" : "ausente");
-
         if (header == null || !header.startsWith(PREFIJO_BEARER)) {
-            log.debug("[JWT] No hay token para: {}", path);
             filterChain.doFilter(request, response);
             return;
         }
 
         String token = header.substring(PREFIJO_BEARER.length());
-        log.debug("[JWT] Token recibido: {}...",
-                token.substring(0, Math.min(token.length(), 30)));
 
-        // VERIFICAR BLACKLIST ANTES DE CUALQUIER OTRA COSA
+        // ============================================================
+        // 1. Verificar Blacklist (Redis)
+        // ============================================================
         try {
             if (tokenBlacklistService.estaInvalidado(token)) {
-                log.warn("[JWT] Token en blacklist (logout previo): {}", path);
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json");
-                response.getWriter().write("{\"error\":\"Token invalidado. Inicia sesión de nuevo.\"}");
+                log.warn("[JWT] Token invalidado: {}", request.getRequestURI());
+                enviarError(response, "Token invalidado. Inicia sesión de nuevo.");
                 return;
             }
         } catch (Exception e) {
-            // Fail-open: si Redis cae, permitimos el token (mejor UX)
-            log.error("[JWT] Error consultando blacklist: {}", e.getMessage());
+            log.error("[JWT] Error en blacklist: {}", e.getMessage());
         }
 
+        // ============================================================
+        // 2. Validar Token
+        // ============================================================
         try {
             String email = jwtService.extraerEmail(token);
-            log.debug("[JWT] Email extraído: {}", email);
 
-            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = usuarioDetailsService.loadUserByUsername(email);
-
-                boolean valido = jwtService.esTokenValido(token, email);
-
-                if (valido) {
-                    log.info("[JWT] Autenticación exitosa para: {}", email);
-
-                    UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(
-                                    userDetails,
-                                    null,
-                                    userDetails.getAuthorities()
-                            );
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                } else {
-                    log.warn("[JWT] Token inválido para: {}", email);
-                    SecurityContextHolder.clearContext();
-                }
+            if (email == null || email.isBlank()) {
+                filterChain.doFilter(request, response);
+                return;
             }
-        } catch (Exception ex) {
-            log.warn("[JWT] Error procesando token (se ignora): {}", ex.getMessage());
-            SecurityContextHolder.clearContext();
-        }
 
-        filterChain.doFilter(request, response);
+            if (SecurityContextHolder.getContext().getAuthentication() != null) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            if (!jwtService.esTokenValido(token, email)) {
+                log.warn("[JWT] Token inválido para: {}", email);
+                SecurityContextHolder.clearContext();
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            UserDetails userDetails = usuarioDetailsService.loadUserByUsername(email);
+            String rol = jwtService.extraerRol(token);
+
+            // Construir authorities
+            List<GrantedAuthority> authorities = new ArrayList<>();
+
+            if (rol != null && !rol.isBlank()) {
+                authorities.add(new SimpleGrantedAuthority("ROLE_" + rol));
+            }
+
+            // NO añadimos ROLE_USER automáticamente si es admin.
+            // Solo añadimos las que vengan del UserDetails.
+            userDetails.getAuthorities().forEach(auth -> {
+                String authority = auth.getAuthority();
+                if (authorities.stream().noneMatch(a -> a.getAuthority().equals(authority))) {
+                    authorities.add(new SimpleGrantedAuthority(authority));
+                }
+            });
+
+            if (authorities.isEmpty()) {
+                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+            }
+
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(userDetails, null, authorities);
+            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+
+            log.info("[JWT] Autenticado: {} | roles={}", email,
+                    authorities.stream().map(GrantedAuthority::getAuthority).toList());
+
+        } catch (Exception ex) {
+            log.warn("[JWT] Error: {}", ex.getMessage());
+            SecurityContextHolder.clearContext();
+        } finally {
+            filterChain.doFilter(request, response);
+        }
+    }
+
+    private void enviarError(HttpServletResponse response, String mensaje) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write("{\"error\":\"" + mensaje + "\"}");
     }
 }

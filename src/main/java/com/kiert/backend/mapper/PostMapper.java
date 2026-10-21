@@ -6,12 +6,14 @@ import com.kiert.backend.entity.Adjunto;
 import com.kiert.backend.entity.Comentario;
 import com.kiert.backend.entity.Post;
 import com.kiert.backend.entity.Usuario;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Component
 public class PostMapper {
 
@@ -38,48 +40,41 @@ public class PostMapper {
     public PostDTO aDTO(Post post, List<Adjunto> adjuntosExternos, Long totalComentarios) {
         if (post == null) return null;
 
-        try {
-            // Categoría
-            String categoria = post.getCategoria() != null ? post.getCategoria() : "otro";
+        // Categoría
+        String categoria = post.getCategoria() != null ? post.getCategoria() : "otro";
 
-            // Adjuntos: usar los externos si vienen
-            List<Adjunto> adjuntos = adjuntosExternos != null
-                    ? adjuntosExternos
-                    : (post.getAdjuntos() != null ? post.getAdjuntos() : Collections.emptyList());
+        // Adjuntos: usar los externos si vienen
+        List<Adjunto> adjuntos = adjuntosExternos != null
+                ? adjuntosExternos
+                : (post.getAdjuntos() != null ? post.getAdjuntos() : Collections.emptyList());
 
-            List<AdjuntoDTO> adjuntosDTO = adjuntos.stream()
-                    .filter(a -> a != null)
-                    .map(this::aDTO)
-                    .toList();
+        List<AdjuntoDTO> adjuntosDTO = adjuntos.stream()
+                .filter(a -> a != null)
+                .map(this::aDTO)
+                .toList();
 
-            // Comentarios: usar el contador externo si viene
-            long comentarios;
-            if (totalComentarios != null) {
-                comentarios = totalComentarios;
-            } else if (post.getComentarios() != null) {
-                comentarios = post.getComentarios().stream()
-                        .filter(c -> !c.isEliminado())
-                        .count();
-            } else {
-                comentarios = 0;
-            }
-
-            return new PostDTO(
-                    post.getId(),
-                    aAutorResumen(post.getAutor()),
-                    post.getTitulo(),
-                    post.getDescripcion(),
-                    categoria,
-                    adjuntosDTO,
-                    comentarios,
-                    post.getFechaCreacion()
-            );
-
-        } catch (Exception e) {
-            System.err.println("Error en PostMapper.aDTO para post ID: " + post.getId());
-            e.printStackTrace();
-            throw new RuntimeException("Error al mapear post: " + e.getMessage());
+        // Comentarios: usar el contador externo si viene
+        long comentarios;
+        if (totalComentarios != null) {
+            comentarios = totalComentarios;
+        } else if (post.getComentarios() != null) {
+            comentarios = post.getComentarios().stream()
+                    .filter(c -> !c.isEliminado())
+                    .count();
+        } else {
+            comentarios = 0;
         }
+
+        return new PostDTO(
+                post.getId(),
+                aAutorResumen(post.getAutor()),
+                post.getTitulo(),
+                post.getDescripcion(),
+                categoria,
+                adjuntosDTO,
+                comentarios,
+                post.getFechaCreacion()
+        );
     }
 
     // ============================================================
@@ -151,41 +146,40 @@ public class PostMapper {
     // MAPEO DE AUTOR
     // ============================================================
 
+    /**
+     * Mapea un usuario a un resumen público.
+     * Maneja LazyInitializationException de forma segura.
+     */
     public AutorResumenDTO aAutorResumen(Usuario usuario) {
         if (usuario == null) return null;
 
-        try {
-            String marcoId = null;
+        String marcoId = "none";
 
+        try {
             // Intenta obtener el marco desde la personalización
             if (usuario.getPersonalizacion() != null) {
                 marcoId = usuario.getPersonalizacion().getMarcoId();
             }
-
-            // Fallback al campo marco_id del usuario
-            if ((marcoId == null || marcoId.isEmpty()) && usuario.getMarcoId() != null) {
-                marcoId = usuario.getMarcoId();
-            }
-
-            if (marcoId == null || marcoId.isEmpty()) {
-                marcoId = "none";
-            }
-
-            return new AutorResumenDTO(
-                    usuario.getId(),
-                    usuario.getNombreUsuario() != null ? usuario.getNombreUsuario() : "Usuario",
-                    usuario.getFotoPerfilUrl(),
-                    marcoId
-            );
-
         } catch (Exception e) {
-            System.err.println("Error al obtener marco del usuario ID: " + usuario.getId());
-            return new AutorResumenDTO(
-                    usuario.getId(),
-                    usuario.getNombreUsuario() != null ? usuario.getNombreUsuario() : "Usuario",
-                    usuario.getFotoPerfilUrl(),
-                    "none"
-            );
+            // LazyInitializationException u otro error → usar fallback
+            log.debug("No se pudo cargar la personalización del usuario {}: {}",
+                    usuario.getId(), e.getMessage());
         }
+
+        // Fallback al campo marco_id del usuario
+        if ((marcoId == null || marcoId.isEmpty()) && usuario.getMarcoId() != null) {
+            marcoId = usuario.getMarcoId();
+        }
+
+        if (marcoId == null || marcoId.isEmpty()) {
+            marcoId = "none";
+        }
+
+        return new AutorResumenDTO(
+                usuario.getId(),
+                usuario.getNombreUsuario() != null ? usuario.getNombreUsuario() : "Usuario",
+                usuario.getFotoPerfilUrl(),
+                marcoId
+        );
     }
 }

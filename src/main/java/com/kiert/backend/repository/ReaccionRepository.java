@@ -21,9 +21,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     // BUSCAR REACCIÓN ESPECÍFICA
     // ============================================================
 
-    /**
-     * Busca la reacción de un usuario a un post.
-     */
     @Query("""
             SELECT r FROM Reaccion r
             LEFT JOIN FETCH r.usuario
@@ -35,9 +32,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
             @Param("postId") Long postId
     );
 
-    /**
-     * Busca la reacción de un usuario a un comentario.
-     */
     @Query("""
             SELECT r FROM Reaccion r
             LEFT JOIN FETCH r.usuario
@@ -50,13 +44,9 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     );
 
     // ============================================================
-    // CONTAR REACCIONES (para el feed — 1 post)
+    // CONTAR REACCIONES (1 post / 1 comentario)
     // ============================================================
 
-    /**
-     * Cuenta reacciones agrupadas por tipo en un post.
-     * Devuelve [tipo, count].
-     */
     @Query("""
             SELECT r.tipo, COUNT(r)
             FROM Reaccion r
@@ -65,9 +55,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
             """)
     List<Object[]> countReaccionesByPost(@Param("postId") Long postId);
 
-    /**
-     * Cuenta reacciones agrupadas por tipo en un comentario.
-     */
     @Query("""
             SELECT r.tipo, COUNT(r)
             FROM Reaccion r
@@ -81,27 +68,9 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     long countByComentarioId(Long comentarioId);
 
     // ============================================================
-    //  OPTIMIZACIÓN CRÍTICA: CONTAR REACCIONES POR MÚLTIPLES POSTS
+    // CONTAR REACCIONES POR MÚLTIPLES POSTS / COMENTARIOS
     // ============================================================
 
-    /**
-     * NUEVO: Cuenta reacciones de VARIOS posts en 1 query.
-     * Devuelve [postId, tipo, count].
-     *
-     * Elimina el N+1 del feed: en lugar de 20 queries, es 1.
-     *
-     * Uso en el service:
-     *   Map<Long, Map<String, Long>> contadores = repo
-     *       .contarReaccionesPorPosts(postIds)
-     *       .stream()
-     *       .collect(Collectors.groupingBy(
-     *           row -> (Long) row[0],
-     *           Collectors.toMap(
-     *               row -> (String) row[1],
-     *               row -> (Long) row[2]
-     *           )
-     *       ));
-     */
     @Query("""
             SELECT r.post.id, r.tipo, COUNT(r)
             FROM Reaccion r
@@ -110,10 +79,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
             """)
     List<Object[]> contarReaccionesPorPosts(@Param("postIds") List<Long> postIds);
 
-    /**
-     * NUEVO: Cuenta reacciones de varios comentarios en 1 query.
-     * Devuelve [comentarioId, tipo, count].
-     */
     @Query("""
             SELECT r.comentario.id, r.tipo, COUNT(r)
             FROM Reaccion r
@@ -128,10 +93,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     // REACCIONES DEL USUARIO
     // ============================================================
 
-    /**
-     * NUEVO: Reacciones de un usuario a posts (paginado).
-     * Útil para "mis reacciones".
-     */
     @Query("""
             SELECT r FROM Reaccion r
             LEFT JOIN FETCH r.post p
@@ -145,9 +106,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
             Pageable pageable
     );
 
-    /**
-     * NUEVO: Reacciones de un usuario a comentarios (paginado).
-     */
     @Query("""
             SELECT r FROM Reaccion r
             LEFT JOIN FETCH r.comentario c
@@ -165,10 +123,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     // VERIFICAR REACCIONES (bulk, para el feed)
     // ============================================================
 
-    /**
-     * NUEVO: Devuelve los IDs de posts donde el usuario reaccionó.
-     * Útil para marcar los posts del feed con el estado "ya reaccioné".
-     */
     @Query("""
             SELECT r.post.id FROM Reaccion r
             WHERE r.usuario.id = :usuarioId
@@ -179,9 +133,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
             @Param("postIds") List<Long> postIds
     );
 
-    /**
-     * NUEVO: Devuelve los IDs de comentarios donde el usuario reaccionó.
-     */
     @Query("""
             SELECT r.comentario.id FROM Reaccion r
             WHERE r.usuario.id = :usuarioId
@@ -196,10 +147,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     // ELIMINAR REACCIONES
     // ============================================================
 
-    /**
-     * Elimina la reacción de un usuario a un post.
-     * MEJORA: usa @Modifying para evitar el SELECT + DELETE.
-     */
     @Modifying
     @Query("""
             DELETE FROM Reaccion r
@@ -211,9 +158,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
             @Param("postId") Long postId
     );
 
-    /**
-     * Elimina la reacción de un usuario a un comentario.
-     */
     @Modifying
     @Query("""
             DELETE FROM Reaccion r
@@ -225,17 +169,10 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
             @Param("comentarioId") Long comentarioId
     );
 
-    /**
-     * NUEVO: Elimina TODAS las reacciones de un post (bulk).
-     * Útil cuando se elimina un post (aunque normalmente es CASCADE).
-     */
     @Modifying
     @Query("DELETE FROM Reaccion r WHERE r.post.id = :postId")
     int deleteByPostId(@Param("postId") Long postId);
 
-    /**
-     *NUEVO: Elimina TODAS las reacciones de un comentario.
-     */
     @Modifying
     @Query("DELETE FROM Reaccion r WHERE r.comentario.id = :comentarioId")
     int deleteByComentarioId(@Param("comentarioId") Long comentarioId);
@@ -244,10 +181,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     // TOP POSTS REACCIONADOS
     // ============================================================
 
-    /**
-     * NUEVO: Top N posts con más reacciones.
-     * Devuelve [postId, totalReacciones].
-     */
     @Query("""
             SELECT r.post.id, COUNT(r) as total
             FROM Reaccion r
@@ -261,10 +194,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     // TIPOS DE REACCIÓN DISPONIBLES
     // ============================================================
 
-    /**
-     * NUEVO: Tipos de reacción distintos que existen en el sistema.
-     * Útil para que el frontend sepa qué emojis mostrar.
-     */
     @Query("""
             SELECT DISTINCT r.tipo FROM Reaccion r
             ORDER BY r.tipo ASC
@@ -275,16 +204,9 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     // ESTADÍSTICAS
     // ============================================================
 
-    /**
-     * NUEVO: Total de reacciones en el sistema.
-     */
     @Query("SELECT COUNT(r) FROM Reaccion r")
     long countTotal();
 
-    /**
-     * NUEVO: Cuenta reacciones agrupadas por tipo (global).
-     * Devuelve [tipo, count].
-     */
     @Query("""
             SELECT r.tipo, COUNT(r)
             FROM Reaccion r
@@ -293,9 +215,6 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
             """)
     List<Object[]> contarGlobalPorTipo();
 
-    /**
-     * NUEVO: Reacciones creadas en un rango de fechas.
-     */
     @Query("""
             SELECT COUNT(r) FROM Reaccion r
             WHERE r.fechaCreacion >= :desde
@@ -307,13 +226,9 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
     );
 
     // ============================================================
-    // LIMPIEZA (para @Scheduled)
+    // LIMPIEZA
     // ============================================================
 
-    /**
-     *  NUEVO: Elimina reacciones huérfanas
-     * (sin post ni comentario, no debería pasar por el CHECK constraint).
-     */
     @Modifying
     @Query("""
             DELETE FROM Reaccion r
@@ -321,4 +236,22 @@ public interface ReaccionRepository extends JpaRepository<Reaccion, Long> {
               AND r.comentario IS NULL
             """)
     int eliminarHuerfanas();
+
+    // ============================================================
+    // SEGURIDAD: Validar autoría de la reacción
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si un usuario es el autor de la reacción.
+     * Se usa para impedir que un usuario elimine reacciones ajenas.
+     */
+    @Query("""
+            SELECT COUNT(r) > 0 FROM Reaccion r
+            WHERE r.id = :reaccionId
+              AND r.usuario.id = :usuarioId
+            """)
+    boolean esReaccionDelUsuario(
+            @Param("reaccionId") Long reaccionId,
+            @Param("usuarioId") Long usuarioId
+    );
 }

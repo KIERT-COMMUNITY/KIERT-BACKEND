@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/security/JwtProperties.java
 package com.kiert.backend.security;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;

@@ -4,6 +4,7 @@ package com.kiert.backend.service;
 import com.kiert.backend.dto.UsuarioDTO;
 import com.kiert.backend.dto.UsuarioDisponibleDTO;
 import com.kiert.backend.entity.Usuario;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,9 @@ public class UsuarioService {
     private static final String CACHE_USUARIOS = "usuarios";
     private static final String CACHE_BUSQUEDA_USUARIOS = "busquedaUsuarios";
     private static final int LIMITE_BUSQUEDA = 20;
+    private static final int MAX_NOMBRE_USUARIO = 20;
+    private static final int MAX_EMAIL = 100;
+    private static final int MAX_BIO = 255;
 
     // ============================================================
     // OBTENER USUARIO POR ID
@@ -36,6 +40,10 @@ public class UsuarioService {
     public UsuarioDTO obtenerUsuarioPorId(Long id) {
         log.info("[DB] Obteniendo usuario por ID: {}", id);
 
+        if (id == null) {
+            throw new BadRequestException("ID requerido");
+        }
+
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
@@ -43,20 +51,14 @@ public class UsuarioService {
                 usuario.getId(),
                 usuario.getNombreUsuario(),
                 usuario.getEmail(),
-                usuario.getFotoPerfilUrl()
+                usuario.getFotoPerfilUrl(),
+                usuario.getBio()
         );
     }
 
     // ============================================================
     // BUSCAR USUARIOS
     // ============================================================
-    /**
-     * CAMBIO CLAVE: la clave incluye `usuarioActualId` porque el resultado
-     * filtra al usuario actual. Sin esto, dos usuarios distintos verían
-     * los mismos resultados cacheados.
-     *
-     * Además, se limita a LIMITE_BUSQUEDA resultados para no llenar Redis.
-     */
     @Transactional(readOnly = true)
     @Cacheable(
             value = CACHE_BUSQUEDA_USUARIOS,
@@ -70,12 +72,27 @@ public class UsuarioService {
             return List.of();
         }
 
+        if (usuarioActualId == null) {
+            return List.of();
+        }
+
+        // Sanitizar query (evitar wildcards explícitos)
+        String queryLimpia = query.trim()
+                .replace("%", "")
+                .replace("_", "");
+
+        if (queryLimpia.isEmpty()) {
+            return List.of();
+        }
+
         List<Usuario> usuarios = usuarioRepository
-                .findByNombreUsuarioContainingIgnoreCase(query.trim());
+                .findByNombreUsuarioContainingIgnoreCase(queryLimpia);
 
         return usuarios.stream()
                 .filter(u -> !u.getId().equals(usuarioActualId))
-                .limit(LIMITE_BUSQUEDA)   // límite
+                .filter(u -> Boolean.TRUE.equals(u.getActivo()))
+                .filter(u -> !Boolean.TRUE.equals(u.getEliminado()))
+                .limit(LIMITE_BUSQUEDA)
                 .map(u -> new UsuarioDisponibleDTO(
                         u.getId(),
                         u.getNombreUsuario(),
@@ -92,14 +109,63 @@ public class UsuarioService {
     public UsuarioDTO actualizarUsuario(Long id, UsuarioDTO datos) {
         log.info("Actualizando usuario: {}", id);
 
+        if (id == null) {
+            throw new BadRequestException("ID requerido");
+        }
+        if (datos == null) {
+            throw new BadRequestException("Datos requeridos");
+        }
+
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
+        // Validar nombre de usuario
         if (datos.nombreUsuario() != null) {
-            usuario.setNombreUsuario(datos.nombreUsuario());
+            String nombre = datos.nombreUsuario().trim();
+            if (nombre.isEmpty()) {
+                throw new BadRequestException("El nombre de usuario no puede estar vacío");
+            }
+            if (nombre.length() > MAX_NOMBRE_USUARIO) {
+                throw new BadRequestException("El nombre de usuario es demasiado largo");
+            }
+            if (nombre.length() < 3) {
+                throw new BadRequestException("El nombre de usuario es demasiado corto");
+            }
+            // Verificar si el nuevo nombre ya está en uso por otro usuario
+            if (!nombre.equals(usuario.getNombreUsuario())
+                    && usuarioRepository.existsByNombreUsuario(nombre)) {
+                throw new BadRequestException("El nombre de usuario ya está en uso");
+            }
+            usuario.setNombreUsuario(nombre);
         }
+
+        // Validar email
         if (datos.email() != null) {
-            usuario.setEmail(datos.email());
+            String email = datos.email().trim().toLowerCase();
+            if (email.isEmpty()) {
+                throw new BadRequestException("El email no puede estar vacío");
+            }
+            if (email.length() > MAX_EMAIL) {
+                throw new BadRequestException("El email es demasiado largo");
+            }
+            if (!email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+                throw new BadRequestException("El email no es válido");
+            }
+            // Verificar si el nuevo email ya está en uso
+            if (!email.equals(usuario.getEmail())
+                    && usuarioRepository.existsByEmail(email)) {
+                throw new BadRequestException("El email ya está en uso");
+            }
+            usuario.setEmail(email);
+        }
+
+        // Validar bio
+        if (datos.bio() != null) {
+            String bio = datos.bio().trim();
+            if (bio.length() > MAX_BIO) {
+                throw new BadRequestException("La biografía es demasiado larga");
+            }
+            usuario.setBio(bio.isEmpty() ? null : bio);
         }
 
         usuario = usuarioRepository.save(usuario);
@@ -108,12 +174,13 @@ public class UsuarioService {
                 usuario.getId(),
                 usuario.getNombreUsuario(),
                 usuario.getEmail(),
-                usuario.getFotoPerfilUrl()
+                usuario.getFotoPerfilUrl(),
+                usuario.getBio()
         );
     }
 
     // ============================================================
-    // ESTADO ONLINE / OFFLINE (ahora en Redis)
+    // ESTADO ONLINE / OFFLINE
     // ============================================================
     public void marcarEnLinea(Long usuarioId) {
         presenciaService.marcarEnLinea(usuarioId);
@@ -123,29 +190,11 @@ public class UsuarioService {
         presenciaService.marcarDesconectado(usuarioId);
     }
 
-    /**
-     * ELIMINADO: marcarTodosDesconectados()
-     * Ya no se necesita porque las claves Redis expiran solas.
-     * Si quieres forzar limpieza al arranque, hazlo desde un CommandLineRunner
-     * que borre las claves presencia:online:* (no necesario).
-     */
-
-    /**
-     * ELIMINADO: limpiarUsuariosInactivos()
-     * Ya no se necesita porque el TTL de 5 min en Redis se encarga.
-     */
-
     // ============================================================
-    // HELPERS PARA EL DTO
+    // HELPERS
     // ============================================================
-    /**
-     * Rellena el estado online/ultima conexión en un DTO.
-     * Llamar desde el mapper o controller cuando se necesite.
-     */
     public UsuarioDTO enriquecerConPresencia(UsuarioDTO dto) {
         if (dto == null) return null;
-        // El DTO es un record, así que creamos uno nuevo con los datos
-        // (o lo dejamos así si el frontend consulta el estado por separado)
         return dto;
     }
 }

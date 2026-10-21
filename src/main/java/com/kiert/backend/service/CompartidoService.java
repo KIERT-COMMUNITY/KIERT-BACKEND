@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/service/CompartidoService.java
 package com.kiert.backend.service;
 
 import com.kiert.backend.dto.CompartidoDTO;
@@ -5,6 +6,7 @@ import com.kiert.backend.dto.CompartirPostDTO;
 import com.kiert.backend.entity.Compartido;
 import com.kiert.backend.entity.Post;
 import com.kiert.backend.entity.Usuario;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.repository.CompartidoRepository;
 import com.kiert.backend.repository.PostRepository;
@@ -29,25 +31,32 @@ public class CompartidoService {
     private final PostRepository postRepository;
     private final UsuarioRepository usuarioRepository;
 
-    // Nombres de caché centralizados
     private static final String CACHE_COMPARTIDOS = "compartidos";
     private static final String CACHE_CONTADOR_COMPARTIDOS = "contadorCompartidos";
 
+    private static final List<String> TIPOS_VALIDOS = List.of("INTERNO", "EXTERNO");
+    private static final int MAX_COMENTARIO = 500;
+
     // ============================================================
-    // COMPARTIR (escritura)
+    // COMPARTIR
     // ============================================================
     @Transactional
     @Caching(evict = {
-            // Invalidar lista de compartidos del post
             @CacheEvict(value = CACHE_COMPARTIDOS, key = "'post:' + #postId"),
-            // Invalidar contador del post
             @CacheEvict(value = CACHE_CONTADOR_COMPARTIDOS, key = "'post:' + #postId"),
-            // Invalidar caché de posts para que se refleje el nuevo contador
             @CacheEvict(value = "posts", allEntries = true),
             @CacheEvict(value = "post", key = "#postId")
     })
     public CompartidoDTO compartir(Long usuarioId, Long postId, CompartirPostDTO dto) {
         log.info("Compartiendo post {} por usuario {}", postId, usuarioId);
+
+        // Validaciones básicas
+        if (usuarioId == null || postId == null) {
+            throw new BadRequestException("Parámetros inválidos");
+        }
+        if (dto == null) {
+            throw new BadRequestException("Datos de compartido requeridos");
+        }
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -55,22 +64,44 @@ public class CompartidoService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
-        String tipo = dto.tipoCompartido() != null ? dto.tipoCompartido() : "INTERNO";
-        if (!tipo.equals("INTERNO") && !tipo.equals("EXTERNO")) {
-            throw new IllegalArgumentException("Tipo de compartido inválido");
+        if (post.isEliminado()) {
+            throw new BadRequestException("El post ya no está disponible");
+        }
+
+        // Validar tipo
+        String tipo = dto.tipoCompartido() != null
+                ? dto.tipoCompartido().trim().toUpperCase()
+                : "INTERNO";
+
+        if (!TIPOS_VALIDOS.contains(tipo)) {
+            throw new BadRequestException("Tipo de compartido inválido");
+        }
+
+        // Validar comentario
+        String comentario = dto.comentario();
+        if (comentario != null && comentario.length() > MAX_COMENTARIO) {
+            throw new BadRequestException("El comentario es demasiado largo");
+        }
+
+        // Anti-spam: verificar si el usuario ya compartió el post recientemente
+        Instant hace10Minutos = Instant.now().minusSeconds(600);
+        if (compartidoRepository.compartioRecientemente(usuarioId, postId, hace10Minutos)) {
+            throw new BadRequestException(
+                    "Ya compartiste este post recientemente. Intenta más tarde."
+            );
         }
 
         Compartido compartido = Compartido.builder()
                 .usuario(usuario)
                 .post(post)
                 .tipoCompartido(tipo)
-                .comentario(dto.comentario())
+                .comentario(comentario != null ? comentario.trim() : null)
                 .fechaCreacion(Instant.now())
                 .build();
 
         compartido = compartidoRepository.save(compartido);
 
-        // Actualizar contador desnormalizado (fuente de verdad rápida)
+        // Actualizar contador desnormalizado
         post.setTotalCompartidos(post.getTotalCompartidos() + 1);
         postRepository.save(post);
 
@@ -80,13 +111,10 @@ public class CompartidoService {
     }
 
     // ============================================================
-    // LISTAR COMPARTIDOS POR POST (lectura frecuente)
+    // LISTAR COMPARTIDOS POR POST
     // ============================================================
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_COMPARTIDOS,
-            key = "'post:' + #postId"
-    )
+    @Cacheable(value = CACHE_COMPARTIDOS, key = "'post:' + #postId")
     public List<CompartidoDTO> listarPorPost(Long postId) {
         log.info("[DB] Listando compartidos del post: {}", postId);
         return compartidoRepository.findByPostId(postId)
@@ -94,25 +122,13 @@ public class CompartidoService {
     }
 
     // ============================================================
-    // CONTAR COMPARTIDOS (lectura muy frecuente — N+1 en feeds)
+    // CONTAR COMPARTIDOS
     // ============================================================
-    /**
-     * IMPORTANTE: Este método usa el contador desnormalizado `post.totalCompartidos`
-     * en lugar de un COUNT(*) a la tabla compartidos, porque es mucho más rápido
-     * y se mantiene sincronizado por el método compartir().
-     *
-     * Si necesitas el conteo exacto desde la tabla (para auditoría), usa
-     * contarCompartidosDesdeDB() en su lugar.
-     */
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_CONTADOR_COMPARTIDOS,
-            key = "'post:' + #postId"
-    )
+    @Cacheable(value = CACHE_CONTADOR_COMPARTIDOS, key = "'post:' + #postId")
     public long contarCompartidos(Long postId) {
         log.debug("[DB] Obteniendo contador de compartidos del post: {}", postId);
 
-        // Usar el contador desnormalizado del post (rápido)
         return postRepository.findById(postId)
                 .map(p -> p.getTotalCompartidos() != null
                         ? p.getTotalCompartidos().longValue()
@@ -120,10 +136,6 @@ public class CompartidoService {
                 .orElse(0L);
     }
 
-    /**
-     * Conteo exacto desde la tabla compartidos.
-     * Úsalo solo para auditoría o verificación, no en flujos de lectura.
-     */
     @Transactional(readOnly = true)
     public long contarCompartidosDesdeDB(Long postId) {
         return compartidoRepository.countByPostId(postId);

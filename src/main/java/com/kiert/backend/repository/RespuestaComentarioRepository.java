@@ -17,14 +17,6 @@ import java.util.Optional;
 @Repository
 public interface RespuestaComentarioRepository extends JpaRepository<RespuestaComentario, Long> {
 
-    // ============================================================
-    // LISTAR RESPUESTAS DE UN COMENTARIO
-    // ============================================================
-
-    /**
-     * Lista respuestas activas de un comentario con su autor cargado.
-     *  MEJORA: incluye JOIN FETCH para eliminar N+1.
-     */
     @Query("""
             SELECT r FROM RespuestaComentario r
             LEFT JOIN FETCH r.autor
@@ -36,17 +28,10 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             @Param("comentarioId") Long comentarioId
     );
 
-    /**
-     * Alias de `findByComentarioIdAndEliminadoFalseOrderByFechaCreacionAsc`.
-     * Mantengo por compatibilidad, pero delega en el método principal.
-     */
     default List<RespuestaComentario> findActiveByComentarioId(Long comentarioId) {
         return findByComentarioIdAndEliminadoFalseOrderByFechaCreacionAsc(comentarioId);
     }
 
-    /**
-     * NUEVO: Versión paginada (recomendada para comentarios virales).
-     */
     @Query("""
             SELECT r FROM RespuestaComentario r
             LEFT JOIN FETCH r.autor
@@ -59,18 +44,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             Pageable pageable
     );
 
-    // ============================================================
-    // CARGA MASIVA POR MÚLTIPLES COMENTARIOS (elimina N+1)
-    // ============================================================
-
-    /**
-     * CRÍTICO: Carga las respuestas de VARIOS comentarios en 1 query.
-     *
-     * Uso: al listar un post con 50 comentarios, en lugar de hacer 50 queries
-     * (una por comentario), haces 1 query que trae las respuestas de los 50.
-     *
-     * Devuelve la lista completa de respuestas. El service agrupa por comentarioId.
-     */
     @Query("""
             SELECT r FROM RespuestaComentario r
             LEFT JOIN FETCH r.autor
@@ -82,13 +55,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             @Param("comentarioIds") List<Long> comentarioIds
     );
 
-    // ============================================================
-    // CONTADORES
-    // ============================================================
-
-    /**
-     * Cuenta respuestas activas de un comentario.
-     */
     @Query("""
             SELECT COUNT(r) FROM RespuestaComentario r
             WHERE r.comentario.id = :comentarioId
@@ -96,13 +62,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             """)
     long countActiveByComentarioId(@Param("comentarioId") Long comentarioId);
 
-    /**
-     * NUEVO: Cuenta respuestas agrupadas por comentario.
-     * Devuelve [comentarioId, count].
-     *
-     * Uso: al listar un post, contar las respuestas de todos sus comentarios
-     * en 1 query en lugar de N.
-     */
     @Query("""
             SELECT r.comentario.id, COUNT(r)
             FROM RespuestaComentario r
@@ -112,9 +71,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             """)
     List<Object[]> contarPorComentarios(@Param("comentarioIds") List<Long> comentarioIds);
 
-    /**
-     * NUEVO: Cuenta TODAS las respuestas de un usuario (para el perfil).
-     */
     @Query("""
             SELECT COUNT(r) FROM RespuestaComentario r
             WHERE r.autor.id = :usuarioId
@@ -122,13 +78,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             """)
     long countActiveByAutorId(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // RESPUESTAS POR USUARIO (perfil)
-    // ============================================================
-
-    /**
-     * NUEVO: Últimas respuestas de un usuario (para el perfil).
-     */
     @Query("""
             SELECT r FROM RespuestaComentario r
             LEFT JOIN FETCH r.comentario c
@@ -143,13 +92,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             Pageable pageable
     );
 
-    // ============================================================
-    // OBTENER POR ID
-    // ============================================================
-
-    /**
-     * NUEVO: Obtiene una respuesta activa con su autor y comentario cargados.
-     */
     @Query("""
             SELECT r FROM RespuestaComentario r
             LEFT JOIN FETCH r.autor
@@ -160,13 +102,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             """)
     Optional<RespuestaComentario> findActivaById(@Param("id") Long id);
 
-    // ============================================================
-    // BÚSQUEDA
-    // ============================================================
-
-    /**
-     * NUEVO: Buscar respuestas por texto en un comentario.
-     */
     @Query("""
             SELECT r FROM RespuestaComentario r
             LEFT JOIN FETCH r.autor
@@ -181,14 +116,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             Pageable pageable
     );
 
-    // ============================================================
-    // SOFT DELETE BULK
-    // ============================================================
-
-    /**
-     * NUEVO: Soft-delete de TODAS las respuestas de un comentario.
-     * Útil cuando se elimina un comentario.
-     */
     @Modifying
     @Query("""
             UPDATE RespuestaComentario r
@@ -202,10 +129,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             @Param("fecha") Instant fecha
     );
 
-    /**
-     * NUEVO: Soft-delete de TODAS las respuestas de varios comentarios.
-     * Útil cuando se elimina un post completo.
-     */
     @Modifying
     @Query("""
             UPDATE RespuestaComentario r
@@ -219,13 +142,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             @Param("fecha") Instant fecha
     );
 
-    // ============================================================
-    // LIMPIEZA (para @Scheduled)
-    // ============================================================
-
-    /**
-     * NUEVO: Hard-delete de respuestas con soft-delete hace más de N días.
-     */
     @Modifying
     @Query(value = """
             DELETE FROM respuestas_comentarios
@@ -234,20 +150,9 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             """, nativeQuery = true)
     int eliminarRespuestasBorradasAntiguas(@Param("limite") Instant limite);
 
-    // ============================================================
-    // ESTADÍSTICAS
-    // ============================================================
-
-    /**
-     *NUEVO: Total de respuestas activas en el sistema.
-     */
     @Query("SELECT COUNT(r) FROM RespuestaComentario r WHERE r.eliminado = false")
     long countActivas();
 
-    /**
-     * NUEVO: Top comentarios con más respuestas.
-     * Devuelve [comentarioId, count].
-     */
     @Query("""
             SELECT r.comentario.id, COUNT(r) as total
             FROM RespuestaComentario r
@@ -256,4 +161,23 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             ORDER BY total DESC
             """)
     List<Object[]> topComentariosConMasRespuestas(Pageable pageable);
+
+    // ============================================================
+    // SEGURIDAD: Validar autoría
+    // ============================================================
+
+    /**
+     * NUEVO: Verifica si un usuario es el autor de la respuesta.
+     * Se usa para prevenir que un usuario edite/elimine respuestas ajenas.
+     */
+    @Query("""
+            SELECT COUNT(r) > 0 FROM RespuestaComentario r
+            WHERE r.id = :respuestaId
+              AND r.autor.id = :usuarioId
+              AND r.eliminado = false
+            """)
+    boolean esAutorDeRespuesta(
+            @Param("respuestaId") Long respuestaId,
+            @Param("usuarioId") Long usuarioId
+    );
 }

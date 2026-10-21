@@ -21,10 +21,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // LISTAR COMENTARIOS
     // ============================================================
 
-    /**
-     * Lista comentarios activos de un post, ordenados por fecha ASC.
-     *  Para posts con muchos comentarios, usa `findByPostIdPaginado`.
-     */
     @Query("""
             SELECT c FROM Comentario c
             LEFT JOIN FETCH c.autor
@@ -36,9 +32,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             @Param("postId") Long postId
     );
 
-    /**
-     * NUEVO: Versión paginada (recomendada para posts con muchos comentarios).
-     */
     @Query("""
             SELECT c FROM Comentario c
             LEFT JOIN FETCH c.autor
@@ -51,13 +44,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             Pageable pageable
     );
 
-    /**
-     * ⚠️ Legacy: mantiene compatibilidad, pero trae comentarios eliminados.
-     * No usar en código nuevo.
-     */
-    @Deprecated
-    List<Comentario> findByPostIdOrderByFechaCreacionAsc(Long postId);
-
     // ============================================================
     // CONTAR COMENTARIOS
     // ============================================================
@@ -69,9 +55,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             """)
     long countActiveByPostId(@Param("postId") Long postId);
 
-    /**
-     *  NUEVO: Contar TODOS los comentarios de un usuario (para el perfil).
-     */
     @Query("""
             SELECT COUNT(c) FROM Comentario c
             WHERE c.autor.id = :usuarioId
@@ -80,41 +63,13 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     long countActiveByAutorId(@Param("usuarioId") Long usuarioId);
 
     // ============================================================
-    // CON RESPUESTAS (evitando el N+1 con doble FETCH)
+    // COMENTARIOS SIN RESPUESTAS (para paginación segura)
     // ============================================================
 
     /**
-     * ⚠️ PROBLEMA CONOCIDO: `LEFT JOIN FETCH c.respuestas` con paginación
-     * genera "HHH000104: firstResult/maxResults specified with collection fetch;
-     * applying in memory" → carga todo en memoria y luego pagina.
-     *
-     * Solución: usar `@EntityGraph` o `@BatchSize` en la entidad.
-     *
-     * Alternativa recomendada: cargar comentarios + respuestas en 2 queries
-     * separadas (ver más abajo).
-     */
-    @Query("""
-            SELECT DISTINCT c FROM Comentario c
-            LEFT JOIN FETCH c.respuestas r
-            LEFT JOIN FETCH r.autor
-            LEFT JOIN FETCH c.autor
-            WHERE c.post.id = :postId
-              AND c.eliminado = false
-              AND r.eliminado = false
-            ORDER BY c.fechaCreacion ASC, r.fechaCreacion ASC
-            """)
-    List<Comentario> findActiveWithRespuestasByPostId(@Param("postId") Long postId);
-
-    /**
-     *  NUEVO (recomendado): Carga los comentarios de un post SIN respuestas.
-     * Luego carga las respuestas de esos comentarios con otra query.
-     *
-     * Uso en el service:
-     *   1. List<Comentario> comentarios = repo.findComentariosDePost(postId);
-     *   2. List<RespuestaComentario> respuestas = respuestaRepo.findRespuestasDeComentarios(ids);
-     *   3. Agrupar respuestas por comentarioId en memoria.
-     *
-     * Ventaja: paginación funciona correctamente.
+     * Carga los comentarios de un post SIN respuestas.
+     * Las respuestas se cargan en otra query con `RespuestaComentarioRepository`.
+     * Esto permite paginación correcta sin el bug N+1.
      */
     @Query("""
             SELECT c FROM Comentario c
@@ -126,13 +81,9 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     List<Comentario> findComentariosDePost(@Param("postId") Long postId);
 
     // ============================================================
-    // ÚLTIMOS COMENTARIOS DE UN USUARIO (para el perfil)
+    // ÚLTIMOS COMENTARIOS DE UN USUARIO (perfil)
     // ============================================================
 
-    /**
-     *  NUEVO: Últimos N comentarios de un usuario.
-     * Útil para la pestaña "Actividad" del perfil.
-     */
     @Query("""
             SELECT c FROM Comentario c
             LEFT JOIN FETCH c.post p
@@ -150,9 +101,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // BUSCAR EN COMENTARIOS
     // ============================================================
 
-    /**
-     * NUEVO: Buscar comentarios por texto (opcional, para admin o búsqueda).
-     */
     @Query("""
             SELECT c FROM Comentario c
             LEFT JOIN FETCH c.autor
@@ -169,13 +117,9 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     );
 
     // ============================================================
-    // ELIMINAR EN CASCADA (soft delete de un post)
+    // ELIMINAR EN CASCADA (soft delete)
     // ============================================================
 
-    /**
-     * NUEVO: Marca como eliminados TODOS los comentarios de un post.
-     * Útil cuando se elimina un post.
-     */
     @Modifying
     @Query("""
             UPDATE Comentario c
@@ -193,12 +137,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // CONTADORES PARA CACHÉ
     // ============================================================
 
-    /**
-     *  NUEVO: Cuenta comentarios activos agrupados por post.
-     * Útil para rellenar el feed sin N+1.
-     *
-     * Devuelve [postId, count].
-     */
     @Query("""
             SELECT c.post.id, COUNT(c)
             FROM Comentario c
@@ -212,9 +150,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
     // HELPERS
     // ============================================================
 
-    /**
-     *  NUEVO: Verifica si un comentario existe y está activo.
-     */
     @Query("""
             SELECT COUNT(c) > 0 FROM Comentario c
             WHERE c.id = :id
@@ -222,9 +157,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             """)
     boolean existeActivo(@Param("id") Long id);
 
-    /**
-     * NUEVO: Obtiene un comentario activo por ID con autor cargado.
-     */
     @Query("""
             SELECT c FROM Comentario c
             LEFT JOIN FETCH c.autor
@@ -233,4 +165,19 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
               AND c.eliminado = false
             """)
     Optional<Comentario> findActivoConAutor(@Param("id") Long id);
+
+    /**
+     * NUEVO: Verifica si un usuario es el autor del comentario.
+     * Se usa para prevenir que un usuario edite/elimine comentarios ajenos.
+     */
+    @Query("""
+            SELECT COUNT(c) > 0 FROM Comentario c
+            WHERE c.id = :comentarioId
+              AND c.autor.id = :usuarioId
+              AND c.eliminado = false
+            """)
+    boolean esAutorDelComentario(
+            @Param("comentarioId") Long comentarioId,
+            @Param("usuarioId") Long usuarioId
+    );
 }

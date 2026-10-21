@@ -7,6 +7,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -27,14 +28,29 @@ public class UsuarioPrincipal implements UserDetails {
         return usuario.getRol() != null ? usuario.getRol() : "USER";
     }
 
-    // ✅ Expone el rol como authority de Spring Security
+    /**
+     * Authorities basadas en el rol REAL del usuario.
+     *
+     * - Si el rol es USER: solo ROLE_USER
+     * - Si el rol es ADMIN/CEO/MODERADOR: el rol específico + ROLE_USER
+     *
+     * Nota: no incluimos ROLE_USER automáticamente para admins,
+     * para que las rutas con .hasRole("USER") los excluyan.
+     */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        List<GrantedAuthority> authorities = new ArrayList<>();
         String rol = getRol();
-        return List.of(
-                new SimpleGrantedAuthority("ROLE_" + rol),
-                new SimpleGrantedAuthority("ROLE_USER") // todos son USER también
-        );
+
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + rol));
+
+        // Si es USER, no duplicamos
+        if (!"USER".equalsIgnoreCase(rol)) {
+            // Admins NO tienen ROLE_USER (así /api/chat/** los excluye)
+            // authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+        }
+
+        return authorities;
     }
 
     @Override
@@ -51,11 +67,17 @@ public class UsuarioPrincipal implements UserDetails {
     public boolean isAccountNonExpired() { return true; }
 
     @Override
-    public boolean isAccountNonLocked() { return true; }
+    public boolean isAccountNonLocked() {
+        return usuario.getBloqueadoHasta() == null
+                || usuario.getBloqueadoHasta().isBefore(java.time.Instant.now());
+    }
 
     @Override
     public boolean isCredentialsNonExpired() { return true; }
 
     @Override
-    public boolean isEnabled() { return Boolean.TRUE.equals(usuario.getActivo()); }
+    public boolean isEnabled() {
+        return Boolean.TRUE.equals(usuario.getActivo())
+                && !Boolean.TRUE.equals(usuario.getEliminado());
+    }
 }
