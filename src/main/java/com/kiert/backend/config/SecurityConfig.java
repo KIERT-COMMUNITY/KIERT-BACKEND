@@ -61,42 +61,45 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
 
                         // ============================================================
-                        // 3. ANUNCIOS PÚBLICOS (Lectura autenticada)
-                        //    IMPORTANTE: Va ANTES que /api/admin/** para no chocar
+                        // 3. ANUNCIOS (Lectura autenticada)
+                        //    Va ANTES que /api/admin/** para no chocar
                         // ============================================================
                         .requestMatchers(HttpMethod.GET, "/api/anuncios/publicos").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/anuncios/**").authenticated()
 
-                        // Bloquear escritura pública en /api/anuncios/**
                         .requestMatchers(HttpMethod.POST, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.PUT, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.PATCH, "/api/anuncios/**").denyAll()
 
                         // ============================================================
-                        // 4. RUTAS DE ADMIN (Solo CEO, ADMIN, MODERADOR)
-                        //    NOTA: /api/admin/anuncios ya está cubierto por /api/admin/**
+                        // 4. ADMIN (solo CEO, ADMIN, MODERADOR)
                         // ============================================================
                         .requestMatchers("/api/admin/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
 
                         // ============================================================
-                        // 5. SEGURIDAD EXTRA: Admins NO pueden acceder al chat de usuarios
+                        // 5. CHAT GLOBAL + CHAT PRIVADO
+                        //    ✅ Ahora CUALQUIER usuario autenticado (admin o normal)
+                        //       puede usar el chat. Antes estaba con hasRole("USER")
+                        //       y bloqueaba a los admins.
                         // ============================================================
-                        .requestMatchers("/api/chat/**").hasRole("USER")
-                        .requestMatchers("/api/usuarios/solicitud/**").hasRole("USER")
-                        .requestMatchers("/api/usuarios/contactos").hasRole("USER")
-                        .requestMatchers("/api/usuarios/solicitudes/pendientes").hasRole("USER")
+                        .requestMatchers("/api/chat-global/**").authenticated()
+                        .requestMatchers("/api/chat/**").authenticated()
+                        .requestMatchers("/api/grupos/**").authenticated()
 
                         // ============================================================
-                        // 6. RUTAS PROTEGIDAS (Usuarios normales autenticados)
+                        // 6. RUTAS PROTEGIDAS DE USUARIO
                         // ============================================================
+                        .requestMatchers("/api/usuarios/solicitud/**").authenticated()
+                        .requestMatchers("/api/usuarios/contactos").authenticated()
+                        .requestMatchers("/api/usuarios/solicitudes/pendientes").authenticated()
+
                         .requestMatchers(HttpMethod.POST, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/publicaciones/**").authenticated()
 
                         .requestMatchers("/api/personalizacion/**").authenticated()
-                        .requestMatchers("/api/grupos/**").authenticated()
                         .requestMatchers("/api/notificaciones/**").authenticated()
                         .requestMatchers("/api/bloqueos/**").authenticated()
                         .requestMatchers("/api/reportes/**").authenticated()

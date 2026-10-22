@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/controller/PersonalizacionController.java
+// src/main/java/com/kiert/backend/features/personalizacion/controller/PersonalizacionController.java
 package com.kiert.backend.features.personalizacion.controller;
 
 import com.kiert.backend.features.personalizacion.dto.PersonalizacionDTO;
@@ -28,34 +28,22 @@ public class PersonalizacionController {
     // OBTENER PERSONALIZACIÓN DEL USUARIO ACTUAL
     // ============================================================
     @GetMapping
-    public ResponseEntity<?> obtenerPersonalizacion() {
-        try {
-            Long usuarioId = usuarioActual.id();
-            log.info("UsuarioActual.id() = {}", usuarioId);
+    public ResponseEntity<PersonalizacionDTO> obtenerPersonalizacion() {
+        Long usuarioId = usuarioActual.id();
+        log.debug("UsuarioActual.id() = {}", usuarioId);
 
-            if (usuarioId == null) {
-                log.warn("Usuario no autenticado, devolviendo default");
-                return ResponseEntity.ok(new PersonalizacionDTO(
-                        null, null, "default", "none", "default", null, null, null
-                ));
-            }
-
-            PersonalizacionDTO resultado = personalizacionService.obtenerPersonalizacion(usuarioId);
-
-            if (resultado == null) {
-                return ResponseEntity.ok(new PersonalizacionDTO(
-                        null, usuarioId, "default", "none", "default", null, null, null
-                ));
-            }
-
-            return ResponseEntity.ok(resultado);
-
-        } catch (Exception e) {
-            log.error("Error en obtenerPersonalizacion: {}", e.getMessage(), e);
-            return ResponseEntity.ok(new PersonalizacionDTO(
-                    null, null, "default", "none", "default", null, null, null
-            ));
+        if (usuarioId == null) {
+            log.warn("Usuario no autenticado, devolviendo default");
+            return ResponseEntity.ok(defaultDTO(null, null));
         }
+
+        // ✅ Llama al método cacheable que crea si no existe y cachea correctamente
+        PersonalizacionDTO resultado = personalizacionService.obtenerOCrearPersonalizacion(usuarioId);
+
+        if (resultado == null) {
+            return ResponseEntity.ok(defaultDTO(usuarioId, null));
+        }
+        return ResponseEntity.ok(resultado);
     }
 
     // ============================================================
@@ -63,24 +51,17 @@ public class PersonalizacionController {
     // ============================================================
     @PutMapping
     public ResponseEntity<?> guardarPersonalizacion(@RequestBody PersonalizacionDTO datos) {
-        try {
-            Long usuarioId = usuarioActual.id();
-            if (usuarioId == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(Map.of("error", "Usuario no autenticado"));
-            }
-
-            log.info("Guardando personalización del usuario: {}", usuarioId);
-            PersonalizacionDTO resultado = personalizacionService.guardarPersonalizacion(
-                    usuarioId, datos.temaId(), datos.marcoId(), datos.fondoId());
-
-            return ResponseEntity.ok(resultado);
-
-        } catch (Exception e) {
-            log.error("Error en guardarPersonalizacion: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al guardar personalización: " + e.getMessage()));
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
         }
+
+        log.info("Guardando personalización del usuario: {}", usuarioId);
+        PersonalizacionDTO resultado = personalizacionService.guardarPersonalizacion(
+                usuarioId, datos.temaId(), datos.marcoId(), datos.fondoId());
+
+        return ResponseEntity.ok(resultado);
     }
 
     // ============================================================
@@ -88,16 +69,11 @@ public class PersonalizacionController {
     // ============================================================
     @GetMapping("/marcos")
     public ResponseEntity<?> obtenerMarcos() {
-        try {
-            Long usuarioId = usuarioActual.id();
-            if (usuarioId == null) {
-                return ResponseEntity.ok(personalizacionService.obtenerMarcos(1L));
-            }
-            return ResponseEntity.ok(personalizacionService.obtenerMarcos(usuarioId));
-        } catch (Exception e) {
-            log.error("Error en obtenerMarcos: {}", e.getMessage(), e);
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
             return ResponseEntity.ok(personalizacionService.obtenerMarcos(1L));
         }
+        return ResponseEntity.ok(personalizacionService.obtenerMarcos(usuarioId));
     }
 
     // ============================================================
@@ -105,16 +81,11 @@ public class PersonalizacionController {
     // ============================================================
     @GetMapping("/fondos")
     public ResponseEntity<?> obtenerFondos() {
-        try {
-            Long usuarioId = usuarioActual.id();
-            if (usuarioId == null) {
-                return ResponseEntity.ok(personalizacionService.obtenerFondos(1L));
-            }
-            return ResponseEntity.ok(personalizacionService.obtenerFondos(usuarioId));
-        } catch (Exception e) {
-            log.error("Error en obtenerFondos: {}", e.getMessage(), e);
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
             return ResponseEntity.ok(personalizacionService.obtenerFondos(1L));
         }
+        return ResponseEntity.ok(personalizacionService.obtenerFondos(usuarioId));
     }
 
     // ============================================================
@@ -122,68 +93,53 @@ public class PersonalizacionController {
     // ============================================================
     @PostMapping("/foto-perfil")
     public ResponseEntity<?> subirFotoPerfil(@RequestParam("archivo") MultipartFile archivo) {
-        try {
-            Long usuarioId = usuarioActual.id();
-            if (usuarioId == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(Map.of("error", "Usuario no autenticado"));
-            }
-            log.info("Subiendo foto de perfil para usuario: {}", usuarioId);
-            return ResponseEntity.ok(personalizacionService.subirFotoPerfil(usuarioId, archivo));
-        } catch (Exception e) {
-            log.error("Error en subirFotoPerfil: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al subir foto: " + e.getMessage()));
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
         }
+        log.info("Subiendo foto de perfil para usuario: {}", usuarioId);
+        return ResponseEntity.ok(personalizacionService.subirFotoPerfil(usuarioId, archivo));
     }
 
     // ============================================================
-    // ✅ NUEVO: ELIMINAR FOTO DE PERFIL
+    // ELIMINAR FOTO DE PERFIL
     // ============================================================
     @DeleteMapping("/foto-perfil")
     @CacheEvict(value = {"personalizacion", "perfil", "usuarios"}, allEntries = true)
     public ResponseEntity<?> eliminarFotoPerfil() {
-        try {
-            Long usuarioId = usuarioActual.id();
-            if (usuarioId == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(Map.of("error", "Usuario no autenticado"));
-            }
-
-            log.info("Eliminando foto de perfil del usuario: {}", usuarioId);
-            PersonalizacionDTO resultado = personalizacionService.eliminarFotoPerfil(usuarioId);
-
-            return ResponseEntity.ok(resultado);
-
-        } catch (Exception e) {
-            log.error("Error al eliminar foto de perfil: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al eliminar foto: " + e.getMessage()));
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
         }
+
+        log.info("Eliminando foto de perfil del usuario: {}", usuarioId);
+        PersonalizacionDTO resultado = personalizacionService.eliminarFotoPerfil(usuarioId);
+
+        return ResponseEntity.ok(resultado);
     }
 
     // ============================================================
     // OBTENER PERSONALIZACIÓN DE OTRO USUARIO
     // ============================================================
     @GetMapping("/usuario/{usuarioId}")
-    public ResponseEntity<?> obtenerPersonalizacionPorUsuario(@PathVariable Long usuarioId) {
-        try {
-            log.info("Obteniendo personalización del usuario: {}", usuarioId);
-            PersonalizacionDTO resultado = personalizacionService.obtenerPersonalizacion(usuarioId);
+    public ResponseEntity<PersonalizacionDTO> obtenerPersonalizacionPorUsuario(@PathVariable Long usuarioId) {
+        log.debug("Obteniendo personalización del usuario: {}", usuarioId);
+        PersonalizacionDTO resultado = personalizacionService.obtenerPersonalizacionPorUsuario(usuarioId);
 
-            if (resultado == null) {
-                return ResponseEntity.ok(new PersonalizacionDTO(
-                        null, usuarioId, "default", "none", "default", null, null, null
-                ));
-            }
-
-            return ResponseEntity.ok(resultado);
-
-        } catch (Exception e) {
-            log.error("Error en obtenerPersonalizacionPorUsuario para {}: {}", usuarioId, e.getMessage(), e);
-            return ResponseEntity.ok(new PersonalizacionDTO(
-                    null, usuarioId, "default", "none", "default", null, null, null
-            ));
+        if (resultado == null) {
+            return ResponseEntity.ok(defaultDTO(usuarioId, null));
         }
+        return ResponseEntity.ok(resultado);
+    }
+
+    // ============================================================
+    // HELPER
+    // ============================================================
+    private PersonalizacionDTO defaultDTO(Long usuarioId, Long id) {
+        return new PersonalizacionDTO(
+                id, usuarioId, "default", "none", "default", null, null, null
+        );
     }
 }

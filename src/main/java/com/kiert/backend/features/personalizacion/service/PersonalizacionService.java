@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/PersonalizacionService.java
+// src/main/java/com/kiert/backend/features/personalizacion/service/PersonalizacionService.java
 package com.kiert.backend.features.personalizacion.service;
 
 import com.kiert.backend.entity.*;
@@ -36,20 +36,17 @@ public class PersonalizacionService {
     private static final String CACHE_MARCOS = "marcos";
     private static final String CACHE_FONDOS = "fondos";
 
-    // Whitelist de temas válidos
     private static final Set<String> TEMAS_VALIDOS = Set.of(
             "default", "dark", "light", "sunset", "ocean", "aurora", "galaxy",
             "lava", "forest", "candy", "cyber", "blood", "royal", "gold", "pastel"
     );
 
-    // Whitelist de marcos válidos
     private static final Set<String> MARCOS_VALIDOS = Set.of(
             "none", "classic", "gold", "silver", "rainbow", "pastel", "neon",
             "ocean", "sunset", "galaxy", "fire", "ice", "rose", "cyber",
             "crystal", "double", "star", "moon", "sun", "elite"
     );
 
-    // Whitelist de fondos válidos
     private static final Set<String> FONDOS_VALIDOS = Set.of(
             "default", "dark", "light", "sunset", "ocean", "aurora", "galaxy",
             "lava", "forest", "candy", "cyber", "blood", "royal", "gold", "pastel"
@@ -58,16 +55,39 @@ public class PersonalizacionService {
     private static final long MAX_IMAGE_SIZE = 15 * 1024 * 1024;
 
     // ============================================================
-    // OBTENER PERSONALIZACIÓN
+    // ✅ OBTENER PERSONALIZACIÓN (SIN readOnly — puede crear default)
     // ============================================================
-    @Transactional(readOnly = true)
+    @Transactional
+    public PersonalizacionDTO obtenerPersonalizacion(Long usuarioId) {
+        log.info("[DB] Obteniendo personalización para usuario: {}", usuarioId);
+
+        if (usuarioId == null) {
+            throw new BadRequestException("Usuario ID requerido");
+        }
+
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+
+        // ✅ findBy + orElseGet: si no existe, crea la default (INSERT permitido)
+        PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
+                .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
+
+        return toDTO(personalizacion, usuario);
+    }
+
+    // ============================================================
+    // ✅ OBTENER (versión cacheable: SOLO si ya existe en DB)
+    //    Si no existe → NO cachea, deja que el controller llame al método no cacheado
+    //    para que se cree y se devuelva el DTO con usuarioId real.
+    // ============================================================
+    @Transactional
     @Cacheable(
             value = CACHE_PERSONALIZACION,
             key = "#usuarioId",
-            unless = "#result == null"
+            unless = "#result == null || #result.id() == null"
     )
-    public PersonalizacionDTO obtenerPersonalizacion(Long usuarioId) {
-        log.info("[DB] Obteniendo personalización para usuario: {}", usuarioId);
+    public PersonalizacionDTO obtenerOCrearPersonalizacion(Long usuarioId) {
+        log.info("[DB] obtenerOCrearPersonalizacion para usuario: {}", usuarioId);
 
         if (usuarioId == null) {
             throw new BadRequestException("Usuario ID requerido");
@@ -79,21 +99,23 @@ public class PersonalizacionService {
         PersonalizacionUsuario personalizacion = personalizacionRepository.findByUsuarioId(usuarioId)
                 .orElseGet(() -> crearPersonalizacionDefault(usuarioId));
 
-        return toDTO(personalizacion, usuario);
+        PersonalizacionDTO dto = toDTO(personalizacion, usuario);
+        log.info("[DB] Personalización obtenida/creada id={} usuarioId={}", dto.id(), dto.usuarioId());
+        return dto;
     }
 
     // ============================================================
     // OBTENER PERSONALIZACIÓN POR USUARIO (público)
     // ============================================================
-    @Transactional(readOnly = true)
+    @Transactional
     @Cacheable(
             value = CACHE_PERSONALIZACION,
             key = "'user:' + #usuarioId",
-            unless = "#result == null"
+            unless = "#result == null || #result.id() == null"
     )
     public PersonalizacionDTO obtenerPersonalizacionPorUsuario(Long usuarioId) {
         log.info("[DB] Obteniendo personalización de usuario {} (público)", usuarioId);
-        return obtenerPersonalizacion(usuarioId);
+        return obtenerOCrearPersonalizacion(usuarioId);
     }
 
     // ============================================================
@@ -117,7 +139,6 @@ public class PersonalizacionService {
             throw new BadRequestException("Usuario ID requerido");
         }
 
-        // Validar valores contra whitelist
         if (temaId != null && !temaId.isEmpty() && !TEMAS_VALIDOS.contains(temaId)) {
             throw new BadRequestException("Tema no válido");
         }
@@ -187,7 +208,6 @@ public class PersonalizacionService {
 
         String urlAnterior = usuario.getFotoPerfilUrl();
 
-        // Subir nueva a Cloudinary
         String url;
         try {
             url = cloudinaryService.subirArchivo(archivo, "perfiles");
@@ -196,7 +216,6 @@ public class PersonalizacionService {
             throw new BadRequestException("No se pudo subir la foto");
         }
 
-        // Eliminar la anterior
         if (urlAnterior != null && !urlAnterior.isBlank()) {
             try {
                 cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
@@ -205,7 +224,6 @@ public class PersonalizacionService {
             }
         }
 
-        // Actualizar en usuario (fuente de verdad)
         usuario.setFotoPerfilUrl(url);
         usuarioRepository.save(usuario);
 
