@@ -10,14 +10,11 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.security.Principal;
+import java.util.Map;
 
 @Slf4j
-@Component
 @RequiredArgsConstructor
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
@@ -25,54 +22,53 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
-        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(
-                message, StompHeaderAccessor.class);
+        StompHeaderAccessor accessor =
+                MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
         if (accessor == null) return message;
 
-        // Validar solo en el frame CONNECT (cuando el cliente se autentica)
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             String authHeader = accessor.getFirstNativeHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                log.warn("[WS] Conexión rechazada: falta token Authorization");
-                throw new IllegalArgumentException("Token de autenticación requerido");
+                log.warn("[STOMP] CONNECT sin header Authorization válido");
+                return message;
             }
 
             String token = authHeader.substring(7);
-
             try {
-                if (!jwtService.esTokenValido(token, jwtService.extraerEmail(token))) {
-                    log.warn("[WS] Token inválido o expirado");
-                    throw new IllegalArgumentException("Token inválido");
-                }
-
-                String email = jwtService.extraerEmail(token);
+                // 1) Extraer datos del token
                 Long usuarioId = jwtService.extraerUsuarioId(token);
-                String rol = jwtService.extraerRol(token);
+                String email = jwtService.extraerEmail(token);
 
-                if (email == null || usuarioId == null) {
-                    throw new IllegalArgumentException("Token sin datos de usuario");
+                if (usuarioId == null || email == null) {
+                    log.warn("[STOMP] Token sin usuarioId/email");
+                    return message;
                 }
 
-                // Guardar en sessionAttributes para que el WebSocketEventListener lo lea
-                accessor.getSessionAttributes().put("usuarioId", usuarioId);
-                accessor.getSessionAttributes().put("email", email);
+                // 2) Validar firma + expiración contra el email esperado
+                if (!jwtService.esTokenValido(token, email)) {
+                    log.warn("[STOMP] Token inválido o expirado para {}", email);
+                    return message;
+                }
 
-                // Crear autenticación
-                List<SimpleGrantedAuthority> authorities = List.of(
-                        new SimpleGrantedAuthority("ROLE_" + (rol != null ? rol : "USER"))
-                );
+                // 3) Guardar usuarioId en sessionAttributes
+                //    → ChatGlobalController lo lee desde aquí
+                Map<String, Object> attrs = accessor.getSessionAttributes();
+                if (attrs != null) {
+                    attrs.put("usuarioId", String.valueOf(usuarioId));
+                    attrs.put("email", email);
+                }
 
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(email, null, authorities);
-                accessor.setUser(auth);
+                // 4) Asignar Principal (útil para @MessageMapping con Principal)
+                accessor.setUser((Principal) () -> email);
 
-                log.info("[WS] Conexión autenticada: {} (rol={})", email, rol);
+                log.debug("[STOMP] Conectado: usuarioId={} email={}", usuarioId, email);
 
             } catch (Exception e) {
-                log.warn("[WS] Error validando token: {}", e.getMessage());
-                throw new IllegalArgumentException("Token inválido o expirado");
+                log.error("[STOMP] Error validando JWT: {}", e.getMessage());
+                // No lanzar → deja que el frame CONNECT siga, pero sin atributos
+                // Si prefieres rechazar: throw new MessagingException("Token inválido", e);
             }
         }
 

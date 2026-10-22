@@ -2,7 +2,7 @@ package com.kiert.backend.config;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
-import com.kiert.backend.service.CloudinaryProperties;
+import com.kiert.backend.features.cloudinary.service.CloudinaryProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;

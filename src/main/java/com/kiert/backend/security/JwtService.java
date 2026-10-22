@@ -21,6 +21,9 @@ public class JwtService {
     private final SecretKey clave;
     private final long expiracionMs;
 
+    /** Rol por defecto para usuarios normales */
+    private static final String ROL_POR_DEFECTO = "USER";
+
     public JwtService(JwtProperties jwtProperties) {
         String secret = jwtProperties.secret();
         this.expiracionMs = jwtProperties.expirationMs() != null
@@ -44,6 +47,7 @@ public class JwtService {
 
     // ============================================================
     // GENERAR TOKEN BÁSICO (USUARIOS NORMALES)
+    // ✅ AHORA INCLUYE role="USER"
     // ============================================================
     public String generarToken(Long usuarioId, String email) {
         Date ahora = new Date();
@@ -52,6 +56,7 @@ public class JwtService {
         return Jwts.builder()
                 .subject(email)
                 .claim("usuarioId", usuarioId)
+                .claim("role", ROL_POR_DEFECTO)   // ✅ rol por defecto
                 .issuedAt(ahora)
                 .expiration(expiracion)
                 .signWith(clave, Jwts.SIG.HS256)
@@ -65,10 +70,12 @@ public class JwtService {
         Date ahora = new Date();
         Date expiracion = new Date(ahora.getTime() + expiracionMs);
 
+        String rolFinal = (rol != null && !rol.isBlank()) ? rol : ROL_POR_DEFECTO;
+
         return Jwts.builder()
                 .subject(email)
                 .claim("usuarioId", usuarioId)
-                .claim("role", rol)
+                .claim("role", rolFinal)
                 .issuedAt(ahora)
                 .expiration(expiracion)
                 .signWith(clave, Jwts.SIG.HS256)
@@ -90,9 +97,16 @@ public class JwtService {
         try { return Long.parseLong(val.toString()); } catch (Exception e) { return null; }
     }
 
+    /**
+     * Devuelve el rol del token. Si la claim no existe o viene vacía,
+     * devuelve "USER" por defecto para que el filtro pueda construir
+     * ROLE_USER y no quede ROLE_ vacío.
+     */
     public String extraerRol(String token) {
         Object val = extraerTodosLosClaims(token).get("role");
-        return val != null ? val.toString() : null;
+        if (val == null) return ROL_POR_DEFECTO;
+        String rol = val.toString().trim();
+        return rol.isEmpty() ? ROL_POR_DEFECTO : rol;
     }
 
     public Instant obtenerExpiracion(String token) {
@@ -129,10 +143,6 @@ public class JwtService {
         return resolver.apply(claims);
     }
 
-    /**
-     * Valida SOLO tokens firmados con HS256.
-     * Si el token viene con otro alg (HS512, RS256, none...), lanza excepción.
-     */
     private Claims extraerTodosLosClaims(String token) {
         try {
             return Jwts.parser()

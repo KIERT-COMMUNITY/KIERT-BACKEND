@@ -1,7 +1,7 @@
 // src/main/java/com/kiert/backend/security/UsuarioDetailsService.java
 package com.kiert.backend.security;
 
-import com.kiert.backend.repository.UsuarioRepository;
+import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

@@ -1,7 +1,7 @@
 // src/main/java/com/kiert/backend/config/WebSocketEventListener.java
 package com.kiert.backend.config;
 
-import com.kiert.backend.service.UsuarioService;
+import com.kiert.backend.features.usuario.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;

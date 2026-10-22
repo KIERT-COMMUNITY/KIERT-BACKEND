@@ -1,11 +1,15 @@
 // src/main/java/com/kiert/backend/mapper/PostMapper.java
 package com.kiert.backend.mapper;
 
-import com.kiert.backend.dto.*;
 import com.kiert.backend.entity.Adjunto;
 import com.kiert.backend.entity.Comentario;
 import com.kiert.backend.entity.Post;
 import com.kiert.backend.entity.Usuario;
+import com.kiert.backend.features.autor.dto.AutorResumenDTO;
+import com.kiert.backend.features.bloqueo.dto.AdjuntoDTO;
+import com.kiert.backend.features.comentarios.dto.ComentarioDTO;
+import com.kiert.backend.features.post.dto.PostDTO;
+import com.kiert.backend.features.reacciones.dto.ReaccionesDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

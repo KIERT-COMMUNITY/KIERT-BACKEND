@@ -1,8 +1,6 @@
 // src/main/java/com/kiert/backend/config/StartupConfig.java
 package com.kiert.backend.config;
 
-import com.kiert.backend.service.UsuarioService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;

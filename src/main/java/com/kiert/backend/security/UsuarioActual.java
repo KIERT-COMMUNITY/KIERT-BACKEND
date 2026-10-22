@@ -1,7 +1,7 @@
 // src/main/java/com/kiert/backend/security/UsuarioActual.java
 package com.kiert.backend.security;
 
-import com.kiert.backend.repository.UsuarioRepository;
+import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;

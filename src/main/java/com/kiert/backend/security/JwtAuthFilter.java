@@ -1,7 +1,7 @@
 // src/main/java/com/kiert/backend/security/JwtAuthFilter.java
 package com.kiert.backend.security;
 
-import com.kiert.backend.service.auth.TokenBlacklistService;
+import com.kiert.backend.features.auth.service.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,7 +20,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -28,6 +30,8 @@ import java.util.List;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private static final String PREFIJO_BEARER = "Bearer ";
+    private static final String ROLE_POR_DEFECTO = "ROLE_USER";
+
     private final JwtService jwtService;
     private final UsuarioDetailsService usuarioDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
@@ -70,9 +74,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String token = header.substring(PREFIJO_BEARER.length());
 
-        // ============================================================
-        // 1. Verificar Blacklist (Redis)
-        // ============================================================
+        // 1. Blacklist
         try {
             if (tokenBlacklistService.estaInvalidado(token)) {
                 log.warn("[JWT] Token invalidado: {}", request.getRequestURI());
@@ -83,9 +85,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             log.error("[JWT] Error en blacklist: {}", e.getMessage());
         }
 
-        // ============================================================
-        // 2. Validar Token
-        // ============================================================
+        // 2. Validar token
         try {
             String email = jwtService.extraerEmail(token);
 
@@ -107,26 +107,37 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
 
             UserDetails userDetails = usuarioDetailsService.loadUserByUsername(email);
-            String rol = jwtService.extraerRol(token);
+            String rol = jwtService.extraerRol(token);   // ← ya devuelve "USER" por defecto
 
-            // Construir authorities
-            List<GrantedAuthority> authorities = new ArrayList<>();
+            // ✅ Construir authorities con deduplicación y validación
+            Set<String> rolesSet = new LinkedHashSet<>();
 
+            // 1) Rol del JWT (si no está vacío)
             if (rol != null && !rol.isBlank()) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_" + rol));
+                rolesSet.add("ROLE_" + rol.toUpperCase().trim());
             }
 
-            // NO añadimos ROLE_USER automáticamente si es admin.
-            // Solo añadimos las que vengan del UserDetails.
-            userDetails.getAuthorities().forEach(auth -> {
-                String authority = auth.getAuthority();
-                if (authorities.stream().noneMatch(a -> a.getAuthority().equals(authority))) {
-                    authorities.add(new SimpleGrantedAuthority(authority));
+            // 2) Roles del UserDetails (filtrando vacíos como "ROLE_")
+            if (userDetails.getAuthorities() != null) {
+                for (GrantedAuthority auth : userDetails.getAuthorities()) {
+                    if (auth == null) continue;
+                    String authority = auth.getAuthority();
+                    if (authority == null) continue;
+                    authority = authority.trim();
+                    // Ignorar authorities vacías o solo "ROLE_"
+                    if (authority.isEmpty() || authority.equals("ROLE_")) continue;
+                    rolesSet.add(authority);
                 }
-            });
+            }
 
-            if (authorities.isEmpty()) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+            // 3) Si no queda nada, añadir ROLE_USER por defecto
+            if (rolesSet.isEmpty()) {
+                rolesSet.add(ROLE_POR_DEFECTO);
+            }
+
+            List<GrantedAuthority> authorities = new ArrayList<>();
+            for (String r : rolesSet) {
+                authorities.add(new SimpleGrantedAuthority(r));
             }
 
             UsernamePasswordAuthenticationToken authToken =
