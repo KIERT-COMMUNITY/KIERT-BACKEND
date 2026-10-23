@@ -37,33 +37,25 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-
-                        // ============================================================
-                        // 1. RUTAS PÚBLICAS (SIN AUTENTICACIÓN)
-                        // ============================================================
                         .requestMatchers(
                                 "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**",
                                 "/v3/api-docs/**", "/api-docs/**", "/webjars/**"
                         ).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/admin/auth/login").permitAll()
-                        .requestMatchers("/api/presencia/**").permitAll()
+
+                        // ✅ CRÍTICO: Presencia ahora requiere autenticación
+                        .requestMatchers("/api/presencia/**").hasAnyRole("USER", "CEO", "ADMIN", "MODERADOR")
+
                         .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/grupos/invitacion/*/unirse").authenticated()
                         .requestMatchers("/api/archivos/**").permitAll()
                         .requestMatchers("/ws", "/ws/**").permitAll()
 
-                        // ============================================================
-                        // 2. RUTAS PÚBLICAS DE LECTURA (GET)
-                        // ============================================================
                         .requestMatchers(HttpMethod.GET, "/api/publicaciones/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/comentarios/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
 
-                        // ============================================================
-                        // 3. ANUNCIOS (Lectura autenticada)
-                        //    Va ANTES que /api/admin/** para no chocar
-                        // ============================================================
                         .requestMatchers(HttpMethod.GET, "/api/anuncios/publicos").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/anuncios/**").authenticated()
 
@@ -72,24 +64,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.PATCH, "/api/anuncios/**").denyAll()
 
-                        // ============================================================
-                        // 4. ADMIN (solo CEO, ADMIN, MODERADOR)
-                        // ============================================================
                         .requestMatchers("/api/admin/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
 
-                        // ============================================================
-                        // 5. CHAT GLOBAL + CHAT PRIVADO
-                        //    ✅ Ahora CUALQUIER usuario autenticado (admin o normal)
-                        //       puede usar el chat. Antes estaba con hasRole("USER")
-                        //       y bloqueaba a los admins.
-                        // ============================================================
                         .requestMatchers("/api/chat-global/**").authenticated()
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/grupos/**").authenticated()
 
-                        // ============================================================
-                        // 6. RUTAS PROTEGIDAS DE USUARIO
-                        // ============================================================
                         .requestMatchers("/api/usuarios/solicitud/**").authenticated()
                         .requestMatchers("/api/usuarios/contactos").authenticated()
                         .requestMatchers("/api/usuarios/solicitudes/pendientes").authenticated()
@@ -107,9 +87,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/stickers/**").authenticated()
                         .requestMatchers("/api/usuarios/**").authenticated()
 
-                        // ============================================================
-                        // 7. CUALQUIER OTRA RUTA REQUIERE AUTH
-                        // ============================================================
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

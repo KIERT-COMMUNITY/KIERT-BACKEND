@@ -36,15 +36,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final UsuarioDetailsService usuarioDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
 
+    // src/main/java/com/kiert/backend/security/JwtAuthFilter.java
+// Reemplaza SOLO el método shouldNotFilter
+
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getRequestURI();
         String metodo = request.getMethod();
 
+        // ✅ WebSocket y preflight CORS: sin JWT
         if (path.startsWith("/ws") || "OPTIONS".equalsIgnoreCase(metodo)) {
             return true;
         }
 
+        // ✅ Rutas públicas: sin JWT
         if (path.startsWith("/api/auth/")
                 || path.startsWith("/api/admin/auth/login")
                 || path.startsWith("/swagger")
@@ -52,10 +57,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/api-docs")
                 || path.startsWith("/webjars")
-                || path.startsWith("/api/archivos/")
-                || path.startsWith("/api/presencia/")) {
+                || path.startsWith("/api/archivos/")) {
             return true;
         }
+
+        // ✅ IMPORTANTE: /api/presencia/** YA NO se excluye
+        // Necesitamos que el filtro JWT procese esas rutas
+        // para saber quién está enviando el heartbeat.
 
         return false;
     }

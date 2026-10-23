@@ -8,7 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -20,36 +23,69 @@ public class PresenciaController {
     private final PresenciaService presenciaService;
     private final UsuarioActual usuarioActual;
 
-    /**
-     * Heartbeat — el frontend lo llama cada minuto.
-     * ✅ NO lanza 401 si no hay usuario (es endpoint público).
-     */
+    // src/main/java/com/kiert/backend/controller/PresenciaController.java
+// Reemplaza SOLO el método heartbeat
+
     @PostMapping("/heartbeat")
     public ResponseEntity<?> heartbeat() {
         Long uid = usuarioActual.id();
         if (uid == null) {
-            // ✅ Devolver 200 con ok:false en lugar de 401
-            // Esto evita que el interceptor del frontend te desloguee
-            log.debug("⚠️ Heartbeat sin usuario autenticado (público)");
-            return ResponseEntity.ok(Map.of("ok", false, "online", false));
+            log.warn("⚠️ Heartbeat sin usuario autenticado (esto NO debería pasar si el filtro JWT funciona)");
+            return ResponseEntity.status(401).body(Map.of("ok", false, "online", false));
         }
         presenciaService.marcarEnLinea(uid);
-        log.debug("💓 Heartbeat OK para usuario {}", uid);
+        log.info("💓 Heartbeat OK para usuario {}", uid);
         return ResponseEntity.ok(Map.of("ok", true, "online", true));
     }
 
-    /**
-     * Offline explícito.
-     * ✅ Igual que heartbeat: no lanza 401 si no hay usuario.
-     */
     @PostMapping("/offline")
     public ResponseEntity<?> offline() {
         Long uid = usuarioActual.id();
         if (uid == null) {
-            return ResponseEntity.ok(Map.of("ok", false, "online", false));
+            return ResponseEntity.status(401).body(Map.of("ok", false, "online", false));
         }
         presenciaService.marcarDesconectado(uid);
-        log.debug("🔴 Offline para usuario {}", uid);
+        log.info("🔴 Offline para usuario {}", uid);
         return ResponseEntity.ok(Map.of("ok", true, "online", false));
+    }
+
+    @GetMapping("/{usuarioId}")
+    public ResponseEntity<?> obtenerPresencia(@PathVariable Long usuarioId) {
+        boolean enLinea = presenciaService.estaEnLinea(usuarioId);
+        Instant ultima = presenciaService.obtenerUltimaConexion(usuarioId);
+
+        return ResponseEntity.ok(Map.of(
+                "usuarioId", usuarioId,
+                "enLinea", enLinea,
+                "ultimaConexion", ultima != null ? ultima.toString() : ""
+        ));
+    }
+
+    @PostMapping("/multiple")
+    public ResponseEntity<List<Map<String, Object>>> obtenerPresenciaMultiple(
+            @RequestBody Map<String, List<Long>> body) {
+
+        List<Long> ids = body.get("usuarioIds");
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        Map<Long, PresenciaService.EstadoPresencia> estados = presenciaService.obtenerEstados(ids);
+
+        List<Map<String, Object>> result = estados.entrySet().stream()
+                .map(entry -> {
+                    Long uid = entry.getKey();
+                    PresenciaService.EstadoPresencia estado = entry.getValue();
+                    return Map.<String, Object>of(
+                            "usuarioId", uid,
+                            "enLinea", estado.enLinea(),
+                            "ultimaConexion", estado.ultimaConexion() != null
+                                    ? estado.ultimaConexion().toString()
+                                    : ""
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(result);
     }
 }
