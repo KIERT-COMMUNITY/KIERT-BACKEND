@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/dto/GrupoHistorialDTO.java
+// src/main/java/com/kiert/backend/features/grupo/dto/GrupoHistorialDTO.java
 package com.kiert.backend.features.grupo.dto;
 
 import java.time.Instant;

@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/features/grupo/dto/InvitacionGrupoDTO.java
 package com.kiert.backend.features.grupo.dto;
 
 import java.time.Instant;

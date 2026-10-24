@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/CloudinaryService.java
+// src/main/java/com/kiert/backend/features/cloudinary/service/CloudinaryService.java
 package com.kiert.backend.features.cloudinary.service;
 
 import com.cloudinary.Cloudinary;
@@ -34,10 +34,21 @@ public class CloudinaryService {
     );
 
     // Carpetas permitidas (evita que un atacante suba archivos a carpetas críticas)
+    // ✅ CORREGIDO: añadidas "posts" y sus subcarpetas
     private static final Set<String> CARPETAS_PERMITIDAS = Set.of(
+            // Chat
             "chat", "chat/imagenes", "chat/archivos", "chat/stickers",
-            "anuncios", "documentos", "imagenes", "videos", "gifs",
-            "marcos", "portadas", "avatares", "perfil", "biblioteca",
+            // Anuncios
+            "anuncios",
+            // Posts (feed principal)
+            "posts", "posts/imagenes", "posts/videos", "posts/gifs", "posts/archivos",
+            // Documentos y biblioteca
+            "documentos", "biblioteca",
+            // Medios genéricos
+            "imagenes", "videos", "gifs",
+            // Perfil y personalización
+            "marcos", "portadas", "avatares", "perfil",
+            // Otros
             "reportes", "temp"
     );
 
@@ -66,7 +77,6 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al subir archivo a Cloudinary: {}", e.getMessage(), e);
-            // ⚠️ NO exponer e.getMessage()
             throw new BadRequestException("Error al subir el archivo");
         }
     }
@@ -184,7 +194,6 @@ public class CloudinaryService {
             return;
         }
 
-        // ⚠️ SEGURIDAD: validar resourceType contra whitelist
         String tipo = (resourceType == null || resourceType.isBlank())
                 ? "image"
                 : resourceType.trim().toLowerCase();
@@ -204,7 +213,6 @@ public class CloudinaryService {
 
         } catch (IOException e) {
             log.error("Error al eliminar archivo {}: {}", publicId, e.getMessage(), e);
-            // ⚠️ NO exponer e.getMessage()
             throw new BadRequestException("Error al eliminar el archivo");
         }
     }
@@ -241,25 +249,18 @@ public class CloudinaryService {
         }
     }
 
-    /**
-     * Extrae el public_id de una URL de Cloudinary.
-     * Más robusto: toma el ÚLTIMO `/upload/` para evitar inyecciones.
-     */
     private String extraerPublicId(String url) {
         try {
-            // Validar que sea una URL de Cloudinary
             if (!url.contains("res.cloudinary.com")) {
                 log.warn("URL no es de Cloudinary: {}", url);
                 return null;
             }
 
-            // Tomar el ÚLTIMO /upload/ para evitar URLs maliciosas
             int uploadIdx = url.lastIndexOf("/upload/");
             if (uploadIdx == -1) return null;
 
             String resto = url.substring(uploadIdx + "/upload/".length());
 
-            // Quitar transformaciones (v1234567890 o w_100,h_100)
             if (resto.startsWith("v")) {
                 int slashIdx = resto.indexOf("/");
                 if (slashIdx != -1) {
@@ -267,7 +268,6 @@ public class CloudinaryService {
                 }
             }
 
-            // Quitar extensión
             int dotIdx = resto.lastIndexOf(".");
             if (dotIdx != -1) {
                 resto = resto.substring(0, dotIdx);
@@ -518,18 +518,13 @@ public class CloudinaryService {
 
     // ========== HELPERS PRIVADOS ==========
 
-    /**
-     * Valida que la carpeta esté en la whitelist.
-     * Evita que un atacante suba archivos a carpetas críticas (ej. ../config).
-     */
     private void validarCarpeta(String carpeta) {
         if (carpeta == null || carpeta.isBlank()) {
-            return; // se usará la carpeta por defecto
+            return;
         }
 
         String carpetaNormalizada = carpeta.trim().toLowerCase();
 
-        // Rechazar rutas con caracteres peligrosos
         if (carpetaNormalizada.contains("..")
                 || carpetaNormalizada.contains("/etc")
                 || carpetaNormalizada.contains("\\")

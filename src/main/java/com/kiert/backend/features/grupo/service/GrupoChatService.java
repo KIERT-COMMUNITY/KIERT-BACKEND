@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/GrupoChatService.java
+// src/main/java/com/kiert/backend/features/grupo/service/GrupoChatService.java
 package com.kiert.backend.features.grupo.service;
 
 import com.kiert.backend.entity.*;
@@ -16,6 +16,7 @@ import com.kiert.backend.features.invitacion.repository.InvitacionLinkRepository
 import com.kiert.backend.features.notificaciones.repository.NotificacionRepository;
 import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import com.kiert.backend.features.notificaciones.service.NotificacionService;
+import com.kiert.backend.features.personalizacion.repository.PersonalizacionRepository;
 import com.kiert.backend.features.presencia.service.PresenciaService;
 import com.kiert.backend.features.storage.StorageService;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,7 @@ public class GrupoChatService {
     private final GrupoHistorialRepository historialRepository;
     private final StorageService storageService;
     private final PresenciaService presenciaService;
+    private final PersonalizacionRepository personalizacionRepository;
 
     private static final String BASE_URL = "https://kiert.app/join/";
     private static final int MAX_NOMBRE_GRUPO = 100;
@@ -65,6 +67,40 @@ public class GrupoChatService {
     private static final String CACHE_INVITACIONES_PENDIENTES = "invitacionesPendientes";
     private static final String CACHE_LINKS_GRUPO = "linksGrupo";
     private static final String CACHE_INFO_INVITACION = "infoInvitacion";
+
+    // ============================================================
+    // HELPER: resolver marco del usuario
+    // ============================================================
+    private String resolverMarcoUsuario(Long usuarioId) {
+        if (usuarioId == null) return "none";
+
+        try {
+            String marcoPersonalizacion = personalizacionRepository
+                    .findByUsuarioId(usuarioId)
+                    .map(PersonalizacionUsuario::getMarcoId)
+                    .orElse(null);
+
+            if (marcoPersonalizacion != null && !marcoPersonalizacion.isBlank()) {
+                return marcoPersonalizacion;
+            }
+        } catch (Exception e) {
+            log.debug("Error leyendo personalización de {}: {}", usuarioId, e.getMessage());
+        }
+
+        try {
+            String marcoFallback = usuarioRepository.findById(usuarioId)
+                    .map(Usuario::getMarcoId)
+                    .orElse(null);
+
+            if (marcoFallback != null && !marcoFallback.isBlank()) {
+                return marcoFallback;
+            }
+        } catch (Exception e) {
+            log.debug("Error leyendo marco fallback de {}: {}", usuarioId, e.getMessage());
+        }
+
+        return "none";
+    }
 
     // ============================================================
     // AUDITORÍA
@@ -175,7 +211,6 @@ public class GrupoChatService {
         Usuario creador = usuarioRepository.findById(creadorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        // Validar tipo
         String tipo = dto.tipo() != null ? dto.tipo().trim().toUpperCase() : "PRIVADO";
         if (!tipo.equals("PUBLICO") && !tipo.equals("PRIVADO")) {
             throw new BadRequestException("Tipo de grupo inválido");
@@ -353,7 +388,7 @@ public class GrupoChatService {
     }
 
     // ============================================================
-    // ACEPTAR INVITACIÓN
+    // ACEPTAR / RECHAZAR INVITACIÓN
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -629,7 +664,7 @@ public class GrupoChatService {
     }
 
     // ============================================================
-    // LISTAR MIEMBROS
+    // LISTAR MIEMBROS — con marcoId
     // ============================================================
     @Transactional(readOnly = true)
     public List<MiembroGrupoDTO> listarMiembros(Long grupoId) {
@@ -642,12 +677,15 @@ public class GrupoChatService {
                     Boolean online = presenciaService.estaEnLinea(u.getId());
                     Instant ultima = presenciaService.obtenerUltimaConexion(u.getId());
 
+                    String marcoId = resolverMarcoUsuario(u.getId());
+
                     return new MiembroGrupoDTO(
                             m.getId(),
                             u.getId(),
                             u.getNombreUsuario(),
                             u.getEmail(),
                             u.getFotoPerfilUrl(),
+                            marcoId,
                             m.getRol(),
                             m.getEstado(),
                             m.getFechaUnion(),
@@ -684,7 +722,7 @@ public class GrupoChatService {
     }
 
     // ============================================================
-    // MENSAJES
+    // MENSAJES — con marcoEmisor
     // ============================================================
     @Transactional(readOnly = true)
     public List<MensajeGrupoDTO> obtenerMensajes(Long grupoId) {
@@ -695,7 +733,6 @@ public class GrupoChatService {
     public List<MensajeGrupoDTO> obtenerMensajes(Long grupoId, Long usuarioActualId) {
         log.info("[DB] Obteniendo mensajes del grupo: {}", grupoId);
 
-        // Validar que el usuario sea miembro (si se pasa usuarioActualId)
         if (usuarioActualId != null && !miembroRepository.esMiembroActivo(grupoId, usuarioActualId)) {
             throw new SecurityException("No eres miembro activo del grupo");
         }
@@ -704,6 +741,7 @@ public class GrupoChatService {
         return mensajes.stream()
                 .map(m -> {
                     boolean esSticker = "STICKER".equals(m.getTipoMensaje());
+                    String marcoEmisor = resolverMarcoUsuario(m.getEmisor().getId());
 
                     return new MensajeGrupoDTO(
                             m.getId(),
@@ -711,6 +749,7 @@ public class GrupoChatService {
                             m.getEmisor().getId(),
                             m.getEmisor().getNombreUsuario(),
                             m.getEmisor().getFotoPerfilUrl(),
+                            marcoEmisor,
                             m.getContenido(),
                             m.getTipoMensaje(),
                             m.getUrlArchivo(),
@@ -763,6 +802,7 @@ public class GrupoChatService {
                 .build();
 
         mensaje = mensajeRepository.save(mensaje);
+        String marcoEmisor = resolverMarcoUsuario(emisor.getId());
 
         return new MensajeGrupoDTO(
                 mensaje.getId(),
@@ -770,12 +810,16 @@ public class GrupoChatService {
                 emisor.getId(),
                 emisor.getNombreUsuario(),
                 emisor.getFotoPerfilUrl(),
+                marcoEmisor,
                 mensaje.getContenido(),
                 mensaje.getTipoMensaje(),
                 mensaje.getUrlArchivo(),
                 mensaje.getNombreArchivo(),
                 mensaje.getFechaEnvio(),
-                true
+                true,
+                null,
+                null,
+                null
         );
     }
 
@@ -826,6 +870,7 @@ public class GrupoChatService {
                 .build();
 
         mensaje = mensajeRepository.save(mensaje);
+        String marcoEmisor = resolverMarcoUsuario(emisor.getId());
 
         return new MensajeGrupoDTO(
                 mensaje.getId(),
@@ -833,12 +878,16 @@ public class GrupoChatService {
                 emisor.getId(),
                 emisor.getNombreUsuario(),
                 emisor.getFotoPerfilUrl(),
+                marcoEmisor,
                 mensaje.getContenido(),
                 mensaje.getTipoMensaje(),
                 mensaje.getUrlArchivo(),
                 mensaje.getNombreArchivo(),
                 mensaje.getFechaEnvio(),
-                true
+                true,
+                null,
+                null,
+                null
         );
     }
 
@@ -1272,6 +1321,7 @@ public class GrupoChatService {
                 .build();
 
         mensaje = mensajeRepository.save(mensaje);
+        String marcoEmisor = resolverMarcoUsuario(emisor.getId());
 
         return new MensajeGrupoDTO(
                 mensaje.getId(),
@@ -1279,6 +1329,7 @@ public class GrupoChatService {
                 emisor.getId(),
                 emisor.getNombreUsuario(),
                 emisor.getFotoPerfilUrl(),
+                marcoEmisor,
                 "",
                 "STICKER",
                 stickerUrl,

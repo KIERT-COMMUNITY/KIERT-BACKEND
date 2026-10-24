@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/PostService.java
+// src/main/java/com/kiert/backend/features/post/service/PostService.java
 package com.kiert.backend.features.post.service;
 
 import com.kiert.backend.entity.*;
@@ -79,7 +79,7 @@ public class PostService {
     }
 
     // ============================================================
-    // CREAR POST
+    // CREAR POST — ✅ CORREGIDO
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -87,9 +87,25 @@ public class PostService {
             @CacheEvict(value = CACHE_POST, allEntries = true)
     })
     public PostDTO crear(Long autorId, CrearPostDTO datos, List<MultipartFile> archivos) {
-        log.info("Creando post para usuario: {}", autorId);
+        log.info("═══════════════════════════════════════════════════");
+        log.info("CREANDO POST — usuario: {}", autorId);
+        log.info("Título: {}", datos != null ? datos.titulo() : "NULL");
+        log.info("Categoría: {}", datos != null ? datos.categoria() : "NULL");
+        log.info("Archivos recibidos: {}", archivos != null ? archivos.size() : 0);
+        if (archivos != null) {
+            for (int i = 0; i < archivos.size(); i++) {
+                MultipartFile a = archivos.get(i);
+                log.info("  Archivo[{}]: name={}, size={}, contentType={}, empty={}",
+                        i,
+                        a != null ? a.getOriginalFilename() : "NULL",
+                        a != null ? a.getSize() : 0,
+                        a != null ? a.getContentType() : "NULL",
+                        a != null ? a.isEmpty() : true);
+            }
+        }
+        log.info("═══════════════════════════════════════════════════");
 
-        // Validaciones
+        // -------- Validaciones básicas --------
         if (autorId == null) {
             throw new BadRequestException("Usuario requerido");
         }
@@ -109,22 +125,29 @@ public class PostService {
             throw new BadRequestException("Solo se permiten " + MAX_ARCHIVOS + " archivos");
         }
 
-        // Validar tamaño total de archivos
-        if (archivos != null && !archivos.isEmpty()) {
-            long total = archivos.stream()
-                    .filter(a -> a != null && !a.isEmpty())
-                    .mapToLong(MultipartFile::getSize)
-                    .sum();
-            if (total > MAX_TOTAL_ARCHIVOS) {
-                throw new BadRequestException("Los archivos no pueden superar 30 MB");
-            }
+        // -------- Validar tamaño total --------
+        List<MultipartFile> archivosValidos = (archivos != null)
+                ? archivos.stream()
+                  .filter(a -> a != null && !a.isEmpty() && a.getSize() > 0)
+                  .toList()
+                : List.of();
+
+        if (archivosValidos.size() > MAX_ARCHIVOS) {
+            throw new BadRequestException("Solo se permiten " + MAX_ARCHIVOS + " archivos válidos");
         }
 
+        long totalBytes = archivosValidos.stream().mapToLong(MultipartFile::getSize).sum();
+        if (totalBytes > MAX_TOTAL_ARCHIVOS) {
+            throw new BadRequestException("Los archivos no pueden superar 30 MB en total");
+        }
+
+        // -------- Autor --------
         Usuario autor = usuarioRepository.findById(autorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String categoriaUsuario = datos.categoria() != null ? datos.categoria().trim() : "otro";
 
+        // -------- Crear post base --------
         Post post = Post.builder()
                 .autor(autor)
                 .titulo(datos.titulo().trim())
@@ -134,6 +157,7 @@ public class PostService {
                 .fechaCreacion(Instant.now())
                 .build();
 
+        // Link externo (si viene)
         if (datos.link() != null && !datos.link().isBlank()) {
             Adjunto adjunto = Adjunto.builder()
                     .post(post)
@@ -144,21 +168,25 @@ public class PostService {
             post.getAdjuntos().add(adjunto);
         }
 
-        post = postRepository.save(post);
-        postRepository.flush();
+        // -------- Subir archivos a Cloudinary --------
+        int subidosOk = 0;
+        int fallidos = 0;
 
-        if (archivos != null && !archivos.isEmpty()) {
-            log.info("Procesando {} archivo(s)", archivos.size());
+        if (!archivosValidos.isEmpty()) {
+            log.info("Subiendo {} archivo(s) a Cloudinary...", archivosValidos.size());
 
-            for (MultipartFile archivo : archivos) {
-                if (archivo == null || archivo.isEmpty()) continue;
-
+            for (MultipartFile archivo : archivosValidos) {
                 try {
                     String url;
                     String tipo;
                     String carpeta = "posts";
                     Integer duracionSegundos = null;
                     String formato = cloudinaryService.getFormato(archivo.getContentType());
+
+                    log.info("→ Subiendo: {} ({} KB, tipo={})",
+                            archivo.getOriginalFilename(),
+                            archivo.getSize() / 1024,
+                            archivo.getContentType());
 
                     if (cloudinaryService.esVideo(archivo)) {
                         Map<String, Object> result = cloudinaryService.subirVideo(archivo, carpeta + "/videos");
@@ -178,6 +206,10 @@ public class PostService {
                         tipo = "archivo";
                     }
 
+                    if (url == null || url.isBlank()) {
+                        throw new RuntimeException("Cloudinary devolvió URL vacía");
+                    }
+
                     Adjunto adjunto = Adjunto.builder()
                             .post(post)
                             .tipo(tipo)
@@ -189,16 +221,35 @@ public class PostService {
                             .build();
 
                     post.getAdjuntos().add(adjunto);
+                    subidosOk++;
+
+                    log.info("   ✅ OK — tipo={}, url={}", tipo, url);
 
                 } catch (Exception e) {
-                    log.error("Error al subir archivo: {}", e.getMessage());
-                    // No abortar el post por un archivo fallido
+                    fallidos++;
+                    log.error("   ❌ ERROR al subir '{}': {} — {}",
+                            archivo.getOriginalFilename(),
+                            e.getClass().getSimpleName(),
+                            e.getMessage(),
+                            e);  // ← stacktrace completo
+
+                    // ✅ Si había archivos pero TODOS fallaron, abortar
+                    //    para no crear un post "fantasma" sin adjuntos
+                    if (subidosOk == 0 && fallidos == archivosValidos.size()) {
+                        throw new BadRequestException(
+                                "No se pudo subir ningún archivo. Intenta de nuevo. (" +
+                                        e.getMessage() + ")");
+                    }
                 }
             }
 
-            post = postRepository.save(post);
-            postRepository.flush();
+            log.info("Resumen subida: {} OK, {} fallidos", subidosOk, fallidos);
         }
+
+        post = postRepository.save(post);
+        postRepository.flush();
+
+        log.info("✅ Post creado: id={}, adjuntos={}", post.getId(), post.getAdjuntos().size());
 
         return postMapper.aDTO(post);
     }
@@ -281,7 +332,6 @@ public class PostService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación"));
 
         if (!post.getAutor().getId().equals(autorId)) {
-            // Mensaje genérico para no revelar existencia
             throw new SecurityException("No tienes permiso para eliminar esta publicación");
         }
 
