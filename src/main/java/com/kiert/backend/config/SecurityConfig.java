@@ -44,7 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/admin/auth/login").permitAll()
 
-                        // ✅ CRÍTICO: Presencia ahora requiere autenticación
+                        // Presencia requiere autenticación
                         .requestMatchers("/api/presencia/**").hasAnyRole("USER", "CEO", "ADMIN", "MODERADOR")
 
                         .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
@@ -52,13 +52,22 @@ public class SecurityConfig {
                         .requestMatchers("/api/archivos/**").permitAll()
                         .requestMatchers("/ws", "/ws/**").permitAll()
 
+                        // ============================================================
+                        // ✅ BIBLIOTECA: lectura pública, escritura autenticada
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET,    "/api/biblioteca/**").permitAll()
+                        .requestMatchers(HttpMethod.POST,   "/api/biblioteca/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT,    "/api/biblioteca/**").authenticated()
+                        .requestMatchers(HttpMethod.PATCH,  "/api/biblioteca/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/biblioteca/**").authenticated()
+
+                        // Publicaciones / comentarios / reacciones: lectura pública
                         .requestMatchers(HttpMethod.GET, "/api/publicaciones/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/comentarios/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/api/anuncios/publicos").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/anuncios/**").authenticated()
-
+                        // ✅ ANUNCIOS: lectura pública
+                        .requestMatchers(HttpMethod.GET, "/api/anuncios/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.PUT, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
@@ -66,7 +75,11 @@ public class SecurityConfig {
 
                         .requestMatchers("/api/admin/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
 
-                        .requestMatchers("/api/chat-global/**").authenticated()
+                        // ✅ CHAT GLOBAL: lectura pública, escritura autenticada
+                        .requestMatchers(HttpMethod.GET, "/api/chat-global/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/chat-global/**").authenticated()
+
+                        // Chat privado / grupos: TODO requiere login
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/grupos/**").authenticated()
 
@@ -98,13 +111,12 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // ✅ LISTA EXPLÍCITA: Localhost (para desarrollo) y tu URL de Vercel (producción)
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:4200",
                 "http://localhost:53334",
                 "http://localhost:8080",
                 "http://127.0.0.1:4200",
-                "https://kiert-community.vercel.app" // 👈 Tu URL real de Vercel
+                "https://kiert-community.vercel.app"
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));

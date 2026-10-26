@@ -22,7 +22,6 @@ public class AnuncioPublicoController {
         return ResponseEntity.ok(anuncioService.listarActivos());
     }
 
-    // ✅ Endpoint para obtener el anuncio del banner flotante
     @GetMapping("/flotante")
     public ResponseEntity<Anuncio> obtenerFlotante() {
         Anuncio anuncio = anuncioService.obtenerAnuncioFlotante();

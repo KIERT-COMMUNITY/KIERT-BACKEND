@@ -34,12 +34,14 @@ public class ChatGlobalController {
     private final UsuarioRepository usuarioRepository;
 
     // ============================================================
-    // REST: historial paginado
+    // REST: historial paginado (público — permite invitados)
     // ============================================================
     @GetMapping("/mensajes")
     public ResponseEntity<List<MensajeGlobalDTO>> obtenerMensajes(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
+
+        log.info("[CHAT-GLOBAL] Historial solicitado (page={}, size={})", page, size);
 
         Pageable pageable = PageRequest.of(page, Math.min(size, 100));
         Page<MensajeGlobal> mensajes = mensajeRepository.findUltimosConAutor(pageable);
@@ -52,9 +54,7 @@ public class ChatGlobalController {
     }
 
     // ============================================================
-    // STOMP: recibir mensaje del cliente y broadcast a todos
-    // El cliente envía a /app/chat-global.enviar
-    // Todos los suscritos a /topic/chat-global reciben el mensaje
+    // STOMP: enviar mensaje (requiere usuario autenticado)
     // ============================================================
     @MessageMapping("/chat-global.enviar")
     @SendTo("/topic/chat-global")
@@ -62,8 +62,7 @@ public class ChatGlobalController {
             @Payload EnviarMensajeGlobalDTO dto,
             SimpMessageHeaderAccessor headerAccessor) {
 
-        // El usuario autenticado debe venir en el header de la sesión STOMP
-        // (lo inyectaremos desde el frontend o desde un interceptor)
+        // ✅ Requiere que el usuario esté autenticado en la sesión STOMP
         String usuarioIdStr = (String) headerAccessor.getSessionAttributes().get("usuarioId");
         if (usuarioIdStr == null) {
             throw new BadRequestException("Usuario no autenticado en el chat");
