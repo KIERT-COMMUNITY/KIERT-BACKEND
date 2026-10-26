@@ -5,6 +5,8 @@ spring:
   profiles:
     active: mysql
 
+  # ❌ ELIMINADO: spring.config.import: vault:// (Esto causaba el timeout en Render)
+
   jackson:
     default-property-inclusion: non_null
 
@@ -15,7 +17,7 @@ spring:
       max-request-size: 60MB
 
   # ========== CACHE CONFIGURATION ==========
-  # ✅ CRÍTICO: Usar caché en memoria ('simple') en lugar de Redis para evitar el timeout.
+  # ✅ Usamos caché simple en memoria. Redis no está disponible en Render (plan gratuito).
   cache:
     type: simple
 
@@ -24,7 +26,7 @@ spring:
     host: smtp.gmail.com
     port: 587
     username: keanovpaginawebyproyectos@gmail.com
-    password: "asda. fddsfsd . dfdsf. fdfsf"
+    password: "gntt popc upns zfpy" # ⚠️ Asegúrate de que esta sea tu contraseña de aplicación de Gmail
     properties:
       mail:
         smtp:
@@ -36,9 +38,8 @@ spring:
           writetimeout: 5000
 
 # ========== SERVER CONFIGURATION ==========
-# ✅ CRÍTICO: Usa el puerto que Render asigna.
 server:
-  port: ${PORT:8081}
+  port: ${PORT:8081} # ✅ Render usa la variable PORT, en local usa 8081
   error:
     include-message: always
 
@@ -63,16 +64,16 @@ springdoc:
   packages-to-scan: com.kiert.backend.controller
   paths-to-match: /api/**
 
-# ========== JWT GOOD CONFIGURATION ==========
+# ========== JWT CONFIGURATION ==========
 kiert:
   jwt:
     secret: 5ea8bc5772b55186e648930d752def86b48d09657d8e5d52f04d3b76bc5e2f9a
-    expiration-ms: 86400000
+    expiration-ms: 86400000  # 24 horas
   cors:
     allowed-origins:
       - "http://localhost:4200"
       - "http://localhost:53334"
-      - "https://kiert-community.vercel.app" # ✅ Tu URL de Vercel
+      - "https://kiert-community.vercel.app" # ✅ URL de Vercel para producción
   frontend:
     reset-password-url: "https://kiert-community.vercel.app/restablecer-contrasena"
 
@@ -96,6 +97,7 @@ spring:
       on-profile: mysql
 
   # ========== DATASOURCE MYSQL ==========
+  # ✅ Usa variables de entorno de Render si existen, si no, usa localhost
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:root}
