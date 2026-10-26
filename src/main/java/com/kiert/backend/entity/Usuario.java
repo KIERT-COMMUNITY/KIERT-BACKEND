@@ -3,6 +3,8 @@ package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -15,6 +17,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@SQLDelete(sql = "UPDATE usuarios SET eliminado = true, fecha_eliminacion = CURRENT_TIMESTAMP, activo = false WHERE id = ?")
+@SQLRestriction("eliminado = false") // Hace que TODAS las consultas ignoren a los eliminados automáticamente
 public class Usuario {
 
     @Id
@@ -61,6 +65,7 @@ public class Usuario {
     @Column(name = "ultima_conexion")
     private Instant ultimaConexion;
 
+    // ✅ CAMPOS PARA SOFT DELETE
     @Column(nullable = false)
     @Builder.Default
     private Boolean eliminado = false;
@@ -90,6 +95,10 @@ public class Usuario {
 
     @Column(name = "fecha_actualizacion")
     private Instant fechaActualizacion;
+
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private String rol = "USER";
 
     // ============================================================
     // RELACIONES
@@ -125,9 +134,6 @@ public class Usuario {
     @Builder.Default
     private List<PasswordResetToken> resetTokens = new ArrayList<>();
 
-    @Column(nullable = false, length = 20)
-    @Builder.Default
-    private String rol = "USER";
     // ============================================================
     // METODOS AUXILIARES
     // ============================================================

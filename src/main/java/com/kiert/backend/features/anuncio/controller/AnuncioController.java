@@ -35,8 +35,9 @@ public class AnuncioController {
             @RequestParam("titulo") String titulo,
             @RequestParam("texto") String texto,
             @RequestParam(value = "enlaceUrl", required = false) String enlaceUrl,
+            @RequestParam(value = "esFlotante", required = false, defaultValue = "false") Boolean esFlotante,
             @RequestPart(value = "imagen", required = false) MultipartFile imagen) {
-        return ResponseEntity.ok(anuncioService.crear(titulo, texto, enlaceUrl, imagen));
+        return ResponseEntity.ok(anuncioService.crear(titulo, texto, enlaceUrl, esFlotante, imagen));
     }
 
     @PutMapping(value = "/{id}", consumes = "multipart/form-data")
@@ -45,8 +46,9 @@ public class AnuncioController {
             @RequestParam("titulo") String titulo,
             @RequestParam("texto") String texto,
             @RequestParam(value = "enlaceUrl", required = false) String enlaceUrl,
+            @RequestParam(value = "esFlotante", required = false, defaultValue = "false") Boolean esFlotante,
             @RequestPart(value = "imagen", required = false) MultipartFile nuevaImagen) {
-        return ResponseEntity.ok(anuncioService.actualizar(id, titulo, texto, enlaceUrl, nuevaImagen));
+        return ResponseEntity.ok(anuncioService.actualizar(id, titulo, texto, enlaceUrl, esFlotante, nuevaImagen));
     }
 
     @DeleteMapping("/{id}")

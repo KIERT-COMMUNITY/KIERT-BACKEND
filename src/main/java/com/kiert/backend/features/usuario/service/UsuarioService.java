@@ -15,6 +15,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -77,7 +78,6 @@ public class UsuarioService {
             return List.of();
         }
 
-        // Sanitizar query (evitar wildcards explícitos)
         String queryLimpia = query.trim()
                 .replace("%", "")
                 .replace("_", "");
@@ -120,7 +120,6 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        // Validar nombre de usuario
         if (datos.nombreUsuario() != null) {
             String nombre = datos.nombreUsuario().trim();
             if (nombre.isEmpty()) {
@@ -132,7 +131,6 @@ public class UsuarioService {
             if (nombre.length() < 3) {
                 throw new BadRequestException("El nombre de usuario es demasiado corto");
             }
-            // Verificar si el nuevo nombre ya está en uso por otro usuario
             if (!nombre.equals(usuario.getNombreUsuario())
                     && usuarioRepository.existsByNombreUsuario(nombre)) {
                 throw new BadRequestException("El nombre de usuario ya está en uso");
@@ -140,7 +138,6 @@ public class UsuarioService {
             usuario.setNombreUsuario(nombre);
         }
 
-        // Validar email
         if (datos.email() != null) {
             String email = datos.email().trim().toLowerCase();
             if (email.isEmpty()) {
@@ -152,7 +149,6 @@ public class UsuarioService {
             if (!email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
                 throw new BadRequestException("El email no es válido");
             }
-            // Verificar si el nuevo email ya está en uso
             if (!email.equals(usuario.getEmail())
                     && usuarioRepository.existsByEmail(email)) {
                 throw new BadRequestException("El email ya está en uso");
@@ -160,7 +156,6 @@ public class UsuarioService {
             usuario.setEmail(email);
         }
 
-        // Validar bio
         if (datos.bio() != null) {
             String bio = datos.bio().trim();
             if (bio.length() > MAX_BIO) {
@@ -181,6 +176,31 @@ public class UsuarioService {
     }
 
     // ============================================================
+    // ELIMINAR CUENTA (SOFT DELETE)
+    // ============================================================
+    @Transactional
+    @CacheEvict(value = {CACHE_USUARIOS, CACHE_BUSQUEDA_USUARIOS}, allEntries = true)
+    public void eliminarCuenta(Long id) {
+        log.info("Eliminando cuenta (soft delete) del usuario: {}", id);
+
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+
+        // Aplicamos el Soft Delete manualmente (por si acaso)
+        usuario.setEliminado(true);
+        usuario.setFechaEliminacion(Instant.now());
+        usuario.setActivo(false); // Desactivar la cuenta
+        usuario.setEnLinea(false); // Forzar offline
+
+        // Opcional: Anonimizar datos para cumplir con RGPD
+        // usuario.setEmail("deleted_" + usuario.getId() + "@anonimizado.com");
+        // usuario.setNombreUsuario("UsuarioEliminado" + usuario.getId());
+
+        usuarioRepository.save(usuario);
+        log.info("Cuenta del usuario {} marcada como eliminada.", id);
+    }
+
+    // ============================================================
     // ESTADO ONLINE / OFFLINE
     // ============================================================
     public void marcarEnLinea(Long usuarioId) {
@@ -191,9 +211,6 @@ public class UsuarioService {
         presenciaService.marcarDesconectado(usuarioId);
     }
 
-    // ============================================================
-    // HELPERS
-    // ============================================================
     public UsuarioDTO enriquecerConPresencia(UsuarioDTO dto) {
         if (dto == null) return null;
         return dto;

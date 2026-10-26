@@ -10,7 +10,7 @@ import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.features.solicitud.repository.SolicitudContactoRepository;
 import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import com.kiert.backend.security.UsuarioActual;
-import com.kiert.backend.features.usuario.service.UsuarioService; // ✅ IMPORTANTE
+import com.kiert.backend.features.usuario.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -31,7 +32,7 @@ public class UsuarioController {
     private final UsuarioRepository usuarioRepository;
     private final SolicitudContactoRepository solicitudContactoRepository;
     private final UsuarioActual usuarioActual;
-    private final UsuarioService usuarioService; // ✅ Inyectado
+    private final UsuarioService usuarioService;
 
     // ============================================================
     // OBTENER USUARIO
@@ -49,7 +50,7 @@ public class UsuarioController {
                     usuario.getNombreUsuario(),
                     usuario.getEmail(),
                     usuario.getFotoPerfilUrl(),
-                    usuario.getBio() // ✅ Incluimos la bio
+                    usuario.getBio()
             );
 
             return ResponseEntity.ok(dto);
@@ -61,7 +62,7 @@ public class UsuarioController {
     }
 
     // ============================================================
-    // ACTUALIZAR USUARIO (Guardar bio, nombre, etc.)
+    // ACTUALIZAR USUARIO
     // ============================================================
     @PutMapping("/{id}")
     public ResponseEntity<?> actualizarUsuario(@PathVariable Long id, @RequestBody UsuarioDTO datos) {
@@ -83,6 +84,31 @@ public class UsuarioController {
             log.error("Error al actualizar usuario {}: {}", id, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al actualizar usuario: " + e.getMessage());
+        }
+    }
+
+    // ============================================================
+    // ELIMINAR MI CUENTA (SOFT DELETE)
+    // ============================================================
+    @DeleteMapping("/me")
+    public ResponseEntity<?> eliminarMiCuenta() {
+        try {
+            Long usuarioId = usuarioActual.id();
+            if (usuarioId == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
+            }
+
+            usuarioService.eliminarCuenta(usuarioId);
+
+            return ResponseEntity.ok(Map.of(
+                    "mensaje", "Tu cuenta ha sido eliminada correctamente.",
+                    "exito", true
+            ));
+
+        } catch (Exception e) {
+            log.error("Error al eliminar la cuenta del usuario: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al eliminar la cuenta: " + e.getMessage()));
         }
     }
 

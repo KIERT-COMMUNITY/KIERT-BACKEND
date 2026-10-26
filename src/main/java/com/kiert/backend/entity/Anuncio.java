@@ -1,13 +1,17 @@
+// src/main/java/com/kiert/backend/entity/Anuncio.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "anuncios")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class Anuncio {
 
@@ -21,7 +25,9 @@ public class Anuncio {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String texto;
 
-    // Imagen: TODOS opcionales (sin nullable = false)
+    // ============================================================
+    // IMAGEN (Cloudinary) - Todos opcionales
+    // ============================================================
     @Column(name = "imagen_url", length = 1000)
     private String imagenUrl;
 
@@ -40,23 +46,39 @@ public class Anuncio {
     @Column(name = "imagen_alto")
     private Integer imagenAlto;
 
+    // ============================================================
+    // ENLACE Y VISIBILIDAD
+    // ============================================================
     @Column(name = "enlace_url", length = 1000)
     private String enlaceUrl;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean activo = true;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean destacado = false;
 
+    // ✅ NUEVO CAMPO: Indica si este anuncio va en el banner flotante
+    @Column(name = "es_flotante", nullable = false)
+    @Builder.Default
+    private Boolean esFlotante = false;
+
+    // ============================================================
+    // AUDITORÍA
+    // ============================================================
     @Column(name = "creado_por_id")
     private Long creadoPorId;
 
     @Column(name = "actualizado_por_id")
     private Long actualizadoPorId;
 
+    // ============================================================
+    // FECHAS
+    // ============================================================
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
-    private LocalDateTime fechaCreacion = LocalDateTime.now();
+    private LocalDateTime fechaCreacion;
 
     @Column(name = "fecha_actualizacion")
     private LocalDateTime fechaActualizacion;
@@ -66,4 +88,20 @@ public class Anuncio {
 
     @Column(name = "fecha_expiracion")
     private LocalDateTime fechaExpiracion;
+
+    // ============================================================
+    // LIFECYCLE HOOKS
+    // ============================================================
+    @PrePersist
+    public void prePersist() {
+        if (this.fechaCreacion == null) this.fechaCreacion = LocalDateTime.now();
+        if (this.activo == null) this.activo = true;
+        if (this.destacado == null) this.destacado = false;
+        if (this.esFlotante == null) this.esFlotante = false;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.fechaActualizacion = LocalDateTime.now();
+    }
 }

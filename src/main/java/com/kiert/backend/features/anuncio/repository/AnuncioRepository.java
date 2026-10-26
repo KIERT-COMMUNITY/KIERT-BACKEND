@@ -71,6 +71,11 @@ public interface AnuncioRepository extends JpaRepository<Anuncio, Long> {
     List<Anuncio> findDestacadosVigentes(@Param("ahora") LocalDateTime ahora);
 
     // ============================================================
+    // BANNER FLOTANTE
+    // ============================================================
+    Optional<Anuncio> findFirstByEsFlotanteTrueAndActivoTrueOrderByFechaCreacionDesc();
+
+    // ============================================================
     // BÚSQUEDAS POR ID / ESTADO
     // ============================================================
 
