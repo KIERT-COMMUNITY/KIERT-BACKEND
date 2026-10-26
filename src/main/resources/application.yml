@@ -14,27 +14,10 @@ spring:
       max-file-size: 50MB
       max-request-size: 60MB
 
-  # ========== REDIS CONFIGURATION ==========
-  # En Render no tienes Redis local. Si no lo usas en producción, comenta esto o usa variables.
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      timeout: 5000ms
-      database: 0
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-
   # ========== CACHE CONFIGURATION ==========
-  # Si Redis no está disponible, esto podría dar error. Puedes cambiar a 'none' o 'simple' en pruebas.
+  # ✅ CRÍTICO: Usar caché en memoria ('simple') en lugar de Redis para evitar el timeout.
   cache:
-    type: redis
-    redis:
-      time-to-live: 1800000
-      cache-null-values: false
+    type: simple
 
   # ========== MAIL CONFIGURATION ==========
   mail:
@@ -53,7 +36,7 @@ spring:
           writetimeout: 5000
 
 # ========== SERVER CONFIGURATION ==========
-# ✅ CRÍTICO: Usa el puerto que Render asigna (variable PORT). Si no existe, usa 8081.
+# ✅ CRÍTICO: Usa el puerto que Render asigna.
 server:
   port: ${PORT:8081}
   error:
@@ -89,10 +72,9 @@ kiert:
     allowed-origins:
       - "http://localhost:4200"
       - "http://localhost:53334"
-      - "https://kiert-community.vercel.app" # ✅ Añade tu URL de Vercel aquí
-      - "*"
+      - "https://kiert-community.vercel.app" # ✅ Tu URL de Vercel
   frontend:
-    reset-password-url: "https://kiert-community.vercel.app/restablecer-contrasena" # ✅ Ajusta para producción
+    reset-password-url: "https://kiert-community.vercel.app/restablecer-contrasena"
 
   # ========== CLOUDINARY CONFIGURATION ==========
   cloudinary:
@@ -114,7 +96,6 @@ spring:
       on-profile: mysql
 
   # ========== DATASOURCE MYSQL ==========
-  # ✅ Usa variables de entorno si existen (Render), si no, usa localhost (Desarrollo)
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:root}
