@@ -97,10 +97,16 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:4200", "http://localhost:53334",
-                "http://localhost:8080", "http://127.0.0.1:4200", "*"
+
+        // ✅ LISTA EXPLÍCITA: Localhost (para desarrollo) y tu URL de Vercel (producción)
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:4200",
+                "http://localhost:53334",
+                "http://localhost:8080",
+                "http://127.0.0.1:4200",
+                "https://kiert-community.vercel.app" // 👈 Tu URL real de Vercel
         ));
+
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of(
