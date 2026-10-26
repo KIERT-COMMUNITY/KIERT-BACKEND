@@ -76,7 +76,7 @@ springdoc:
   packages-to-scan: com.kiert.backend.controller
   paths-to-match: /api/**
 
-# ========== JWT CONFIGURATION ==========
+# ========== JWT GOOD CONFIGURATION ==========
 kiert:
   jwt:
     secret: 5ea8bc5772b55186e648930d752def86b48d09657d8e5d52f04d3b76bc5e2f9a
