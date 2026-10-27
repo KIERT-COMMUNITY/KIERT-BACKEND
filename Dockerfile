@@ -22,13 +22,27 @@ RUN apk add --no-cache tzdata wget \
 
 COPY --from=builder /app/target/kiert-backend.jar app.jar
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 \
   CMD wget --quiet --tries=1 --spider http://localhost:${PORT:-8080}/actuator/health || exit 1
 
 EXPOSE ${PORT:-8080}
 
+# ============================================================
+# ENTRYPOINT con flags para ARRANCAR MÁS RÁPIDO
+# ============================================================
+#  -XX:TieredStopAtLevel=1     → JIT menos agresivo, arranque más rápido
+#  -Xss256k                    → Hilos más pequeños
+#  -XX:MaxRAMPercentage=75.0   → Usa bien la RAM del contenedor
+#  -Dserver.address=0.0.0.0    → Render detecta el puerto
+#  -Dserver.port=${PORT}       → Render inyecta PORT (10000)
+# ============================================================
 ENTRYPOINT ["sh", "-c", "\
   exec java \
+    -XX:+UseContainerSupport \
+    -XX:MaxRAMPercentage=75.0 \
+    -XX:TieredStopAtLevel=1 \
+    -Xss256k \
     -Dserver.address=0.0.0.0 \
+    -Dserver.port=${PORT:-8080} \
     -Djava.security.egd=file:/dev/./urandom \
     -jar app.jar"]
