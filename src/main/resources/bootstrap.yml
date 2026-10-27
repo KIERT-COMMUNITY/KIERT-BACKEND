@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: kiert-backend
+
+  cloud:
+    vault:
+      enabled: false
+      fail-fast: false

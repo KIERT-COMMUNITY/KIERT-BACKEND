@@ -2,8 +2,12 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- ============================================================ -->
+    <!-- PARENT: Spring Boot 3.3.4 -->
+    <!-- ============================================================ -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -11,20 +15,39 @@
         <relativePath/>
     </parent>
 
+    <!-- ============================================================ -->
+    <!-- IDENTIFICACIÓN -->
+    <!-- ============================================================ -->
     <groupId>com.kiert</groupId>
     <artifactId>kiert-backend</artifactId>
     <version>1.0.0</version>
+    <packaging>jar</packaging>
     <name>kiert-backend</name>
     <description>Backend Spring Boot para la comunidad Kiert (auth, publicaciones, comentarios, chat, archivos)</description>
 
+    <!-- ============================================================ -->
+    <!-- PROPIEDADES -->
+    <!-- ============================================================ -->
     <properties>
         <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
         <jjwt.version>0.12.6</jjwt.version>
-        <lombok.version>1.18.46</lombok.version>
+        <lombok.version>1.18.34</lombok.version>
+        <springdoc.version>2.6.0</springdoc.version>
+        <cloudinary.version>1.35.0</cloudinary.version>
+        <spring-cloud.version>4.1.4</spring-cloud.version>
     </properties>
 
+    <!-- ============================================================ -->
+    <!-- DEPENDENCIAS -->
+    <!-- ============================================================ -->
     <dependencies>
-        <!-- Web + validación -->
+
+        <!-- ========== WEB + VALIDACIÓN ========== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -33,25 +56,27 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-        <!-- Swagger / OpenAPI -->
+
+        <!-- ========== SWAGGER / OPENAPI ========== -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.6.0</version>
+            <version>${springdoc.version}</version>
         </dependency>
-        <!-- Seguridad -->
+
+        <!-- ========== SEGURIDAD ========== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
-        <!-- WebSocket (chat en tiempo real, STOMP) -->
+        <!-- ========== WEBSOCKET (STOMP) ========== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
-        <!-- JPA + MySQL -->
+        <!-- ========== JPA + MYSQL ========== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -62,20 +87,20 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Cloudinary -->
+        <!-- ========== CLOUDINARY ========== -->
         <dependency>
             <groupId>com.cloudinary</groupId>
             <artifactId>cloudinary-http44</artifactId>
-            <version>1.35.0</version>
+            <version>${cloudinary.version}</version>
         </dependency>
 
-        <!-- Envío de correos (recuperar contraseña) -->
+        <!-- ========== MAIL (recuperar contraseña) ========== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
-        <!-- JWT -->
+        <!-- ========== JWT ========== -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
@@ -94,7 +119,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Redis y Caché -->
+        <!-- ========== REDIS + CACHÉ ========== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
@@ -104,26 +129,55 @@
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
 
-        <!-- Utilidades -->
+        <!-- ========== LOMBOK ========== -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <version>${lombok.version}</version>
-            <optional>true</optional>
+            <scope>provided</scope>
         </dependency>
 
-        <!-- Cliente HTTP para hablar con Supabase Storage (URLs firmadas) -->
+        <!-- ========== WEBFLUX (cliente HTTP Supabase Storage) ========== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
-        <!-- Soporte para fechas Java 8 en Redis -->
+
+        <!-- ========== JACKSON JSR-310 (Instant, LocalDateTime en Redis) ========== -->
+        <!-- La versión la gestiona el BOM de Spring Boot 3.3.4 -->
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
-            <version>2.17.2</version>
         </dependency>
-        <!-- Tests -->
+
+        <!-- ========== ACTUATOR (health check para Render) ========== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ========== VAULT (OPCIONAL — Render no lo usa) ========== -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-vault-config</artifactId>
+            <version>4.1.2</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-context</artifactId>
+            <version>${spring-cloud.version}</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ========== H2 (solo desarrollo) ========== -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ========== TESTS ========== -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -134,45 +188,26 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Spring Cloud Vault -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-vault-config</artifactId>
-            <version>4.1.2</version>
-        </dependency>
-        <!-- Spring Cloud Context - NECESARIO para Vault -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-context</artifactId>
-            <version>4.1.4</version>
-        </dependency>
-        <!-- Spring Boot Actuator para monitoreo -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-        <!-- H2 para desarrollo/pruebas rápidas sin MySQL -->
-        <!-- Spring Cloud Bootstrap - NECESARIO para bootstrap.yml -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-bootstrap</artifactId>
-            <version>4.1.4</version>
-        </dependency>
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+
     </dependencies>
 
+    <!-- ============================================================ -->
+    <!-- BUILD -->
+    <!-- ============================================================ -->
     <build>
+        <finalName>kiert-backend</finalName>
+
         <plugins>
+
+            <!-- ========== COMPILADOR ========== -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
-                    <proc>full</proc>
+                    <release>17</release>
+                    <encoding>UTF-8</encoding>
+                    <parameters>true</parameters>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -182,10 +217,25 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
+
+            <!-- ========== SUREFIRE (tests) ========== -->
+            <!-- Saltamos tests por defecto para acelerar el build en Render.
+                 Si quieres ejecutarlos, cambia skipTests a false. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <skipTests>true</skipTests>
+                </configuration>
+            </plugin>
+
+            <!-- ========== SPRING BOOT (fat jar) ========== -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <mainClass>com.kiert.backend.KiertBackendApplication</mainClass>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>
@@ -194,6 +244,8 @@
                     </excludes>
                 </configuration>
             </plugin>
+
         </plugins>
     </build>
+
 </project>
