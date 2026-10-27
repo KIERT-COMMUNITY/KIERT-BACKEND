@@ -22,20 +22,16 @@ RUN apk add --no-cache tzdata wget \
 
 COPY --from=builder /app/target/kiert-backend.jar app.jar
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 \
-  CMD wget --quiet --tries=1 --spider http://localhost:${PORT:-8080}/actuator/health || exit 1
-
 EXPOSE ${PORT:-8080}
 
 # ============================================================
-# ENTRYPOINT con flags para ARRANCAR MÁS RÁPIDO
+# ❌ SIN HEALTHCHECK — Render ya hace su propio port scan.
+# Si tenías HEALTHCHECK con start-period=60s, Render mataba
+# la app porque tardaba más de 60s en arrancar.
 # ============================================================
-#  -XX:TieredStopAtLevel=1     → JIT menos agresivo, arranque más rápido
-#  -Xss256k                    → Hilos más pequeños
-#  -XX:MaxRAMPercentage=75.0   → Usa bien la RAM del contenedor
-#  -Dserver.address=0.0.0.0    → Render detecta el puerto
-#  -Dserver.port=${PORT}       → Render inyecta PORT (10000)
-# ============================================================
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=5 \
+#   CMD wget --quiet --tries=1 --spider http://localhost:${PORT:-8080}/actuator/health || exit 1
+
 ENTRYPOINT ["sh", "-c", "\
   exec java \
     -XX:+UseContainerSupport \
