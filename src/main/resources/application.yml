@@ -24,7 +24,6 @@ spring:
       max-file-size: 50MB
       max-request-size: 60MB
 
-  # ========== REDIS ==========
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
@@ -32,7 +31,6 @@ spring:
       password: ${SPRING_DATA_REDIS_PASSWORD:}
       timeout: 5000ms
       database: 0
-      # ✅ NO escanear repositorios Redis (evita warnings y acelera)
       repositories:
         enabled: false
       lettuce:
@@ -41,14 +39,12 @@ spring:
           max-idle: 8
           min-idle: 0
 
-  # ========== CACHE ==========
   cache:
     type: redis
     redis:
       time-to-live: 1800000
       cache-null-values: false
 
-  # ========== MAIL ==========
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -73,7 +69,6 @@ server:
   compression:
     enabled: true
 
-# ========== ACTUATOR (health rápido, sin consultar BD/Redis) ==========
 management:
   endpoints:
     web:
@@ -92,7 +87,6 @@ management:
     diskspace:
       enabled: false
 
-# ========== SWAGGER ==========
 springdoc:
   api-docs:
     path: /api-docs
@@ -113,7 +107,6 @@ springdoc:
   packages-to-scan: com.kiert.backend.controller
   paths-to-match: /api/**
 
-# ========== JWT ==========
 kiert:
   jwt:
     secret: ${KIERT_JWT_SECRET:5ea8bc5772b55186e648930d752def86b48d09657d8e5d52f04d3b76bc5e2f9a}
@@ -159,6 +152,8 @@ spring:
       max-lifetime: 1800000
 
   jpa:
+    # ✅ Dialect explícito — no depende de detectar la conexión
+    database-platform: org.hibernate.dialect.MySQLDialect
     open-in-view: false
     hibernate:
       ddl-auto: none
@@ -166,13 +161,11 @@ spring:
       format-sql: false
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
         jdbc:
           batch_size: 20
         order_inserts: true
         order_updates: true
-        generate_statistics: false
-        hbm2ddl:
-          auto: none
 
   sql:
     init:
