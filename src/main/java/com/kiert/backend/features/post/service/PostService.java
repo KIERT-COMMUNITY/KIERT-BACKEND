@@ -46,9 +46,6 @@ public class PostService {
     private static final int MAX_ARCHIVOS = 5;
     private static final long MAX_TOTAL_ARCHIVOS = 30L * 1024L * 1024L;
 
-    // ============================================================
-    // LISTAR POSTS
-    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_POSTS, key = "'all'")
     public List<PostDTO> listar() {
@@ -59,9 +56,6 @@ public class PostService {
                 .toList();
     }
 
-    // ============================================================
-    // OBTENER POST POR ID
-    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_POST, key = "#id")
     public PostDTO obtenerPorId(Long id) {
@@ -78,34 +72,14 @@ public class PostService {
         return postMapper.aDTO(post);
     }
 
-    // ============================================================
-    // CREAR POST — ✅ CORREGIDO
-    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_POSTS, allEntries = true),
             @CacheEvict(value = CACHE_POST, allEntries = true)
     })
     public PostDTO crear(Long autorId, CrearPostDTO datos, List<MultipartFile> archivos) {
-        log.info("═══════════════════════════════════════════════════");
-        log.info("CREANDO POST — usuario: {}", autorId);
-        log.info("Título: {}", datos != null ? datos.titulo() : "NULL");
-        log.info("Categoría: {}", datos != null ? datos.categoria() : "NULL");
-        log.info("Archivos recibidos: {}", archivos != null ? archivos.size() : 0);
-        if (archivos != null) {
-            for (int i = 0; i < archivos.size(); i++) {
-                MultipartFile a = archivos.get(i);
-                log.info("  Archivo[{}]: name={}, size={}, contentType={}, empty={}",
-                        i,
-                        a != null ? a.getOriginalFilename() : "NULL",
-                        a != null ? a.getSize() : 0,
-                        a != null ? a.getContentType() : "NULL",
-                        a != null ? a.isEmpty() : true);
-            }
-        }
-        log.info("═══════════════════════════════════════════════════");
+        log.info("Creando post para usuario {}", autorId);
 
-        // -------- Validaciones básicas --------
         if (autorId == null) {
             throw new BadRequestException("Usuario requerido");
         }
@@ -113,51 +87,45 @@ public class PostService {
             throw new BadRequestException("Datos requeridos");
         }
         if (datos.titulo() == null || datos.titulo().isBlank()) {
-            throw new BadRequestException("El título es obligatorio");
+            throw new BadRequestException("El titulo es obligatorio");
         }
         if (datos.titulo().length() > MAX_TITULO) {
-            throw new BadRequestException("El título es demasiado largo");
+            throw new BadRequestException("El titulo es demasiado largo");
         }
         if (datos.descripcion() != null && datos.descripcion().length() > MAX_DESCRIPCION) {
-            throw new BadRequestException("La descripción es demasiado larga");
+            throw new BadRequestException("La descripcion es demasiado larga");
         }
         if (archivos != null && archivos.size() > MAX_ARCHIVOS) {
             throw new BadRequestException("Solo se permiten " + MAX_ARCHIVOS + " archivos");
         }
 
-        // -------- Validar tamaño total --------
         List<MultipartFile> archivosValidos = (archivos != null)
                 ? archivos.stream()
                   .filter(a -> a != null && !a.isEmpty() && a.getSize() > 0)
                   .toList()
                 : List.of();
 
-        if (archivosValidos.size() > MAX_ARCHIVOS) {
-            throw new BadRequestException("Solo se permiten " + MAX_ARCHIVOS + " archivos válidos");
-        }
-
         long totalBytes = archivosValidos.stream().mapToLong(MultipartFile::getSize).sum();
         if (totalBytes > MAX_TOTAL_ARCHIVOS) {
             throw new BadRequestException("Los archivos no pueden superar 30 MB en total");
         }
 
-        // -------- Autor --------
         Usuario autor = usuarioRepository.findById(autorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         String categoriaUsuario = datos.categoria() != null ? datos.categoria().trim() : "otro";
+        boolean esAnonimo = Boolean.TRUE.equals(datos.esAnonimo());
 
-        // -------- Crear post base --------
         Post post = Post.builder()
                 .autor(autor)
                 .titulo(datos.titulo().trim())
                 .categoria(categoriaUsuario)
                 .descripcion(datos.descripcion())
                 .eliminado(false)
+                .esAnonimo(esAnonimo)
                 .fechaCreacion(Instant.now())
                 .build();
 
-        // Link externo (si viene)
         if (datos.link() != null && !datos.link().isBlank()) {
             Adjunto adjunto = Adjunto.builder()
                     .post(post)
@@ -168,12 +136,11 @@ public class PostService {
             post.getAdjuntos().add(adjunto);
         }
 
-        // -------- Subir archivos a Cloudinary --------
         int subidosOk = 0;
         int fallidos = 0;
 
         if (!archivosValidos.isEmpty()) {
-            log.info("Subiendo {} archivo(s) a Cloudinary...", archivosValidos.size());
+            log.info("Subiendo {} archivo(s) a Cloudinary", archivosValidos.size());
 
             for (MultipartFile archivo : archivosValidos) {
                 try {
@@ -182,11 +149,6 @@ public class PostService {
                     String carpeta = "posts";
                     Integer duracionSegundos = null;
                     String formato = cloudinaryService.getFormato(archivo.getContentType());
-
-                    log.info("→ Subiendo: {} ({} KB, tipo={})",
-                            archivo.getOriginalFilename(),
-                            archivo.getSize() / 1024,
-                            archivo.getContentType());
 
                     if (cloudinaryService.esVideo(archivo)) {
                         Map<String, Object> result = cloudinaryService.subirVideo(archivo, carpeta + "/videos");
@@ -207,7 +169,7 @@ public class PostService {
                     }
 
                     if (url == null || url.isBlank()) {
-                        throw new RuntimeException("Cloudinary devolvió URL vacía");
+                        throw new RuntimeException("Cloudinary devolvio URL vacia");
                     }
 
                     Adjunto adjunto = Adjunto.builder()
@@ -223,40 +185,33 @@ public class PostService {
                     post.getAdjuntos().add(adjunto);
                     subidosOk++;
 
-                    log.info("   ✅ OK — tipo={}, url={}", tipo, url);
-
                 } catch (Exception e) {
                     fallidos++;
-                    log.error("   ❌ ERROR al subir '{}': {} — {}",
-                            archivo.getOriginalFilename(),
-                            e.getClass().getSimpleName(),
-                            e.getMessage(),
-                            e);  // ← stacktrace completo
+                    log.error("Error al subir '{}': {}",
+                            archivo.getOriginalFilename(), e.getMessage());
 
-                    // ✅ Si había archivos pero TODOS fallaron, abortar
-                    //    para no crear un post "fantasma" sin adjuntos
                     if (subidosOk == 0 && fallidos == archivosValidos.size()) {
                         throw new BadRequestException(
-                                "No se pudo subir ningún archivo. Intenta de nuevo. (" +
-                                        e.getMessage() + ")");
+                                "No se pudo subir ningun archivo. Intenta de nuevo.");
                     }
                 }
             }
-
-            log.info("Resumen subida: {} OK, {} fallidos", subidosOk, fallidos);
         }
 
+        // Guardar y asegurar que el ID esté disponible
         post = postRepository.save(post);
         postRepository.flush();
 
-        log.info("✅ Post creado: id={}, adjuntos={}", post.getId(), post.getAdjuntos().size());
+        if (post.getId() == null) {
+            throw new RuntimeException("Error interno: el post no obtuvo ID");
+        }
+
+        log.info("Post creado: id={}, anonimo={}, adjuntos={}",
+                post.getId(), esAnonimo, post.getAdjuntos().size());
 
         return postMapper.aDTO(post);
     }
 
-    // ============================================================
-    // LISTAR COMENTARIOS
-    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_COMMENTS, key = "#postId")
     public List<ComentarioDTO> listarComentarios(Long postId) {
@@ -272,9 +227,6 @@ public class PostService {
                 .toList();
     }
 
-    // ============================================================
-    // COMENTAR
-    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_COMMENTS, key = "#postId"),
@@ -285,7 +237,7 @@ public class PostService {
         log.info("Comentando en post {} por usuario {}", postId, autorId);
 
         if (contenido == null || contenido.isBlank()) {
-            throw new BadRequestException("El comentario no puede estar vacío");
+            throw new BadRequestException("El comentario no puede estar vacio");
         }
         if (contenido.length() > MAX_COMENTARIO) {
             throw new BadRequestException("El comentario es demasiado largo");
@@ -295,7 +247,7 @@ public class PostService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación"));
 
         if (post.isEliminado()) {
-            throw new BadRequestException("La publicación ya no está disponible");
+            throw new BadRequestException("La publicacion ya no esta disponible");
         }
 
         Usuario autor = usuarioRepository.findById(autorId)
@@ -312,9 +264,6 @@ public class PostService {
         return postMapper.aDTO(comentario);
     }
 
-    // ============================================================
-    // ELIMINAR POST
-    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_POSTS, allEntries = true),
@@ -325,19 +274,18 @@ public class PostService {
         log.info("Eliminando post {} por usuario {}", postId, autorId);
 
         if (postId == null || autorId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
 
         Post post = postRepository.findActiveById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación"));
 
         if (!post.getAutor().getId().equals(autorId)) {
-            throw new SecurityException("No tienes permiso para eliminar esta publicación");
+            throw new SecurityException("No tienes permiso para eliminar esta publicacion");
         }
 
         post.setEliminado(true);
         post.setFechaEliminacion(Instant.now());
         postRepository.save(post);
-        log.info("Post {} eliminado exitosamente", postId);
     }
 }

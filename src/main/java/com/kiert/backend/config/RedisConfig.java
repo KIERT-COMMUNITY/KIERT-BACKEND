@@ -2,10 +2,12 @@
 package com.kiert.backend.config;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
@@ -35,33 +37,43 @@ public class RedisConfig implements CachingConfigurer {
     // OBJECT MAPPER PARA REDIS
     // ============================================================
     /**
-     * ObjectMapper base para Redis.
+     * ObjectMapper EXCLUSIVO para Redis:
      *
-     * IMPORTANTE:
-     *  - NO activamos defaultTyping aquí. Lo hace internamente
-     *    GenericJackson2JsonRedisSerializer (constructor sin argumentos),
-     *    que añade la propiedad "@class" para poder reconstruir tipos
-     *    (ArrayList, HashMap, PostDTO, etc.).
-     *  - Si activamos defaultTyping AQUÍ y además se lo pasamos al
-     *    serializer, Jackson lo activa DOS VECES y en algunas versiones
-     *    produce JSON inconsistente → error "missing type id property '@class'".
+     *  - JavaTimeModule → soporta Instant, LocalDateTime, etc.
+     *  - defaultTyping NON_FINAL con @class → permite reconstruir tipos
+     *    (ArrayList, HashMap, DTOs, etc.) al deserializar.
+     *  - Visibility ANY → serializa campos privados.
      *
-     *  - Necesitamos JavaTimeModule para Instant/LocalDateTime.
-     *  - Visibility ANY para que serialice campos privados (DTOs con records
-     *    o clases con getters no estándar).
+     * ⚠️ IMPORTANTE:
+     * Se activa defaultTyping aquí porque VAMOS A PASAR este mapper
+     * al GenericJackson2JsonRedisSerializer. Si lo dejamos al
+     * constructor sin argumentos, se crea un mapper interno SIN
+     * JavaTimeModule y vuelve a fallar con Instant.
      */
-    @Bean("redisObjectMapper")
-    public ObjectMapper redisObjectMapper() {
+    private ObjectMapper buildRedisObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
+
+        // Soporte para java.time
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+
+        // Serializar campos privados
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+
+        // Tipo embebido (@class) — necesario para Redis
+        mapper.activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY
+        );
+
         return mapper;
     }
 
     /**
-     * ObjectMapper @Primary para REST (sin "@class" en las respuestas HTTP).
+     * ObjectMapper @Primary para REST (SIN defaultTyping → sin "@class"
+     * en las respuestas HTTP).
      */
     @Bean
     @Primary
@@ -77,12 +89,11 @@ public class RedisConfig implements CachingConfigurer {
     // SERIALIZADOR
     // ============================================================
     /**
-     * Constructor SIN argumentos: usa el ObjectMapper interno ya configurado
-     * con defaultTyping (@class) y JavaTimeModule. Esto evita el doble
-     * defaultTyping que rompía la deserialización.
+     * Serializer Redis que SÍ conoce JavaTimeModule, porque recibe
+     * nuestro ObjectMapper ya preparado con defaultTyping + JavaTime.
      */
     private GenericJackson2JsonRedisSerializer buildSerializer() {
-        return new GenericJackson2JsonRedisSerializer();
+        return new GenericJackson2JsonRedisSerializer(buildRedisObjectMapper());
     }
 
     // ============================================================
@@ -154,6 +165,9 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("resumenReportes", buildConfig(Duration.ofMinutes(2), serializer))
                 .withCacheConfiguration("misReportes", buildConfig(Duration.ofMinutes(5), serializer))
 
+                // ✅ Cache de BIENVENIDA (no necesita invalidación frecuente)
+                .withCacheConfiguration("bienvenida", buildConfig(Duration.ofMinutes(30), serializer))
+
                 .build();
     }
 
@@ -207,7 +221,6 @@ public class RedisConfig implements CachingConfigurer {
             @Override
             public void handleCacheGetError(RuntimeException exception, Cache cache, Object key) {
                 log.warn("[CACHE] Error en GET ({}::{}): {}", cache.getName(), key, exception.getMessage());
-                // Evictar la clave corrupta para que el siguiente PUT la sobreescriba
                 try {
                     cache.evict(key);
                 } catch (Exception ignored) {}

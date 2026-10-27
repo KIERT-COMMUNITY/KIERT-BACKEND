@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/features/post/dto/PostDTO.java
 package com.kiert.backend.features.post.dto;
 
 import com.kiert.backend.features.autor.dto.AutorResumenDTO;
@@ -14,5 +15,6 @@ public record PostDTO(
         String categoria,
         List<AdjuntoDTO> adjuntos,
         long totalComentarios,
-        Instant fechaCreacion
+        Instant fechaCreacion,
+        boolean esAnonimo
 ) {}

@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/entity/Post.java
 package com.kiert.backend.entity;
 
 import jakarta.persistence.*;
@@ -30,7 +31,6 @@ public class Post {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String descripcion;
 
-    // CAMPO STRING - Acepta cualquier categoría
     @Column(nullable = false, length = 50)
     private String categoria;
 
@@ -59,9 +59,12 @@ public class Post {
     @Column(nullable = false)
     @Builder.Default
     private boolean eliminado = false;
-    // NUEVO CAMPO: TOTAL COMPARTIDOS
+
     @Column(name = "total_compartidos", nullable = false)
     @Builder.Default
     private Long totalCompartidos = 0L;
 
+    @Column(name = "es_anonimo", nullable = false)
+    @Builder.Default
+    private Boolean esAnonimo = false;
 }

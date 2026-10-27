@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/features/post/controller/PostController.java
 package com.kiert.backend.features.post.controller;
 
 import com.kiert.backend.entity.Post;
@@ -31,14 +32,10 @@ public class PostController {
     private final PostRepository postRepository;
     private final UsuarioActual usuarioActual;
 
-    // ENDPOINT DE DIAGNÓSTICO - OBTENER POSTS CRUDOS
     @GetMapping("/diagnostico")
     public ResponseEntity<?> diagnosticar() {
         try {
-            log.info("Diagnóstico: Obteniendo posts crudos");
             List<Post> posts = postRepository.findAll();
-            log.info("Total posts en BD: {}", posts.size());
-
             List<Map<String, Object>> resultado = new ArrayList<>();
             for (Post p : posts) {
                 Map<String, Object> item = new HashMap<>();
@@ -46,27 +43,22 @@ public class PostController {
                 item.put("titulo", p.getTitulo());
                 item.put("categoria", p.getCategoria());
                 item.put("eliminado", p.isEliminado());
+                item.put("esAnonimo", p.getEsAnonimo());
                 item.put("autorId", p.getAutor() != null ? p.getAutor().getId() : null);
                 resultado.add(item);
             }
-
             return ResponseEntity.ok(resultado);
-
         } catch (Exception e) {
-            log.error("Error en diagnóstico: {}", e.getMessage(), e);
+            log.error("Error en diagnostico: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error en diagnóstico: " + e.getMessage());
+                    .body("Error en diagnostico: " + e.getMessage());
         }
     }
 
-    // ENDPOINT DE PRUEBA - POSTS ACTIVOS SIMPLES
     @GetMapping("/activos")
     public ResponseEntity<?> listarActivos() {
         try {
-            log.info("Listando posts activos (sin DTO)");
             List<Post> posts = postRepository.findAllActiveOrderByFechaCreacionDesc();
-            log.info("Se encontraron {} posts activos", posts.size());
-
             List<Map<String, Object>> resultado = new ArrayList<>();
             for (Post p : posts) {
                 Map<String, Object> item = new HashMap<>();
@@ -74,12 +66,11 @@ public class PostController {
                 item.put("titulo", p.getTitulo());
                 item.put("descripcion", p.getDescripcion());
                 item.put("categoria", p.getCategoria());
+                item.put("esAnonimo", p.getEsAnonimo());
                 item.put("fechaCreacion", p.getFechaCreacion().toString());
                 resultado.add(item);
             }
-
             return ResponseEntity.ok(resultado);
-
         } catch (Exception e) {
             log.error("Error al listar posts activos: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -87,27 +78,13 @@ public class PostController {
         }
     }
 
-    // ENDPOINT ORIGINAL CON LOGS MEJORADOS
     @GetMapping
     public ResponseEntity<?> listar() {
         try {
-            log.info("Recibiendo solicitud para listar posts");
-
-            long count = postRepository.count();
-            log.info("Total posts en BD: {}", count);
-
             List<PostDTO> posts = postService.listar();
-            log.info("Se devolvieron {} posts", posts.size());
-
-            if (!posts.isEmpty()) {
-                posts.forEach(p -> log.info("Post ID: {}, Categoría: {}", p.id(), p.categoria()));
-            }
-
             return ResponseEntity.ok(posts);
-
         } catch (Exception e) {
             log.error("Error al listar posts: {}", e.getMessage(), e);
-            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error al cargar publicaciones: " + e.getMessage());
         }
@@ -116,80 +93,74 @@ public class PostController {
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerPorId(@PathVariable Long id) {
         try {
-            log.info("Obteniendo post: {}", id);
-
             if (id == null || id <= 0) {
-                log.warn("ID inválido: {}", id);
-                return ResponseEntity.badRequest().body("ID de publicación inválido");
+                return ResponseEntity.badRequest().body("ID de publicacion invalido");
             }
-
             PostDTO post = postService.obtenerPorId(id);
-            log.info("Post encontrado: ID={}, Categoría={}", post.id(), post.categoria());
             return ResponseEntity.ok(post);
-
         } catch (Exception e) {
             log.error("Error al obtener post {}: {}", id, e.getMessage(), e);
-            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error al obtener publicación: " + e.getMessage());
+                    .body("Error al obtener publicacion: " + e.getMessage());
         }
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @CacheEvict(value = {"publicaciones", "busquedaUsuarios"}, allEntries = true)
+    @CacheEvict(value = {"publicaciones", "busquedaUsuarios", "posts", "post"}, allEntries = true)
     public ResponseEntity<?> crearPost(
             @RequestParam("titulo") String titulo,
             @RequestParam("categoria") String categoria,
             @RequestParam("descripcion") String descripcion,
             @RequestParam(value = "link", required = false) String link,
+            @RequestParam(value = "esAnonimo", required = false, defaultValue = "false") Boolean esAnonimo,
             @RequestParam(value = "archivos", required = false) List<MultipartFile> archivos) {
 
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) {
-                log.error("Usuario no autenticado en crearPost");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
 
-            log.info("Creando post para usuario: {}", usuarioId);
-            log.info("Título: {}", titulo);
-            log.info("Categoría: '{}'", categoria);
-            log.info("Descripción: {}", descripcion);
-            log.info("Link: {}", link);
-            log.info("Archivos: {}", archivos != null ? archivos.size() : 0);
+            CrearPostDTO datos = new CrearPostDTO(
+                    titulo,
+                    categoria,
+                    descripcion,
+                    link,
+                    esAnonimo != null ? esAnonimo : false
+            );
 
-            CrearPostDTO datos = new CrearPostDTO(titulo, categoria, descripcion, link);
             PostDTO creado = postService.crear(usuarioId, datos, archivos);
 
-            log.info("Post creado exitosamente con ID: {}, Categoría: '{}'", creado.id(), creado.categoria());
+            if (creado == null || creado.id() == null) {
+                log.error("El post se creo pero no tiene ID valido");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Error: el post no obtuvo ID");
+            }
+
+            log.info("Post creado: id={}, anonimo={}", creado.id(), creado.esAnonimo());
             return ResponseEntity.status(HttpStatus.CREATED).body(creado);
 
         } catch (Exception e) {
             log.error("Error al crear post: {}", e.getMessage(), e);
-            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error al crear publicación: " + e.getMessage());
+                    .body("Error al crear publicacion: " + e.getMessage());
         }
     }
 
     @DeleteMapping("/{id}")
-    @CacheEvict(value = {"publicaciones", "busquedaUsuarios"}, allEntries = true)
+    @CacheEvict(value = {"publicaciones", "busquedaUsuarios", "posts", "post"}, allEntries = true)
     public ResponseEntity<?> eliminarPost(@PathVariable Long id) {
         try {
             Long usuarioId = usuarioActual.id();
             if (usuarioId == null) {
-                log.error("Usuario no autenticado en eliminarPost");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
             }
-            log.info("Eliminando post: {} por usuario {}", id, usuarioId);
             postService.eliminarPost(id, usuarioId);
             return ResponseEntity.noContent().build();
-
         } catch (Exception e) {
             log.error("Error al eliminar post {}: {}", id, e.getMessage(), e);
-            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error al eliminar publicación: " + e.getMessage());
+                    .body("Error al eliminar publicacion: " + e.getMessage());
         }
     }
 }

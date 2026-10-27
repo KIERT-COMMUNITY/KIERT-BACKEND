@@ -21,33 +21,15 @@ import java.util.Map;
 @Component
 public class PostMapper {
 
-    // ============================================================
-    // MAPEO DE POST
-    // ============================================================
-
-    /**
-     * Mapeo básico. Usa las colecciones lazy del post.
-     * Puede generar N+1 si no están precargadas.
-     */
     public PostDTO aDTO(Post post) {
         return aDTO(post, null, null);
     }
 
-    /**
-     * Sobrecarga optimizada: permite pasar adjuntos y contador de comentarios
-     * precargados en queries separadas, evitando N+1 y el bug HHH000104.
-     *
-     * @param post             entidad Post (debe tener autor y personalización precargados)
-     * @param adjuntosExternos si no es null, se usa en lugar de post.getAdjuntos()
-     * @param totalComentarios si no es null, se usa en lugar de contar en post.getComentarios()
-     */
     public PostDTO aDTO(Post post, List<Adjunto> adjuntosExternos, Long totalComentarios) {
         if (post == null) return null;
 
-        // Categoría
         String categoria = post.getCategoria() != null ? post.getCategoria() : "otro";
 
-        // Adjuntos: usar los externos si vienen
         List<Adjunto> adjuntos = adjuntosExternos != null
                 ? adjuntosExternos
                 : (post.getAdjuntos() != null ? post.getAdjuntos() : Collections.emptyList());
@@ -57,7 +39,6 @@ public class PostMapper {
                 .map(this::aDTO)
                 .toList();
 
-        // Comentarios: usar el contador externo si viene
         long comentarios;
         if (totalComentarios != null) {
             comentarios = totalComentarios;
@@ -69,21 +50,33 @@ public class PostMapper {
             comentarios = 0;
         }
 
+        boolean esAnonimo = Boolean.TRUE.equals(post.getEsAnonimo());
+
+        AutorResumenDTO autorDTO = esAnonimo
+                ? autorAnonimo()
+                : aAutorResumen(post.getAutor());
+
         return new PostDTO(
                 post.getId(),
-                aAutorResumen(post.getAutor()),
+                autorDTO,
                 post.getTitulo(),
                 post.getDescripcion(),
                 categoria,
                 adjuntosDTO,
                 comentarios,
-                post.getFechaCreacion()
+                post.getFechaCreacion(),
+                esAnonimo
         );
     }
 
-    // ============================================================
-    // MAPEO DE ADJUNTO
-    // ============================================================
+    private AutorResumenDTO autorAnonimo() {
+        return new AutorResumenDTO(
+                null,
+                "Anónimo",
+                null,
+                "none"
+        );
+    }
 
     public AdjuntoDTO aDTO(Adjunto adjunto) {
         if (adjunto == null) return null;
@@ -101,25 +94,10 @@ public class PostMapper {
         );
     }
 
-    // ============================================================
-    // MAPEO DE COMENTARIO
-    // ============================================================
-
-    /**
-     * Mapeo básico. Cuenta reacciones desde la colección lazy.
-     * Puede generar N+1.
-     */
     public ComentarioDTO aDTO(Comentario comentario) {
         return aDTO(comentario, null);
     }
 
-    /**
-     * Sobrecarga optimizada: permite pasar el conteo de reacciones
-     * ya calculado (en lugar de contarlas desde la colección lazy).
-     *
-     * @param comentario       entidad Comentario
-     * @param reaccionesExternas mapa con contadores {like: N, love: N}
-     */
     public ComentarioDTO aDTO(Comentario comentario, Map<String, Long> reaccionesExternas) {
         if (comentario == null) return null;
 
@@ -146,31 +124,20 @@ public class PostMapper {
         );
     }
 
-    // ============================================================
-    // MAPEO DE AUTOR
-    // ============================================================
-
-    /**
-     * Mapea un usuario a un resumen público.
-     * Maneja LazyInitializationException de forma segura.
-     */
     public AutorResumenDTO aAutorResumen(Usuario usuario) {
         if (usuario == null) return null;
 
         String marcoId = "none";
 
         try {
-            // Intenta obtener el marco desde la personalización
             if (usuario.getPersonalizacion() != null) {
                 marcoId = usuario.getPersonalizacion().getMarcoId();
             }
         } catch (Exception e) {
-            // LazyInitializationException u otro error → usar fallback
-            log.debug("No se pudo cargar la personalización del usuario {}: {}",
+            log.debug("No se pudo cargar personalizacion del usuario {}: {}",
                     usuario.getId(), e.getMessage());
         }
 
-        // Fallback al campo marco_id del usuario
         if ((marcoId == null || marcoId.isEmpty()) && usuario.getMarcoId() != null) {
             marcoId = usuario.getMarcoId();
         }

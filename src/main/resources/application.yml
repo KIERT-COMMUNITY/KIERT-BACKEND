@@ -15,11 +15,10 @@ spring:
       max-request-size: 60MB
 
   # ========== REDIS CONFIGURATION ==========
-  # En Render no tienes Redis local. Si no lo usas en producción, comenta esto o usa variables.
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: localhost
+      port: 6379
       timeout: 5000ms
       database: 0
       lettuce:
@@ -29,11 +28,10 @@ spring:
           min-idle: 0
 
   # ========== CACHE CONFIGURATION ==========
-  # Si Redis no está disponible, esto podría dar error. Puedes cambiar a 'none' o 'simple' en pruebas.
   cache:
     type: redis
     redis:
-      time-to-live: 1800000
+      time-to-live: 1800000  # 30 minutos
       cache-null-values: false
 
   # ========== MAIL CONFIGURATION ==========
@@ -52,10 +50,8 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
-# ========== SERVER CONFIGURATION ==========
-# ✅ CRÍTICO: Usa el puerto que Render asigna (variable PORT). Si no existe, usa 8081.
 server:
-  port: ${PORT:8081}
+  port: 8081
   error:
     include-message: always
 
@@ -84,15 +80,14 @@ springdoc:
 kiert:
   jwt:
     secret: 5ea8bc5772b55186e648930d752def86b48d09657d8e5d52f04d3b76bc5e2f9a
-    expiration-ms: 86400000
+    expiration-ms: 86400000  # 24 horas
   cors:
     allowed-origins:
       - "http://localhost:4200"
       - "http://localhost:53334"
-      - "https://kiert-community.vercel.app" # ✅ Añade tu URL de Vercel aquí
       - "*"
   frontend:
-    reset-password-url: "https://kiert-community.vercel.app/restablecer-contrasena" # ✅ Ajusta para producción
+    reset-password-url: "http://localhost:4200/restablecer-contrasena"
 
   # ========== CLOUDINARY CONFIGURATION ==========
   cloudinary:
@@ -114,11 +109,10 @@ spring:
       on-profile: mysql
 
   # ========== DATASOURCE MYSQL ==========
-  # ✅ Usa variables de entorno si existen (Render), si no, usa localhost (Desarrollo)
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true}
-    username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:adrian.200503}
+    url: jdbc:mysql://localhost:3306/kiert_db?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
+    username: root
+    password: adrian.200503
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
