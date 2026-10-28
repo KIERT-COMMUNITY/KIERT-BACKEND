@@ -1,13 +1,15 @@
-// src/main/java/com/kiert/backend/controller/ChatGlobalController.java
+// src/main/java/com/kiert/backend/features/chatGlobal/controller/ChatGlobalController.java
 package com.kiert.backend.features.chatGlobal.controller;
 
 import com.kiert.backend.features.chatGlobal.dto.EnviarMensajeGlobalDTO;
 import com.kiert.backend.features.chatGlobal.dto.MensajeGlobalDTO;
 import com.kiert.backend.entity.MensajeGlobal;
+import com.kiert.backend.entity.PersonalizacionUsuario;
 import com.kiert.backend.entity.Usuario;
 import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.features.chatGlobal.repository.MensajeGlobalRepository;
+import com.kiert.backend.features.personalizacion.repository.PersonalizacionRepository;
 import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,7 @@ public class ChatGlobalController {
 
     private final MensajeGlobalRepository mensajeRepository;
     private final UsuarioRepository usuarioRepository;
+    private final PersonalizacionRepository personalizacionRepository; // ✅ NUEVO
 
     // ============================================================
     // REST: historial paginado (público — permite invitados)
@@ -97,11 +100,28 @@ public class ChatGlobalController {
     // DTO MAPPING
     // ============================================================
     private MensajeGlobalDTO mapearADTO(MensajeGlobal m) {
+        if (m == null) return null;
+
+        Usuario autor = m.getAutor();
+        Long autorId = autor != null ? autor.getId() : null;
+        String nombre = autor != null ? autor.getNombreUsuario() : "Usuario";
+        String foto = autor != null ? autor.getFotoPerfilUrl() : null;
+
+        // ✅ Leer marcoId de la personalización del autor (fallback "none")
+        String marcoId = "none";
+        if (autorId != null) {
+            marcoId = personalizacionRepository.findByUsuarioId(autorId)
+                    .map(PersonalizacionUsuario::getMarcoId)
+                    .filter(s -> s != null && !s.isBlank())
+                    .orElse("none");
+        }
+
         return new MensajeGlobalDTO(
                 m.getId(),
-                m.getAutor().getId(),
-                m.getAutor().getNombreUsuario(),
-                m.getAutor().getFotoPerfilUrl(),
+                autorId,
+                nombre,
+                foto,
+                marcoId,          // ✅ NUEVO orden: después de foto, antes de contenido
                 m.getContenido(),
                 m.getFechaEnvio()
         );

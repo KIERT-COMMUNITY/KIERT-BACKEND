@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/MensajeGlobalRepository.java
+// src/main/java/com/kiert/backend/features/chatGlobal/repository/MensajeGlobalRepository.java
 package com.kiert.backend.features.chatGlobal.repository;
 
 import com.kiert.backend.entity.MensajeGlobal;
