@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/PostRepository.java
+// src/main/java/com/kiert/backend/features/post/repository/PostRepository.java
 package com.kiert.backend.features.post.repository;
 
 import com.kiert.backend.entity.Post;
@@ -17,7 +17,13 @@ import java.util.Optional;
 @Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
 
-    @Deprecated
+    /**
+     * Lista todos los posts activos ordenados por fecha de creacion descendente.
+     *
+     * <p>NOTA: antes estaba marcado con {@code @Deprecated} por error. La consulta
+     * es valida y se usa en PostService.listar(). Si en el futuro quieres
+     * paginar, usa {@link #findAllActivePaginado(Pageable)} en su lugar.</p>
+     */
     @Query("""
             SELECT DISTINCT p FROM Post p
             LEFT JOIN FETCH p.autor a
@@ -228,11 +234,11 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     );
 
     // ============================================================
-    // SEGURIDAD: Validar autoría
+    // SEGURIDAD: Validar autoria
     // ============================================================
 
     /**
-     * NUEVO: Verifica si un usuario es el autor del post.
+     * Verifica si un usuario es el autor del post.
      * Se usa para prevenir que un usuario edite/elimine posts ajenos.
      */
     @Query("""

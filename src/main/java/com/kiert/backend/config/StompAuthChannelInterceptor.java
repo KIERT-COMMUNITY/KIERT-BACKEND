@@ -28,6 +28,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
         if (accessor == null) return message;
 
+        // ============================================================
+        // CONNECT: validar JWT y setear Principal
+        // ============================================================
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             String authHeader = accessor.getFirstNativeHeader("Authorization");
 
@@ -39,15 +42,27 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             String token = authHeader.substring(7);
             try {
                 Long usuarioId = jwtService.extraerUsuarioId(token);
-                String email = jwtService.extraerEmail(token);
+                String emailExtraido = jwtService.extraerEmail(token);
 
-                if (usuarioId == null || email == null) {
-                    throw new MessagingException("Token sin usuarioId/email");
+                // Fallback: si el token del admin no tiene email, usa el subject
+                if (emailExtraido == null) {
+                    try {
+                        emailExtraido = jwtService.extraerSubject(token);
+                    } catch (Exception ignored) { /* noop */ }
                 }
 
-                if (!jwtService.esTokenValido(token, email)) {
+                if (usuarioId == null) {
+                    throw new MessagingException("Token sin usuarioId");
+                }
+                if (emailExtraido == null || emailExtraido.isBlank()) {
+                    throw new MessagingException("Token sin email/subject");
+                }
+                if (!jwtService.esTokenValido(token, emailExtraido)) {
                     throw new MessagingException("Token invalido o expirado");
                 }
+
+                // ✅ variable final para la lambda
+                final String email = emailExtraido;
 
                 Map<String, Object> attrs = accessor.getSessionAttributes();
                 if (attrs != null) {
@@ -55,6 +70,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                     attrs.put("email", email);
                 }
 
+                // Setear Principal (email como nombre)
                 accessor.setUser((Principal) () -> email);
 
                 log.debug("[STOMP] Conectado: usuarioId={} email={}", usuarioId, email);
@@ -64,6 +80,24 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             } catch (Exception e) {
                 log.error("[STOMP] Error validando JWT: {}", e.getMessage());
                 throw new MessagingException("Token invalido", e);
+            }
+        }
+
+        // ============================================================
+        // SEND: propagar usuarioId/email a los native headers
+        // (por si el controller usa @Header en lugar de Principal)
+        // ============================================================
+        if (StompCommand.SEND.equals(accessor.getCommand())) {
+            Map<String, Object> attrs = accessor.getSessionAttributes();
+            if (attrs != null) {
+                Object uid = attrs.get("usuarioId");
+                if (uid != null) {
+                    accessor.setNativeHeader("usuarioId", String.valueOf(uid));
+                }
+                Object email = attrs.get("email");
+                if (email != null) {
+                    accessor.setNativeHeader("email", String.valueOf(email));
+                }
             }
         }
 

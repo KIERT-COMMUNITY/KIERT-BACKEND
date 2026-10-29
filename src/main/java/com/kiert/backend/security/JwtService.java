@@ -93,6 +93,14 @@ public class JwtService {
         return extraerClaim(token, Claims::getSubject);
     }
 
+    /**
+     * NUEVO: Extrae el "subject" del JWT.
+     * Util como fallback cuando el token no tiene claim "email" (p. ej. tokens de admin).
+     */
+    public String extraerSubject(String token) {
+        return extraerClaim(token, Claims::getSubject);
+    }
+
     public Long extraerUsuarioId(String token) {
         Object val = extraerTodosLosClaims(token).get("usuarioId");
         if (val == null) return null;
