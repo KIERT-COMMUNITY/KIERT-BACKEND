@@ -1,0 +1,140 @@
+# ============================================================
+# application-prod.yml
+# Perfil: prod (produccion en Render)
+# ============================================================
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  main:
+    lazy-initialization: false
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+      connection-timeout: 10000
+      initialization-fail-timeout: 10000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    database-platform: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+    defer-datasource-initialization: false
+    hibernate:
+      ddl-auto: none
+      show-sql: false
+      format-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        boot:
+          allow_jdbc_metadata_access: false
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  sql:
+    init:
+      mode: never
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      timeout: 3000ms
+      connect-timeout: 3000ms
+      database: 0
+      repositories:
+        enabled: false
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+server:
+  address: 0.0.0.0
+  port: ${PORT:8081}
+  error:
+    include-message: always
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+
+kiert:
+  jwt:
+    secret: ${KIERT_JWT_SECRET}
+    expiration-ms: 86400000
+  cors:
+    allowed-origins:
+      - "https://kiert-community.vercel.app"
+      - "https://www.kiert.com"
+      - "https://kiert.com"
+  frontend:
+    reset-password-url: ${KIERT_FRONTEND_RESET_URL:https://kiert-community.vercel.app/restablecer-contrasena}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME}
+    api-key: ${CLOUDINARY_API_KEY}
+    api-secret: ${CLOUDINARY_API_SECRET}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: false
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: false
+  show-actuator: false
+  packages-to-scan: com.kiert.backend
+  paths-to-match: /api/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    db:
+      enabled: false
+    redis:
+      enabled: false
+    diskspace:
+      enabled: false
+
+logging:
+  level:
+    com.kiert.backend: INFO
+    org.springframework.security: WARN
+    org.springframework.web: INFO
+    org.hibernate: WARN
+    org.springframework.data.redis: WARN
+    org.springframework.messaging: WARN
