@@ -7,9 +7,11 @@ spring:
     activate:
       on-profile: prod
 
+  # Desactivar lazy-init para que Tomcat abra el puerto cuanto antes
   main:
     lazy-initialization: false
 
+  # Datasource desde variables de entorno
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -34,6 +36,7 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+        # Hibernate 6: no consultar metadatos de la BD al arrancar (ahorra 15-20s)
         boot:
           allow_jdbc_metadata_access: false
         jdbc:
@@ -45,6 +48,7 @@ spring:
     init:
       mode: never
 
+  # Redis desde variables de entorno
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST}
@@ -61,6 +65,7 @@ spring:
           max-idle: 8
           min-idle: 0
 
+  # Mail desde variables de entorno
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -85,6 +90,7 @@ server:
   compression:
     enabled: true
 
+# CORS produccion: solo dominios reales, nunca localhost ni *
 kiert:
   jwt:
     secret: ${KIERT_JWT_SECRET}
