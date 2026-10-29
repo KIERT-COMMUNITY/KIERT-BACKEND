@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/CompartidoService.java
+// src/main/java/com/kiert/backend/features/compartidos/service/CompartidoService.java
 package com.kiert.backend.features.compartidos.service;
 
 import com.kiert.backend.features.compartidos.dto.CompartidoDTO;
@@ -36,6 +36,7 @@ public class CompartidoService {
 
     private static final List<String> TIPOS_VALIDOS = List.of("INTERNO", "EXTERNO");
     private static final int MAX_COMENTARIO = 500;
+    private static final long VENTANA_ANTI_SPAM_SEGUNDOS = 600;
 
     // ============================================================
     // COMPARTIR
@@ -50,9 +51,8 @@ public class CompartidoService {
     public CompartidoDTO compartir(Long usuarioId, Long postId, CompartirPostDTO dto) {
         log.info("Compartiendo post {} por usuario {}", postId, usuarioId);
 
-        // Validaciones básicas
         if (usuarioId == null || postId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
         if (dto == null) {
             throw new BadRequestException("Datos de compartido requeridos");
@@ -65,30 +65,26 @@ public class CompartidoService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
         if (post.isEliminado()) {
-            throw new BadRequestException("El post ya no está disponible");
+            throw new BadRequestException("El post ya no esta disponible");
         }
 
-        // Validar tipo
         String tipo = dto.tipoCompartido() != null
                 ? dto.tipoCompartido().trim().toUpperCase()
                 : "INTERNO";
 
         if (!TIPOS_VALIDOS.contains(tipo)) {
-            throw new BadRequestException("Tipo de compartido inválido");
+            throw new BadRequestException("Tipo de compartido invalido");
         }
 
-        // Validar comentario
         String comentario = dto.comentario();
         if (comentario != null && comentario.length() > MAX_COMENTARIO) {
             throw new BadRequestException("El comentario es demasiado largo");
         }
 
-        // Anti-spam: verificar si el usuario ya compartió el post recientemente
-        Instant hace10Minutos = Instant.now().minusSeconds(600);
-        if (compartidoRepository.compartioRecientemente(usuarioId, postId, hace10Minutos)) {
+        Instant desde = Instant.now().minusSeconds(VENTANA_ANTI_SPAM_SEGUNDOS);
+        if (compartidoRepository.compartioRecientemente(usuarioId, postId, desde)) {
             throw new BadRequestException(
-                    "Ya compartiste este post recientemente. Intenta más tarde."
-            );
+                    "Ya compartiste este post recientemente. Intenta mas tarde.");
         }
 
         Compartido compartido = Compartido.builder()
@@ -101,8 +97,9 @@ public class CompartidoService {
 
         compartido = compartidoRepository.save(compartido);
 
-        // Actualizar contador desnormalizado
-        post.setTotalCompartidos(post.getTotalCompartidos() + 1);
+        // Actualizar contador desnormalizado de forma segura
+        long totalActual = post.getTotalCompartidos() != null ? post.getTotalCompartidos() : 0L;
+        post.setTotalCompartidos(totalActual + 1);
         postRepository.save(post);
 
         log.info("Post compartido con ID: {}", compartido.getId());
@@ -116,7 +113,7 @@ public class CompartidoService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_COMPARTIDOS, key = "'post:' + #postId")
     public List<CompartidoDTO> listarPorPost(Long postId) {
-        log.info("[DB] Listando compartidos del post: {}", postId);
+        log.debug("[DB] Listando compartidos del post: {}", postId);
         return compartidoRepository.findByPostId(postId)
                 .stream().map(this::mapearADTO).toList();
     }
@@ -136,6 +133,10 @@ public class CompartidoService {
                 .orElse(0L);
     }
 
+    /**
+     * Cuenta directa desde la tabla compartidos (sin cache).
+     * Usar solo para reconciliacion o tareas administrativas.
+     */
     @Transactional(readOnly = true)
     public long contarCompartidosDesdeDB(Long postId) {
         return compartidoRepository.countByPostId(postId);

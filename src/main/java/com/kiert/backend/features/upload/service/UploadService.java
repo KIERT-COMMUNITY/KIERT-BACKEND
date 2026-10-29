@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/UploadService.java
+// src/main/java/com/kiert/backend/features/upload/service/UploadService.java
 package com.kiert.backend.features.upload.service;
 
 import com.kiert.backend.features.login.request.UrlFirmadaRequestDTO;
@@ -9,6 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+import java.util.Set;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -18,8 +21,7 @@ public class UploadService {
 
     private static final int MAX_NOMBRE_ARCHIVO = 255;
 
-    // Extensiones permitidas para URL firmada
-    private static final java.util.Set<String> EXTENSIONES_PERMITIDAS = java.util.Set.of(
+    private static final Set<String> EXTENSIONES_PERMITIDAS = Set.of(
             "jpg", "jpeg", "png", "gif", "webp", "svg",
             "mp4", "webm", "mov", "m4v",
             "mp3", "wav", "ogg", "m4a",
@@ -37,35 +39,39 @@ public class UploadService {
 
         String nombreArchivo = datos.nombreArchivo().trim();
 
-        // Validar longitud
         if (nombreArchivo.length() > MAX_NOMBRE_ARCHIVO) {
             throw new BadRequestException("El nombre del archivo es demasiado largo");
         }
 
-        // Validar que tenga extensión
         int dotIdx = nombreArchivo.lastIndexOf('.');
         if (dotIdx < 0 || dotIdx == nombreArchivo.length() - 1) {
-            throw new BadRequestException("El archivo debe tener una extensión");
+            throw new BadRequestException("El archivo debe tener una extension");
         }
 
-        String extension = nombreArchivo.substring(dotIdx + 1).toLowerCase();
+        String extension = nombreArchivo.substring(dotIdx + 1).toLowerCase(Locale.ROOT);
         if (!EXTENSIONES_PERMITIDAS.contains(extension)) {
-            throw new BadRequestException("Extensión de archivo no permitida");
+            throw new BadRequestException("Extension de archivo no permitida");
         }
 
-        // Validar que no tenga caracteres peligrosos
         if (nombreArchivo.contains("..")
                 || nombreArchivo.contains("/")
                 || nombreArchivo.contains("\\")) {
             throw new BadRequestException("El nombre del archivo contiene caracteres no permitidos");
         }
 
-        // Sanitizar nombre para Cloudinary
         String nombreSanitizado = storageService.sanitizar(nombreArchivo);
+        if (nombreSanitizado == null || nombreSanitizado.isBlank()) {
+            throw new BadRequestException("El nombre del archivo no es valido");
+        }
 
         log.info("Generando URL firmada para: {}", nombreSanitizado);
 
         String urlSubida = storageService.generarUrlFirmadaSubida(nombreSanitizado);
+        if (urlSubida == null || urlSubida.isBlank()) {
+            log.warn("No se pudo generar la URL firmada para: {}", nombreSanitizado);
+            throw new BadRequestException("No se pudo generar la URL de subida");
+        }
+
         String urlPublica = storageService.urlPublica(nombreSanitizado);
 
         return new UrlFirmadaResponseDTO(urlSubida, urlPublica);

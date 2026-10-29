@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/features/comentarios/controller/ComentarioController.java
 package com.kiert.backend.features.comentarios.controller;
 
 import com.kiert.backend.features.comentarios.dto.ComentarioDTO;
@@ -6,7 +7,9 @@ import com.kiert.backend.security.UsuarioActual;
 import com.kiert.backend.features.comentarios.service.ComentarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,70 +27,136 @@ public class ComentarioController {
     // ========== COMENTARIOS ==========
 
     @GetMapping("/post/{postId}")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<List<ComentarioDTO>> listarPorPost(@PathVariable Long postId) {
-        log.info("Listando comentarios del post: {}", postId);
+        log.debug("Listando comentarios del post: {}", postId);
         return ResponseEntity.ok(comentarioService.listarPorPost(postId));
     }
 
-    // Endpoint para crear comentario SOLO CON TEXTO (sin imagen)
     @PostMapping("/post/{postId}")
-    public ResponseEntity<ComentarioDTO> crearComentario(
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> crearComentario(
             @PathVariable Long postId,
             @RequestBody Map<String, String> body) {
-        String contenido = body.get("contenido");
-        log.info("Creando comentario en post: {}, usuario: {}, contenido: {}", postId, usuarioActual.id(), contenido);
-        return ResponseEntity.ok(comentarioService.crearComentario(postId, usuarioActual.id(), contenido));
+
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+
+        String contenido = body != null ? body.get("contenido") : null;
+        if (contenido == null || contenido.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El contenido es obligatorio"));
+        }
+
+        log.info("Creando comentario en post: {}, usuario: {}", postId, usuarioId);
+        return ResponseEntity.ok(comentarioService.crearComentario(postId, usuarioId, contenido));
     }
 
     @DeleteMapping("/{comentarioId}")
-    public ResponseEntity<Void> eliminarComentario(@PathVariable Long comentarioId) {
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> eliminarComentario(@PathVariable Long comentarioId) {
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+
         log.info("Eliminando comentario: {}", comentarioId);
-        comentarioService.eliminarComentario(comentarioId, usuarioActual.id());
-        return ResponseEntity.ok().build();
+        comentarioService.eliminarComentario(comentarioId, usuarioId);
+        return ResponseEntity.ok(Map.of("mensaje", "Comentario eliminado"));
     }
 
     // ========== RESPUESTAS ==========
 
     @GetMapping("/{comentarioId}/respuestas")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<List<RespuestaDTO>> listarRespuestas(@PathVariable Long comentarioId) {
-        log.info("Listando respuestas del comentario: {}", comentarioId);
+        log.debug("Listando respuestas del comentario: {}", comentarioId);
         return ResponseEntity.ok(comentarioService.listarRespuestas(comentarioId));
     }
 
-    // Endpoint para crear respuesta SOLO CON TEXTO (sin imagen)
     @PostMapping("/{comentarioId}/respuestas")
-    public ResponseEntity<RespuestaDTO> crearRespuesta(
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> crearRespuesta(
             @PathVariable Long comentarioId,
             @RequestBody Map<String, String> body) {
-        String contenido = body.get("contenido");
-        log.info("Creando respuesta al comentario: {}, usuario: {}", comentarioId, usuarioActual.id());
-        return ResponseEntity.ok(comentarioService.crearRespuesta(comentarioId, usuarioActual.id(), contenido));
+
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+
+        String contenido = body != null ? body.get("contenido") : null;
+        if (contenido == null || contenido.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El contenido es obligatorio"));
+        }
+
+        log.info("Creando respuesta al comentario: {}, usuario: {}", comentarioId, usuarioId);
+        return ResponseEntity.ok(comentarioService.crearRespuesta(comentarioId, usuarioId, contenido));
     }
 
     @DeleteMapping("/respuestas/{respuestaId}")
-    public ResponseEntity<Void> eliminarRespuesta(@PathVariable Long respuestaId) {
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> eliminarRespuesta(@PathVariable Long respuestaId) {
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+
         log.info("Eliminando respuesta: {}", respuestaId);
-        comentarioService.eliminarRespuesta(respuestaId, usuarioActual.id());
-        return ResponseEntity.ok().build();
+        comentarioService.eliminarRespuesta(respuestaId, usuarioId);
+        return ResponseEntity.ok(Map.of("mensaje", "Respuesta eliminada"));
     }
 
     // ========== REACCIONES ==========
 
     @PostMapping("/{comentarioId}/reaccionar")
-    public ResponseEntity<Map<String, Long>> reaccionarComentario(
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> reaccionarComentario(
             @PathVariable Long comentarioId,
             @RequestBody Map<String, String> body) {
-        String tipo = body.get("tipo");
-        log.info("Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioActual.id());
-        return ResponseEntity.ok(comentarioService.reaccionarComentario(comentarioId, usuarioActual.id(), tipo));
+
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+
+        String tipo = body != null ? body.get("tipo") : null;
+        if (tipo == null || tipo.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El tipo de reaccion es obligatorio"));
+        }
+
+        log.info("Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioId);
+        return ResponseEntity.ok(comentarioService.reaccionarComentario(comentarioId, usuarioId, tipo));
     }
 
     @PostMapping("/respuestas/{respuestaId}/reaccionar")
-    public ResponseEntity<Map<String, Long>> reaccionarRespuesta(
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> reaccionarRespuesta(
             @PathVariable Long respuestaId,
             @RequestBody Map<String, String> body) {
-        String tipo = body.get("tipo");
-        log.info("Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioActual.id());
-        return ResponseEntity.ok(comentarioService.reaccionarRespuesta(respuestaId, usuarioActual.id(), tipo));
+
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+
+        String tipo = body != null ? body.get("tipo") : null;
+        if (tipo == null || tipo.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El tipo de reaccion es obligatorio"));
+        }
+
+        log.info("Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioId);
+        return ResponseEntity.ok(comentarioService.reaccionarRespuesta(respuestaId, usuarioId, tipo));
     }
 }

@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/ReaccionService.java
+// src/main/java/com/kiert/backend/features/reacciones/service/ReaccionService.java
 package com.kiert.backend.features.reacciones.service;
 
 import com.kiert.backend.entity.Reaccion;
@@ -42,12 +42,10 @@ public class ReaccionService {
     private static final String CACHE_USUARIO_REACCIONO_POST = "usuarioReaccionoPost";
     private static final String CACHE_USUARIO_REACCIONO_COMENTARIO = "usuarioReaccionoComentario";
 
-    // Whitelist de tipos de reacción válidos (para posts)
     private static final Set<String> TIPOS_POST = Set.of(
             "like", "love", "haha", "wow", "sad", "angry"
     );
 
-    // Whitelist de tipos de reacción válidos (para comentarios)
     private static final Set<String> TIPOS_COMENTARIO = Set.of(
             "like", "love"
     );
@@ -64,14 +62,13 @@ public class ReaccionService {
             @CacheEvict(value = "post", key = "#postId")
     })
     public Map<String, Long> reaccionarPost(Long usuarioId, Long postId, String tipo) {
-        log.info("Usuario {} reaccionando a post {} con tipo {}", usuarioId, postId, tipo);
+        log.debug("Usuario {} reaccionando a post {} con tipo {}", usuarioId, postId, tipo);
 
-        // Validaciones
         if (usuarioId == null || postId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
         if (tipo == null || !TIPOS_POST.contains(tipo)) {
-            throw new BadRequestException("Tipo de reacción inválido");
+            throw new BadRequestException("Tipo de reaccion invalido");
         }
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
@@ -81,7 +78,7 @@ public class ReaccionService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
         if (post.isEliminado()) {
-            throw new BadRequestException("La publicación ya no está disponible");
+            throw new BadRequestException("La publicacion ya no esta disponible");
         }
 
         Optional<Reaccion> reaccionExistente = reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId);
@@ -91,12 +88,12 @@ public class ReaccionService {
             Reaccion reaccion = reaccionExistente.get();
             if (reaccion.getTipo().equals(tipo)) {
                 reaccionRepository.delete(reaccion);
-                log.info("Reacción eliminada para usuario {} en post {}", usuarioId, postId);
+                log.debug("Reaccion eliminada para usuario {} en post {}", usuarioId, postId);
             } else {
                 reaccion.setTipo(tipo);
                 reaccionRepository.save(reaccion);
                 esNuevaReaccion = true;
-                log.info("Reacción actualizada a {} para usuario {} en post {}", tipo, usuarioId, postId);
+                log.debug("Reaccion actualizada a {} para usuario {} en post {}", tipo, usuarioId, postId);
             }
         } else {
             Reaccion nuevaReaccion = Reaccion.builder()
@@ -106,15 +103,14 @@ public class ReaccionService {
                     .build();
             reaccionRepository.save(nuevaReaccion);
             esNuevaReaccion = true;
-            log.info("Nueva reacción {} creada para usuario {} en post {}", tipo, usuarioId, postId);
+            log.debug("Nueva reaccion {} creada para usuario {} en post {}", tipo, usuarioId, postId);
         }
 
-        // Notificación de like (solo para likes, no para los demás)
         if (esNuevaReaccion && "like".equals(tipo) && !usuarioId.equals(post.getAutor().getId())) {
             try {
                 notificationService.crearNotificacionLike(usuarioId, postId);
             } catch (Exception e) {
-                log.warn("Error creando notificación: {}", e.getMessage());
+                log.warn("Error creando notificacion: {}", e.getMessage());
             }
         }
 
@@ -132,14 +128,13 @@ public class ReaccionService {
             @CacheEvict(value = "comments", allEntries = true)
     })
     public Map<String, Long> reaccionarComentario(Long usuarioId, Long comentarioId, String tipo) {
-        log.info("Usuario {} reaccionando a comentario {} con tipo {}", usuarioId, comentarioId, tipo);
+        log.debug("Usuario {} reaccionando a comentario {} con tipo {}", usuarioId, comentarioId, tipo);
 
-        // Validaciones
         if (usuarioId == null || comentarioId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
         if (tipo == null || !TIPOS_COMENTARIO.contains(tipo)) {
-            throw new BadRequestException("Tipo de reacción inválido");
+            throw new BadRequestException("Tipo de reaccion invalido");
         }
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
@@ -149,7 +144,7 @@ public class ReaccionService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
 
         if (comentario.isEliminado()) {
-            throw new BadRequestException("El comentario ya no está disponible");
+            throw new BadRequestException("El comentario ya no esta disponible");
         }
 
         Optional<Reaccion> reaccionExistente = reaccionRepository
@@ -159,11 +154,11 @@ public class ReaccionService {
             Reaccion reaccion = reaccionExistente.get();
             if (reaccion.getTipo().equals(tipo)) {
                 reaccionRepository.delete(reaccion);
-                log.info("Reacción eliminada para usuario {} en comentario {}", usuarioId, comentarioId);
+                log.debug("Reaccion eliminada para usuario {} en comentario {}", usuarioId, comentarioId);
             } else {
                 reaccion.setTipo(tipo);
                 reaccionRepository.save(reaccion);
-                log.info("Reacción actualizada a {} para usuario {} en comentario {}", tipo, usuarioId, comentarioId);
+                log.debug("Reaccion actualizada a {} para usuario {} en comentario {}", tipo, usuarioId, comentarioId);
             }
         } else {
             Reaccion nuevaReaccion = Reaccion.builder()
@@ -172,7 +167,7 @@ public class ReaccionService {
                     .tipo(tipo)
                     .build();
             reaccionRepository.save(nuevaReaccion);
-            log.info("Nueva reacción {} creada para usuario {} en comentario {}", tipo, usuarioId, comentarioId);
+            log.debug("Nueva reaccion {} creada para usuario {} en comentario {}", tipo, usuarioId, comentarioId);
         }
 
         return calcularReaccionesComentarioDesdeDB(comentarioId);
@@ -191,6 +186,29 @@ public class ReaccionService {
     public Map<String, Long> obtenerReaccionesComentario(Long comentarioId) {
         log.debug("[DB] Calculando reacciones del comentario: {}", comentarioId);
         return calcularReaccionesComentarioDesdeDB(comentarioId);
+    }
+
+    // ============================================================
+    // VERIFICAR SI USUARIO REACCIONO
+    // ============================================================
+    @Cacheable(
+            value = CACHE_USUARIO_REACCIONO_POST,
+            key = "#usuarioId + ':' + #postId"
+    )
+    public boolean usuarioReaccionoPost(Long usuarioId, Long postId) {
+        log.debug("[DB] Verificando si usuario {} reacciono al post {}", usuarioId, postId);
+        if (usuarioId == null || postId == null) return false;
+        return reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId).isPresent();
+    }
+
+    @Cacheable(
+            value = CACHE_USUARIO_REACCIONO_COMENTARIO,
+            key = "#usuarioId + ':' + #comentarioId"
+    )
+    public boolean usuarioReaccionoComentario(Long usuarioId, Long comentarioId) {
+        log.debug("[DB] Verificando si usuario {} reacciono al comentario {}", usuarioId, comentarioId);
+        if (usuarioId == null || comentarioId == null) return false;
+        return reaccionRepository.findByUsuarioIdAndComentarioId(usuarioId, comentarioId).isPresent();
     }
 
     // ============================================================
@@ -236,26 +254,5 @@ public class ReaccionService {
             }
         }
         return reacciones;
-    }
-
-    // ============================================================
-    // VERIFICAR SI USUARIO REACCIONÓ
-    // ============================================================
-    @Cacheable(
-            value = CACHE_USUARIO_REACCIONO_POST,
-            key = "#usuarioId + ':' + #postId"
-    )
-    public boolean usuarioReaccionoPost(Long usuarioId, Long postId) {
-        log.debug("[DB] Verificando si usuario {} reaccionó al post {}", usuarioId, postId);
-        return reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId).isPresent();
-    }
-
-    @Cacheable(
-            value = CACHE_USUARIO_REACCIONO_COMENTARIO,
-            key = "#usuarioId + ':' + #comentarioId"
-    )
-    public boolean usuarioReaccionoComentario(Long usuarioId, Long comentarioId) {
-        log.debug("[DB] Verificando si usuario {} reaccionó al comentario {}", usuarioId, comentarioId);
-        return reaccionRepository.findByUsuarioIdAndComentarioId(usuarioId, comentarioId).isPresent();
     }
 }

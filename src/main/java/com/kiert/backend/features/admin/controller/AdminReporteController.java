@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/controller/AdminReporteController.java
+// src/main/java/com/kiert/backend/features/admin/controller/AdminReporteController.java
 package com.kiert.backend.features.admin.controller;
 
 import com.kiert.backend.features.reporte.dto.ActualizarReporteDTO;
@@ -14,6 +14,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -22,17 +23,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/reportes")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class AdminReporteController {
 
     private final ReporteService reporteService;
     private final UsuarioActual usuarioActual;
 
-    /**
-     * Listar reportes con filtros
-     * GET /api/admin/reportes?estado=PENDIENTE&tipo=POST
-     */
     @GetMapping
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<Page<ReporteDTO>> listarReportes(
             @RequestParam(required = false) String estado,
             @RequestParam(required = false) String tipo,
@@ -40,20 +37,14 @@ public class AdminReporteController {
         return ResponseEntity.ok(reporteService.listarReportes(estado, tipo, pageable));
     }
 
-    /**
-     * Resumen para el dashboard
-     * GET /api/admin/reportes/resumen
-     */
     @GetMapping("/resumen")
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<ReporteResumenDTO> resumen() {
         return ResponseEntity.ok(reporteService.obtenerResumen());
     }
 
-    /**
-     * Actualizar estado de un reporte
-     * PUT /api/admin/reportes/{id}
-     */
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<?> actualizarReporte(
             @PathVariable Long id,
             @RequestBody ActualizarReporteDTO dto) {
@@ -66,9 +57,9 @@ public class AdminReporteController {
             ReporteDTO actualizado = reporteService.actualizarEstado(id, moderadorId, dto);
             return ResponseEntity.ok(actualizado);
         } catch (Exception e) {
-            log.error("Error al actualizar reporte: {}", e.getMessage(), e);
+            log.error("Error al actualizar reporte {}: {}", id, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
+                    .body(Map.of("error", "No se pudo actualizar el reporte"));
         }
     }
 }

@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/RespuestaComentarioRepository.java
+// src/main/java/com/kiert/backend/features/comentarios/repository/RespuestaComentarioRepository.java
 package com.kiert.backend.features.comentarios.repository;
 
 import com.kiert.backend.entity.RespuestaComentario;
@@ -162,14 +162,6 @@ public interface RespuestaComentarioRepository extends JpaRepository<RespuestaCo
             """)
     List<Object[]> topComentariosConMasRespuestas(Pageable pageable);
 
-    // ============================================================
-    // SEGURIDAD: Validar autoría
-    // ============================================================
-
-    /**
-     * NUEVO: Verifica si un usuario es el autor de la respuesta.
-     * Se usa para prevenir que un usuario edite/elimine respuestas ajenas.
-     */
     @Query("""
             SELECT COUNT(r) > 0 FROM RespuestaComentario r
             WHERE r.id = :respuestaId

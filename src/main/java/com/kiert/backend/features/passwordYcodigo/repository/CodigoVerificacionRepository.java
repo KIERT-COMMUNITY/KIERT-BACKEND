@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/CodigoVerificacionRepository.java
+// src/main/java/com/kiert/backend/features/passwordYcodigo/repository/CodigoVerificacionRepository.java
 package com.kiert.backend.features.passwordYcodigo.repository;
 
 import com.kiert.backend.entity.CodigoVerificacion;
@@ -12,26 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface CodigoVerificacionRepository extends JpaRepository<CodigoVerificacion, Long> {
-
-    @Query("""
-            SELECT c FROM CodigoVerificacion c
-            WHERE c.email = :email
-              AND c.codigo = :codigo
-              AND c.tipo = :tipo
-              AND c.usado = false
-              AND c.fechaExpiracion > :ahora
-            ORDER BY c.fechaCreacion DESC
-            """)
-    Optional<CodigoVerificacion> findCodigoVigente(
-            @Param("email") String email,
-            @Param("codigo") String codigo,
-            @Param("tipo") TipoCodigo tipo,
-            @Param("ahora") Instant ahora
-    );
 
     @Modifying
     @Query("""

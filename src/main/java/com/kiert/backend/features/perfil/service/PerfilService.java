@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/PerfilService.java
+// src/main/java/com/kiert/backend/features/perfil/service/PerfilService.java
 package com.kiert.backend.features.perfil.service;
 
 import com.kiert.backend.features.usuario.dto.UsuarioDTO;
@@ -22,12 +22,10 @@ import org.springframework.web.multipart.MultipartFile;
 public class PerfilService {
 
     private static final long MAX_FOTO_PERFIL_BYTES = 5L * 1024 * 1024;
+    private static final String CLOUDINARY_PREFIX = "https://res.cloudinary.com/";
 
     private final UsuarioRepository usuarioRepository;
     private final CloudinaryService cloudinaryService;
-
-    // ❌ ELIMINADO: PersonalizacionRepository (ya no se usa)
-    // ✅ La foto vive SOLO en usuarios.foto_perfil_url
 
     // ============================================================
     // OBTENER PERFIL
@@ -35,14 +33,13 @@ public class PerfilService {
     @Transactional(readOnly = true)
     @Cacheable(value = "perfil", key = "#usuarioId")
     public UsuarioDTO obtenerPerfil(Long usuarioId) {
-        log.info("[DB] Obteniendo perfil del usuario {}", usuarioId);
+        log.debug("[DB] Obteniendo perfil del usuario {}", usuarioId);
         Usuario usuario = buscar(usuarioId);
         return aDTO(usuario);
     }
 
     // ============================================================
     // SUBIR FOTO DE PERFIL
-    // ✅ Solo actualiza usuarios.foto_perfil_url
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -75,17 +72,13 @@ public class PerfilService {
         String urlAnterior = usuario.getFotoPerfilUrl();
 
         try {
-            // ✅ Subir nueva a Cloudinary
-            String urlNueva = cloudinaryService.subirArchivo(archivo, "perfiles");
-            log.info("Foto de perfil subida: {}", urlNueva);
+            String urlNueva = cloudinaryService.subirImagen(archivo, "perfiles");
+            log.info("Foto de perfil subida para usuario {}", usuarioId);
 
-            // ✅ Eliminar foto anterior de Cloudinary
             if (urlAnterior != null && !urlAnterior.isBlank()) {
-                log.info("Eliminando foto anterior de Cloudinary: {}", urlAnterior);
                 cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
             }
 
-            // ✅ Actualizar en usuario (ÚNICA fuente de verdad)
             usuario.setFotoPerfilUrl(urlNueva);
             usuario = usuarioRepository.save(usuario);
 
@@ -94,7 +87,7 @@ public class PerfilService {
         } catch (BadRequestException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.error("Error al subir foto de perfil: {}", ex.getMessage(), ex);
+            log.error("Error al subir foto de perfil para usuario {}: {}", usuarioId, ex.getMessage());
             throw new BadRequestException("No se pudo subir la imagen. Intenta nuevamente.");
         }
     }
@@ -117,18 +110,24 @@ public class PerfilService {
             @CacheEvict(value = "gruposUsuario", allEntries = true)
     })
     public UsuarioDTO actualizarFotoPerfil(Long usuarioId, String urlFoto) {
-        log.info("Actualizando foto de perfil del usuario {}: {}", usuarioId, urlFoto);
+        log.info("Actualizando foto de perfil del usuario {}", usuarioId);
+
+        if (urlFoto == null || urlFoto.isBlank()) {
+            throw new BadRequestException("URL de foto requerida");
+        }
+
+        // SEGURIDAD: solo URLs de Cloudinary
+        if (!urlFoto.startsWith(CLOUDINARY_PREFIX)) {
+            throw new BadRequestException("La URL de la foto no es valida");
+        }
 
         Usuario usuario = buscar(usuarioId);
         String urlAnterior = usuario.getFotoPerfilUrl();
 
-        // ✅ Eliminar la anterior de Cloudinary si cambia
         if (urlAnterior != null && !urlAnterior.isBlank() && !urlAnterior.equals(urlFoto)) {
-            log.info("Eliminando foto anterior de Cloudinary: {}", urlAnterior);
             cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
         }
 
-        // ✅ Actualizar en usuario (ÚNICA fuente de verdad)
         usuario.setFotoPerfilUrl(urlFoto);
         usuario = usuarioRepository.save(usuario);
 
@@ -136,8 +135,7 @@ public class PerfilService {
     }
 
     // ============================================================
-    // ✅ ELIMINAR FOTO DE PERFIL
-    // ✅ Solo actualiza usuarios.foto_perfil_url = null
+    // ELIMINAR FOTO DE PERFIL
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -160,34 +158,34 @@ public class PerfilService {
         String urlAnterior = usuario.getFotoPerfilUrl();
 
         if (urlAnterior == null || urlAnterior.isBlank()) {
-            log.warn("El usuario {} no tiene foto de perfil", usuarioId);
+            log.debug("El usuario {} no tiene foto de perfil", usuarioId);
             return aDTO(usuario);
         }
 
-        // ✅ Eliminar de Cloudinary
-        log.info("Eliminando foto de Cloudinary: {}", urlAnterior);
         cloudinaryService.eliminarArchivoPorUrl(urlAnterior);
 
-        // ✅ Poner null en usuario (ÚNICA fuente de verdad)
         usuario.setFotoPerfilUrl(null);
         usuario = usuarioRepository.save(usuario);
 
-        log.info("✅ Foto de perfil eliminada para el usuario {}", usuarioId);
+        log.info("Foto de perfil eliminada para el usuario {}", usuarioId);
         return aDTO(usuario);
     }
 
     // ============================================================
-    // LIMPIAR CACHÉ
+    // LIMPIAR CACHE
     // ============================================================
     @CacheEvict(value = "perfil", key = "#usuarioId")
     public void eliminarCachePerfil(Long usuarioId) {
-        log.info("Eliminando caché del usuario {}", usuarioId);
+        log.debug("Eliminando cache del usuario {}", usuarioId);
     }
 
     // ============================================================
     // HELPERS
     // ============================================================
     private Usuario buscar(Long usuarioId) {
+        if (usuarioId == null) {
+            throw new BadRequestException("Usuario requerido");
+        }
         return usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado."));
     }

@@ -1,9 +1,10 @@
-// src/main/java/com/kiert/backend/service/ReporteService.java
+// src/main/java/com/kiert/backend/features/reporte/service/ReporteService.java
 package com.kiert.backend.features.reporte.service;
 
 import com.kiert.backend.entity.*;
 import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
+import com.kiert.backend.features.auth.service.RateLimitService;
 import com.kiert.backend.features.comentarios.repository.ComentarioRepository;
 import com.kiert.backend.features.comentarios.repository.RespuestaComentarioRepository;
 import com.kiert.backend.features.post.repository.PostRepository;
@@ -24,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -38,6 +40,7 @@ public class ReporteService {
     private final ComentarioRepository comentarioRepository;
     private final RespuestaComentarioRepository respuestaRepository;
     private final NotificacionService notificacionService;
+    private final RateLimitService rateLimitService;
 
     private static final String CACHE_RESUMEN_REPORTES = "resumenReportes";
     private static final String CACHE_MIS_REPORTES = "misReportes";
@@ -61,6 +64,7 @@ public class ReporteService {
 
     private static final int MAX_DESCRIPCION = 1000;
     private static final int MAX_NOTA = 1000;
+    private static final int MAX_REPORTES_POR_HORA = 20;
 
     // ============================================================
     // CREAR REPORTE
@@ -74,27 +78,33 @@ public class ReporteService {
         log.info("Creando reporte tipo={} motivo={} por usuario={}",
                 dto.tipoReporte(), dto.motivo(), usuarioReportanteId);
 
-        // Validaciones
         if (usuarioReportanteId == null || dto == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
+
+        // Rate limiting: maximo N reportes por hora por usuario
+        rateLimitService.verificar(
+                "reportes:usuario:" + usuarioReportanteId,
+                MAX_REPORTES_POR_HORA,
+                Duration.ofHours(1)
+        );
+
         if (dto.tipoReporte() == null || !TIPOS_VALIDOS.contains(dto.tipoReporte())) {
-            throw new BadRequestException("Tipo de reporte inválido");
+            throw new BadRequestException("Tipo de reporte invalido");
         }
         if (dto.motivo() == null || !MOTIVOS_VALIDOS.contains(dto.motivo())) {
-            throw new BadRequestException("Motivo inválido");
+            throw new BadRequestException("Motivo invalido");
         }
         if (dto.descripcion() == null || dto.descripcion().trim().length() < 10) {
-            throw new BadRequestException("La descripción debe tener al menos 10 caracteres");
+            throw new BadRequestException("La descripcion debe tener al menos 10 caracteres");
         }
         if (dto.descripcion().length() > MAX_DESCRIPCION) {
-            throw new BadRequestException("La descripción es demasiado larga");
+            throw new BadRequestException("La descripcion es demasiado larga");
         }
 
         Usuario reportante = usuarioRepository.findById(usuarioReportanteId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        // Validar duplicados según el tipo (usando los métodos existentes del repository)
         boolean yaReportado = switch (dto.tipoReporte()) {
             case "POST" -> dto.postId() != null &&
                     reporteRepository.existeReporteDePost(usuarioReportanteId, dto.postId());
@@ -158,7 +168,6 @@ public class ReporteService {
 
         reporte = reporteRepository.save(reporte);
 
-        // Notificar a moderadores
         try {
             notificacionService.notificarNuevoReporteAModeradores(
                     reportante,
@@ -168,14 +177,14 @@ public class ReporteService {
                     reporte.getId()
             );
         } catch (Exception e) {
-            log.error("[NOTIF] Error al notificar a moderadores: {}", e.getMessage());
+            log.warn("[NOTIF] Error al notificar a moderadores: {}", e.getMessage());
         }
 
         return mapearADTO(reporte);
     }
 
     // ============================================================
-    // LISTAR REPORTES
+    // LISTAR REPORTES (solo moderadores)
     // ============================================================
     @Transactional(readOnly = true)
     public Page<ReporteDTO> listarReportes(String estado, String tipo, Pageable pageable) {
@@ -189,13 +198,13 @@ public class ReporteService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_MIS_REPORTES, key = "'usuario:' + #usuarioId")
     public List<ReporteDTO> listarMisReportes(Long usuarioId) {
-        log.info("[DB] Listando reportes del usuario: {}", usuarioId);
+        log.debug("[DB] Listando reportes del usuario: {}", usuarioId);
         return reporteRepository.findByUsuarioReportanteIdOrderByFechaCreacionDesc(usuarioId)
                 .stream().map(this::mapearADTO).toList();
     }
 
     // ============================================================
-    // ACTUALIZAR ESTADO
+    // ACTUALIZAR ESTADO (solo moderadores)
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -203,15 +212,14 @@ public class ReporteService {
             @CacheEvict(value = CACHE_MIS_REPORTES, allEntries = true)
     })
     public ReporteDTO actualizarEstado(Long reporteId, Long moderadorId, ActualizarReporteDTO dto) {
-        // Validaciones
         if (reporteId == null || moderadorId == null || dto == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
         if (dto.estado() == null || !ESTADOS_VALIDOS.contains(dto.estado())) {
-            throw new BadRequestException("Estado inválido");
+            throw new BadRequestException("Estado invalido");
         }
         if (dto.accionTomada() != null && !ACCIONES_VALIDAS.contains(dto.accionTomada())) {
-            throw new BadRequestException("Acción inválida");
+            throw new BadRequestException("Accion invalida");
         }
         if (dto.notaModerador() != null && dto.notaModerador().length() > MAX_NOTA) {
             throw new BadRequestException("La nota es demasiado larga");
@@ -220,11 +228,10 @@ public class ReporteService {
         Reporte reporte = reporteRepository.findById(reporteId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Reporte no encontrado"));
 
-        // Validar que el moderador sea válido
         Usuario moderador = usuarioRepository.findById(moderadorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Moderador no encontrado"));
 
-        if (!usuarioRepository.esAdministrador(moderadorId)) {
+        if (!reporteRepository.esModeradorValido(moderadorId)) {
             throw new SecurityException("No tienes permisos de moderador");
         }
 
@@ -238,12 +245,10 @@ public class ReporteService {
 
         reporte = reporteRepository.save(reporte);
 
-        // Notificaciones
         boolean estadoFinal = "RESUELTO".equals(dto.estado()) || "RECHAZADO".equals(dto.estado());
         boolean cambioEstado = !dto.estado().equals(estadoAnterior);
 
         if (estadoFinal && cambioEstado) {
-            // Notificar al reportante
             try {
                 notificacionService.notificarResultadoAlReportante(
                         reporte.getUsuarioReportante(),
@@ -255,10 +260,9 @@ public class ReporteService {
                         dto.accionTomada()
                 );
             } catch (Exception e) {
-                log.error("[NOTIF] Error al notificar reportante: {}", e.getMessage());
+                log.warn("[NOTIF] Error al notificar reportante: {}", e.getMessage());
             }
 
-            // Notificar al usuario reportado
             try {
                 if (reporte.getUsuarioReportado() != null
                         && dto.accionTomada() != null
@@ -274,7 +278,7 @@ public class ReporteService {
                     );
                 }
             } catch (Exception e) {
-                log.error("[NOTIF] Error al notificar usuario reportado: {}", e.getMessage());
+                log.warn("[NOTIF] Error al notificar usuario reportado: {}", e.getMessage());
             }
         }
 

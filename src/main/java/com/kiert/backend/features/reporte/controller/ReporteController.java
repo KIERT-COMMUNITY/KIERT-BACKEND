@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/features/reporte/controller/ReporteController.java
 package com.kiert.backend.features.reporte.controller;
 
 import com.kiert.backend.features.reporte.dto.ActualizarReporteDTO;
@@ -15,6 +16,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,50 +26,54 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/reportes")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class ReporteController {
 
     private final ReporteService reporteService;
     private final UsuarioActual usuarioActual;
 
-    /**
-     * Crear un nuevo reporte
-     * POST /api/reportes
-     */
+    // ============================================================
+    // CREAR REPORTE
+    // ============================================================
     @PostMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> crearReporte(
-            @RequestBody CrearReporteDTO dto,
+            @RequestBody(required = false) CrearReporteDTO dto,
             HttpServletRequest request) {
-        try {
-            Long usuarioId = usuarioActual.id();
-            if (usuarioId == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(Map.of("error", "Usuario no autenticado"));
-            }
 
-            String ip = obtenerIpCliente(request);
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+        if (dto == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Datos del reporte requeridos"));
+        }
+
+        try {
+            String ip = request.getRemoteAddr();
             ReporteDTO reporte = reporteService.crearReporte(usuarioId, dto, ip);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
-                    "mensaje", "Reporte enviado correctamente. Nuestro equipo lo revisará.",
+                    "mensaje", "Reporte enviado correctamente. Nuestro equipo lo revisara.",
                     "reporte", reporte
             ));
 
         } catch (IllegalArgumentException | IllegalStateException e) {
-            log.warn(" Error de validación al crear reporte: {}", e.getMessage());
+            log.warn("Error de validacion al crear reporte por usuario {}: {}", usuarioId, e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("Error al crear reporte: {}", e.getMessage(), e);
+            log.warn("Error al crear reporte por usuario {}: {}", usuarioId, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Error al procesar el reporte"));
+                    .body(Map.of("error", "No se pudo procesar el reporte"));
         }
     }
 
-    /**
-     * Listar todos los reportes (solo moderadores)
-     * GET /api/reportes?estado=PENDIENTE&tipo=POST
-     */
+    // ============================================================
+    // LISTAR REPORTES (solo moderadores)
+    // ============================================================
     @GetMapping
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<Page<ReporteDTO>> listarReportes(
             @RequestParam(required = false) String estado,
             @RequestParam(required = false) String tipo,
@@ -75,56 +81,59 @@ public class ReporteController {
         return ResponseEntity.ok(reporteService.listarReportes(estado, tipo, pageable));
     }
 
-    /**
-     * Ver mis reportes enviados
-     * GET /api/reportes/mis-reportes
-     */
+    // ============================================================
+    // MIS REPORTES
+    // ============================================================
     @GetMapping("/mis-reportes")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> misReportes() {
         Long usuarioId = usuarioActual.id();
         if (usuarioId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
         }
         List<ReporteDTO> reportes = reporteService.listarMisReportes(usuarioId);
         return ResponseEntity.ok(reportes);
     }
 
-    /**
-     * Actualizar estado de un reporte (moderador)
-     * PUT /api/reportes/{id}
-     */
+    // ============================================================
+    // ACTUALIZAR ESTADO (solo moderadores)
+    // ============================================================
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<?> actualizarReporte(
             @PathVariable Long id,
-            @RequestBody ActualizarReporteDTO dto) {
+            @RequestBody(required = false) ActualizarReporteDTO dto) {
+
+        Long moderadorId = usuarioActual.id();
+        if (moderadorId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Usuario no autenticado"));
+        }
+        if (dto == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Datos de actualizacion requeridos"));
+        }
+
         try {
-            Long moderadorId = usuarioActual.id();
-            if (moderadorId == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-            }
             ReporteDTO actualizado = reporteService.actualizarEstado(id, moderadorId, dto);
             return ResponseEntity.ok(actualizado);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "No tienes permisos de moderador"));
         } catch (Exception e) {
-            log.error("Error al actualizar reporte: {}", e.getMessage());
+            log.warn("Error al actualizar reporte {} por moderador {}: {}", id, moderadorId, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
+                    .body(Map.of("error", "No se pudo actualizar el reporte"));
         }
     }
 
-    /**
-     * Resumen de reportes para dashboard
-     * GET /api/reportes/resumen
-     */
+    // ============================================================
+    // RESUMEN (solo moderadores)
+    // ============================================================
     @GetMapping("/resumen")
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<ReporteResumenDTO> resumen() {
         return ResponseEntity.ok(reporteService.obtenerResumen());
-    }
-
-    private String obtenerIpCliente(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

@@ -11,6 +11,7 @@ import com.kiert.backend.features.comentarios.dto.ComentarioDTO;
 import com.kiert.backend.features.post.dto.PostDTO;
 import com.kiert.backend.features.reacciones.dto.ReaccionesDTO;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -42,11 +43,12 @@ public class PostMapper {
         long comentarios;
         if (totalComentarios != null) {
             comentarios = totalComentarios;
-        } else if (post.getComentarios() != null) {
+        } else if (Hibernate.isInitialized(post.getComentarios()) && post.getComentarios() != null) {
             comentarios = post.getComentarios().stream()
                     .filter(c -> !c.isEliminado())
                     .count();
         } else {
+            // Si la coleccion no esta inicializada, no forzamos carga (evita N+1 y LazyInitializationException)
             comentarios = 0;
         }
 
@@ -72,7 +74,7 @@ public class PostMapper {
     private AutorResumenDTO autorAnonimo() {
         return new AutorResumenDTO(
                 null,
-                "Anónimo",
+                "Anonimo",
                 null,
                 "none"
         );
@@ -105,9 +107,13 @@ public class PostMapper {
         long loves = 0;
 
         if (reaccionesExternas != null) {
-            likes = reaccionesExternas.getOrDefault("like", 0L);
-            loves = reaccionesExternas.getOrDefault("love", 0L);
-        } else if (comentario.getReacciones() != null) {
+            // Acepta tanto "likes"/"loves" (plural, como los devuelve el servicio)
+            // como "like"/"love" (singular, por compatibilidad)
+            likes = reaccionesExternas.getOrDefault("likes",
+                    reaccionesExternas.getOrDefault("like", 0L));
+            loves = reaccionesExternas.getOrDefault("loves",
+                    reaccionesExternas.getOrDefault("love", 0L));
+        } else if (Hibernate.isInitialized(comentario.getReacciones()) && comentario.getReacciones() != null) {
             for (var r : comentario.getReacciones()) {
                 if ("like".equals(r.getTipo())) likes++;
                 else if ("love".equals(r.getTipo())) loves++;
@@ -130,7 +136,8 @@ public class PostMapper {
         String marcoId = "none";
 
         try {
-            if (usuario.getPersonalizacion() != null) {
+            if (Hibernate.isInitialized(usuario.getPersonalizacion())
+                    && usuario.getPersonalizacion() != null) {
                 marcoId = usuario.getPersonalizacion().getMarcoId();
             }
         } catch (Exception e) {

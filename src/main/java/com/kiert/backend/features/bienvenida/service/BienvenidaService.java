@@ -1,8 +1,10 @@
+// src/main/java/com/kiert/backend/features/bienvenida/service/BienvenidaService.java
 package com.kiert.backend.features.bienvenida.service;
 
 import com.kiert.backend.entity.ConfiguracionBienvenida;
 import com.kiert.backend.entity.HistorialBienvenida;
 import com.kiert.backend.entity.Usuario;
+import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.features.bienvenida.dto.BienvenidaDTO;
 import com.kiert.backend.features.bienvenida.dto.HistorialBienvenidaDTO;
@@ -26,18 +28,17 @@ import java.util.List;
 public class BienvenidaService {
 
     private static final Long ID_UNICO = 1L;
+    private static final int TITULO_MAX_LENGTH = 200;
+    private static final int CONTENIDO_MAX_LENGTH = 10000;
 
     private final ConfiguracionBienvenidaRepository configRepo;
     private final HistorialBienvenidaRepository historialRepo;
     private final UsuarioRepository usuarioRepo;
 
-    // ============================================================
-    // OBTENER (lectura pública)
-    // ============================================================
     @Transactional(readOnly = true)
     public BienvenidaDTO obtener() {
         ConfiguracionBienvenida config = configRepo.findById(ID_UNICO)
-                .orElseThrow(() -> new RecursoNoEncontradoException("Configuración de bienvenida no encontrada"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Configuracion de bienvenida no encontrada"));
 
         return new BienvenidaDTO(
                 config.getTitulo(),
@@ -50,11 +51,10 @@ public class BienvenidaService {
         );
     }
 
-    // ============================================================
-    // ACTUALIZAR (solo admin) + guardar historial
-    // ============================================================
     @Transactional
     public BienvenidaDTO actualizar(Long adminId, String titulo, String contenido, String ip) {
+        validarTituloYContenido(titulo, contenido);
+
         Usuario admin = usuarioRepo.findById(adminId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Admin no encontrado"));
 
@@ -68,18 +68,15 @@ public class BienvenidaService {
                         .fechaActualizacion(Instant.now())
                         .build());
 
-        // Guardar valores anteriores para el historial
         String tituloAnterior = config.getTitulo();
         String contenidoAnterior = config.getContenido();
 
-        // Actualizar
         config.setTitulo(titulo.trim());
         config.setContenido(contenido.trim());
         config.setActualizadoPor(admin);
         config.setFechaActualizacion(Instant.now());
         configRepo.save(config);
 
-        // Guardar historial
         HistorialBienvenida historial = HistorialBienvenida.builder()
                 .tituloAnterior(tituloAnterior)
                 .contenidoAnterior(contenidoAnterior)
@@ -102,9 +99,6 @@ public class BienvenidaService {
         );
     }
 
-    // ============================================================
-    // HISTORIAL (solo admin)
-    // ============================================================
     @Transactional(readOnly = true)
     public List<HistorialBienvenidaDTO> listarHistorial(int page, int size) {
         Page<HistorialBienvenida> pageResult = historialRepo.findAllByOrderByFechaCambioDesc(
@@ -123,5 +117,20 @@ public class BienvenidaService {
                         h.getIpCambio()
                 ))
                 .toList();
+    }
+
+    private void validarTituloYContenido(String titulo, String contenido) {
+        if (titulo == null || titulo.isBlank()) {
+            throw new BadRequestException("El titulo es obligatorio");
+        }
+        if (contenido == null || contenido.isBlank()) {
+            throw new BadRequestException("El contenido es obligatorio");
+        }
+        if (titulo.length() > TITULO_MAX_LENGTH) {
+            throw new BadRequestException("El titulo no debe exceder " + TITULO_MAX_LENGTH + " caracteres");
+        }
+        if (contenido.length() > CONTENIDO_MAX_LENGTH) {
+            throw new BadRequestException("El contenido no debe exceder " + CONTENIDO_MAX_LENGTH + " caracteres");
+        }
     }
 }

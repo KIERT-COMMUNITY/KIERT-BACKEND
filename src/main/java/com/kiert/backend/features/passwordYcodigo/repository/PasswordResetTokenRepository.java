@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/PasswordResetTokenRepository.java
+// src/main/java/com/kiert/backend/features/passwordYcodigo/repository/PasswordResetTokenRepository.java
 package com.kiert.backend.features.passwordYcodigo.repository;
 
 import com.kiert.backend.entity.PasswordResetToken;

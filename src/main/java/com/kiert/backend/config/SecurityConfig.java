@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/config/SecurityConfig.java
 package com.kiert.backend.config;
 
 import com.kiert.backend.security.JwtAuthFilter;
@@ -28,6 +29,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final CorsProperties corsProperties;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -36,124 +38,109 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // ============================================================
-                        // SWAGGER / DOCS
-                        // ============================================================
+                        // Swagger / docs
                         .requestMatchers(
                                 "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**",
                                 "/v3/api-docs/**", "/api-docs/**", "/webjars/**"
                         ).permitAll()
 
-                        // ============================================================
-                        // AUTH
-                        // ============================================================
-                        .requestMatchers("/api/auth/**").permitAll()
+                        // Auth: endpoints publicos enumerados explicitamente
+                        .requestMatchers(
+                                "/api/auth/login",
+                                "/api/auth/registro",
+                                "/api/auth/verificar-cuenta",
+                                "/api/auth/reenviar-codigo",
+                                "/api/auth/recuperar",
+                                "/api/auth/verificar-codigo-recuperacion",
+                                "/api/auth/reset-password",
+                                "/api/auth/reset-password-token"
+                        ).permitAll()
+                        .requestMatchers("/api/auth/**").authenticated()
                         .requestMatchers("/api/admin/auth/login").permitAll()
 
-                        // ============================================================
-                        // PRESENCIA
-                        // ============================================================
-                        .requestMatchers("/api/presencia/**").hasAnyRole("USER", "CEO", "ADMIN", "MODERADOR")
+                        // Presencia
+                        .requestMatchers("/api/presencia/**")
+                        .hasAnyRole("USER", "CEO", "ADMIN", "MODERADOR")
 
-                        // ============================================================
-                        // GRUPOS - INVITACIONES / ARCHIVOS / WEBSOCKET
-                        // ============================================================
+                        // Grupos / archivos / WS
                         .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/grupos/invitacion/*/unirse").authenticated()
-                        .requestMatchers("/api/archivos/**").permitAll()
+                        .requestMatchers("/api/archivos/**").authenticated()
                         .requestMatchers("/ws", "/ws/**").permitAll()
 
-                        // ============================================================
-                        // BIENVENIDA
-                        // ============================================================
-                        // Lectura publica (invitados incluidos)
+                        // Bienvenida
                         .requestMatchers(HttpMethod.GET, "/api/bienvenida/**").permitAll()
-
-                        // Gestion (solo admin)
                         .requestMatchers(HttpMethod.GET,    "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
                         .requestMatchers(HttpMethod.PUT,    "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
                         .requestMatchers(HttpMethod.POST,   "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
                         .requestMatchers(HttpMethod.DELETE, "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
 
-                        // ============================================================
-                        // BIBLIOTECA
-                        // ============================================================
+                        // Biblioteca
                         .requestMatchers(HttpMethod.GET,    "/api/biblioteca/**").permitAll()
                         .requestMatchers(HttpMethod.POST,   "/api/biblioteca/**").authenticated()
                         .requestMatchers(HttpMethod.PUT,    "/api/biblioteca/**").authenticated()
                         .requestMatchers(HttpMethod.PATCH,  "/api/biblioteca/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/biblioteca/**").authenticated()
 
-                        // ============================================================
-                        // PUBLICACIONES
-                        // ============================================================
+                        // Publicaciones
                         .requestMatchers(HttpMethod.GET,    "/api/publicaciones/**").permitAll()
                         .requestMatchers(HttpMethod.POST,   "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.PUT,    "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.PATCH,  "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/publicaciones/**").authenticated()
 
-                        // ============================================================
-                        // COMENTARIOS
-                        // ============================================================
+                        // Comentarios
                         .requestMatchers(HttpMethod.GET,    "/api/comentarios/**").permitAll()
                         .requestMatchers(HttpMethod.POST,   "/api/comentarios/**").authenticated()
                         .requestMatchers(HttpMethod.PUT,    "/api/comentarios/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/comentarios/**").authenticated()
 
-                        // ============================================================
-                        // REACCIONES
-                        // ============================================================
+                        // Reacciones
                         .requestMatchers(HttpMethod.GET,  "/api/reacciones/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/reacciones/**").authenticated()
 
-                        // ============================================================
-                        // ANUNCIOS (solo lectura publica, escritura denegada)
-                        // ============================================================
+                        // Anuncios publicos (solo lectura)
                         .requestMatchers(HttpMethod.GET,    "/api/anuncios/**").permitAll()
                         .requestMatchers(HttpMethod.POST,   "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.PUT,    "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.PATCH,  "/api/anuncios/**").denyAll()
 
-                        // ============================================================
-                        // ADMIN (bloque general, cubre /api/admin/** que no sea auth)
-                        // ============================================================
+                        // Admin (bloque general)
                         .requestMatchers("/api/admin/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
 
-                        // ============================================================
-                        // CHAT GLOBAL (compatibilidad)
-                        // ============================================================
+                        // Chat global
                         .requestMatchers(HttpMethod.GET,  "/api/chat-global/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/chat-global/**").authenticated()
 
-                        // ============================================================
-                        // CHAT PRIVADO / GRUPOS
-                        // ============================================================
+                        // Chat privado / grupos
                         .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/grupos/**").authenticated()
 
-                        // ============================================================
-                        // USUARIOS / CONTACTOS
-                        // ============================================================
+                        // Usuarios / contactos
                         .requestMatchers("/api/usuarios/solicitud/**").authenticated()
                         .requestMatchers("/api/usuarios/contactos").authenticated()
                         .requestMatchers("/api/usuarios/solicitudes/pendientes").authenticated()
 
-                        // ============================================================
-                        // PERSONALIZACION / NOTIFICACIONES / BLOQUEOS / REPORTES / PERFIL / STICKERS / USUARIOS
-                        // ============================================================
+                        // Reportes: lectura y actualizacion solo moderadores
+                        .requestMatchers(HttpMethod.GET, "/api/reportes").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/reportes/resumen").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/reportes/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.POST, "/api/reportes").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/reportes/mis-reportes").authenticated()
+                        .requestMatchers("/api/reportes/**").authenticated()
+
+                        // Stickers: publicos sin auth, resto autenticado
+                        .requestMatchers(HttpMethod.GET, "/api/stickers/publicos").permitAll()
+                        .requestMatchers("/api/stickers/**").authenticated()
+
+                        // Resto autenticado
                         .requestMatchers("/api/personalizacion/**").authenticated()
                         .requestMatchers("/api/notificaciones/**").authenticated()
                         .requestMatchers("/api/bloqueos/**").authenticated()
-                        .requestMatchers("/api/reportes/**").authenticated()
                         .requestMatchers("/api/perfil/**").authenticated()
-                        .requestMatchers("/api/stickers/**").authenticated()
                         .requestMatchers("/api/usuarios/**").authenticated()
 
-                        // ============================================================
-                        // TODO LO DEMAS requiere autenticacion
-                        // ============================================================
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
@@ -164,17 +151,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:4200",
-                "http://localhost:53334",
-                "http://localhost:8080",
-                "http://127.0.0.1:4200",
-                "https://kiert-community.vercel.app"
-        ));
-
+        configuration.setAllowedOrigins(corsProperties.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"
+        ));
         configuration.setExposedHeaders(List.of(
                 "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"
         ));

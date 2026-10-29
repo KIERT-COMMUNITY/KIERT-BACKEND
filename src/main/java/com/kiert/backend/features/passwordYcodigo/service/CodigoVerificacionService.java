@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/CodigoVerificacionService.java
+// src/main/java/com/kiert/backend/features/passwordYcodigo/service/CodigoVerificacionService.java
 package com.kiert.backend.features.passwordYcodigo.service;
 
 import com.kiert.backend.entity.CodigoVerificacion;
@@ -8,12 +8,14 @@ import com.kiert.backend.features.passwordYcodigo.repository.CodigoVerificacionR
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -22,17 +24,14 @@ public class CodigoVerificacionService {
 
     private final CodigoVerificacionRepository codigoRepository;
     private final RedisTemplate<String, Object> redis;
+    private final PasswordEncoder passwordEncoder;
 
-    private static final SecureRandom random = new SecureRandom();
+    private static final SecureRandom RANDOM = new SecureRandom();
 
-    // ============================================================
-    // CLAVES REDIS PARA RATE LIMITING
-    // ============================================================
     private static final String KEY_GENERAR_POR_EMAIL = "ratelimit:codigo:gen:email:";
     private static final String KEY_GENERAR_POR_IP = "ratelimit:codigo:gen:ip:";
     private static final String KEY_INTENTOS_VALIDAR = "ratelimit:codigo:val:email:";
 
-    // Límites
     private static final int MAX_GENERACIONES_POR_EMAIL = 3;
     private static final Duration VENTANA_EMAIL = Duration.ofHours(1);
 
@@ -43,7 +42,7 @@ public class CodigoVerificacionService {
     private static final Duration VENTANA_VALIDACION = Duration.ofMinutes(15);
 
     // ============================================================
-    // GENERAR CÓDIGO
+    // GENERAR CODIGO
     // ============================================================
     @Transactional
     public String generarCodigo(String email, TipoCodigo tipo) {
@@ -56,42 +55,39 @@ public class CodigoVerificacionService {
             throw new BadRequestException("Email requerido");
         }
         if (tipo == null) {
-            throw new BadRequestException("Tipo de código requerido");
+            throw new BadRequestException("Tipo de codigo requerido");
         }
 
-        // 1. Rate limiting por email
         verificarLimiteGeneracion(email);
 
-        // 2. Rate limiting por IP
         if (ipCliente != null && !ipCliente.isBlank()) {
             verificarLimiteGeneracionPorIp(ipCliente);
         }
 
-        // 3. Invalidar códigos anteriores
         codigoRepository.invalidarCodigosAnteriores(email, tipo, Instant.now());
 
-        // 4. Generar código
-        String codigo = String.format("%06d", random.nextInt(1_000_000));
+        String codigo = String.format("%06d", RANDOM.nextInt(1_000_000));
+
+        // SEGURIDAD: hashear el codigo antes de guardarlo.
+        // El codigo en claro solo viaja al email del usuario.
+        String codigoHash = passwordEncoder.encode(codigo);
 
         CodigoVerificacion entity = CodigoVerificacion.builder()
                 .email(email)
-                .codigo(codigo)
+                .codigo(codigoHash)
                 .tipo(tipo)
                 .build();
 
         codigoRepository.save(entity);
 
-        // 5. Incrementar contadores Redis
         incrementarContador(KEY_GENERAR_POR_EMAIL + email, VENTANA_EMAIL);
         if (ipCliente != null && !ipCliente.isBlank()) {
             incrementarContador(KEY_GENERAR_POR_IP + ipCliente, VENTANA_IP);
         }
 
-        // 6. Resetear intentos de validación (nuevo código = nueva ventana)
         redis.delete(KEY_INTENTOS_VALIDAR + email);
 
-        // ⚠️ NUNCA loguear el código en claro. Solo el hecho de que se generó.
-        log.info("Código generado para {} ({})", enmascararEmail(email), tipo);
+        log.info("Codigo generado para {} ({})", enmascararEmail(email), tipo);
         return codigo;
     }
 
@@ -101,37 +97,41 @@ public class CodigoVerificacionService {
     @Transactional
     public void validarYConsumir(String email, String codigo, TipoCodigo tipo) {
         if (email == null || email.isBlank() || codigo == null || codigo.isBlank() || tipo == null) {
-            throw new BadRequestException("Código incorrecto o expirado");
+            throw new BadRequestException("Codigo incorrecto o expirado");
         }
 
-        // 1. Rate limiting por intentos
         verificarLimiteIntentosValidacion(email);
 
-        // 2. Buscar código en MySQL
-        CodigoVerificacion entity = codigoRepository
-                .findCodigoVigente(email, codigo, tipo, Instant.now())
-                .orElse(null);
+        // SEGURIDAD: no se puede buscar por codigo en claro porque esta hasheado.
+        // Se traen los codigos vigentes del email+tipo y se compara con BCrypt.
+        var vigentes = codigoRepository.findCodigosVigentes(email, tipo, Instant.now());
+
+        CodigoVerificacion entity = null;
+        for (CodigoVerificacion c : vigentes) {
+            if (passwordEncoder.matches(codigo, c.getCodigo())) {
+                entity = c;
+                break;
+            }
+        }
 
         if (entity == null) {
             incrementarContador(KEY_INTENTOS_VALIDAR + email, VENTANA_VALIDACION);
-            throw new BadRequestException("Código incorrecto o expirado");
+            throw new BadRequestException("Codigo incorrecto o expirado");
         }
 
         entity.setUsado(true);
         entity.setFechaUso(Instant.now());
         codigoRepository.save(entity);
 
-        // 3. Limpiar contador
         redis.delete(KEY_INTENTOS_VALIDAR + email);
 
-        log.info("Código validado y consumido para {} ({})",
+        log.info("Codigo validado y consumido para {} ({})",
                 enmascararEmail(email), tipo);
     }
 
     // ============================================================
-    // HELPERS DE RATE LIMITING
+    // RATE LIMITING
     // ============================================================
-
     private void verificarLimiteGeneracion(String email) {
         String key = KEY_GENERAR_POR_EMAIL + email;
         Object valor = redis.opsForValue().get(key);
@@ -142,7 +142,7 @@ public class CodigoVerificacionService {
                 Long ttl = redis.getExpire(key);
                 long minutos = ttl != null && ttl > 0 ? (ttl + 59) / 60 : 0;
                 throw new BadRequestException(
-                        "Has solicitado demasiados códigos. Intenta de nuevo en " + minutos + " minutos."
+                        "Has solicitado demasiados codigos. Intenta de nuevo en " + minutos + " minutos."
                 );
             }
         }
@@ -158,7 +158,7 @@ public class CodigoVerificacionService {
                 Long ttl = redis.getExpire(key);
                 long minutos = ttl != null && ttl > 0 ? (ttl + 59) / 60 : 0;
                 throw new BadRequestException(
-                        "Demasiadas solicitudes desde tu conexión. Intenta de nuevo en " + minutos + " minutos."
+                        "Demasiadas solicitudes desde tu conexion. Intenta de nuevo en " + minutos + " minutos."
                 );
             }
         }
@@ -187,7 +187,7 @@ public class CodigoVerificacionService {
                 redis.expire(key, ttl);
             }
         } catch (Exception e) {
-            log.error("Error incrementando contador Redis: {}", e.getMessage());
+            log.warn("Error incrementando contador Redis: {}", e.getMessage());
         }
     }
 
@@ -200,9 +200,6 @@ public class CodigoVerificacionService {
         }
     }
 
-    /**
-     * Enmascara el email para no exponerlo completo en logs.
-     */
     private String enmascararEmail(String email) {
         if (email == null || email.isBlank()) return "***";
         int at = email.indexOf('@');

@@ -1,8 +1,9 @@
-// src/main/java/com/kiert/backend/service/StorageService.java
+// src/main/java/com/kiert/backend/features/storage/StorageService.java
 package com.kiert.backend.features.storage;
 
 import com.kiert.backend.features.archivo.dto.ArchivoSubidoDTO;
 import com.kiert.backend.features.cloudinary.service.CloudinaryService;
+import com.kiert.backend.exception.BadRequestException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,13 +18,19 @@ public class StorageService {
 
     private final CloudinaryService cloudinaryService;
 
-    // ========== SUBIR ARCHIVO (DETECCIÓN AUTOMÁTICA) ==========
+    // ========== SUBIR ARCHIVO (DETECCION AUTOMATICA) ==========
     public String subirArchivo(MultipartFile archivo) {
+        if (archivo == null || archivo.isEmpty()) {
+            throw new BadRequestException("El archivo es obligatorio");
+        }
         return cloudinaryService.subirArchivo(archivo);
     }
 
     // ========== SUBIR ARCHIVO CON CARPETA ==========
     public String subirArchivo(MultipartFile archivo, String carpeta) {
+        if (archivo == null || archivo.isEmpty()) {
+            throw new BadRequestException("El archivo es obligatorio");
+        }
         return cloudinaryService.subirArchivo(archivo, carpeta);
     }
 
@@ -33,6 +40,9 @@ public class StorageService {
             String carpeta,
             String tipoArchivo
     ) {
+        if (archivo == null || archivo.isEmpty()) {
+            throw new BadRequestException("El archivo es obligatorio");
+        }
         return cloudinaryService.subirArchivoChat(archivo, carpeta, tipoArchivo);
     }
 
@@ -43,39 +53,52 @@ public class StorageService {
 
     // ========== SUBIR VIDEO ==========
     public String subirVideo(MultipartFile video, String carpeta) {
+        if (video == null || video.isEmpty()) {
+            throw new BadRequestException("El video es obligatorio");
+        }
         Map<String, Object> result = cloudinaryService.subirVideo(video, carpeta);
         if (result == null || !result.containsKey("secure_url")) {
-            throw new RuntimeException("No se pudo subir el video");
+            log.warn("Cloudinary no devolvio secure_url al subir video");
+            throw new BadRequestException("No se pudo subir el video");
         }
         return result.get("secure_url").toString();
     }
 
     // ========== SUBIR GIF ==========
     public String subirGif(MultipartFile gif, String carpeta) {
+        if (gif == null || gif.isEmpty()) {
+            throw new BadRequestException("El GIF es obligatorio");
+        }
         return cloudinaryService.subirGif(gif, carpeta);
     }
 
     // ========== SUBIR IMAGEN ==========
     public String subirImagen(MultipartFile imagen, String carpeta) {
+        if (imagen == null || imagen.isEmpty()) {
+            throw new BadRequestException("La imagen es obligatoria");
+        }
         return cloudinaryService.subirImagen(imagen, carpeta);
     }
 
     // ========== SUBIR MARCO ==========
     public String subirMarco(MultipartFile archivo, String nombre) {
+        if (archivo == null || archivo.isEmpty()) {
+            throw new BadRequestException("El archivo del marco es obligatorio");
+        }
         return cloudinaryService.subirMarco(archivo, nombre);
     }
 
     // ========== VERIFICAR TIPOS ==========
     public boolean esVideo(MultipartFile archivo) {
-        return cloudinaryService.esVideo(archivo);
+        return archivo != null && cloudinaryService.esVideo(archivo);
     }
 
     public boolean esGif(MultipartFile archivo) {
-        return cloudinaryService.esGif(archivo);
+        return archivo != null && cloudinaryService.esGif(archivo);
     }
 
     public boolean esImagen(MultipartFile archivo) {
-        return cloudinaryService.esImagen(archivo);
+        return archivo != null && cloudinaryService.esImagen(archivo);
     }
 
     public String getFormato(String contentType) {
@@ -87,7 +110,7 @@ public class StorageService {
         return cloudinaryService.generarUrlFirmadaSubida(nombreArchivo);
     }
 
-    // ========== URL PÚBLICA ==========
+    // ========== URL PUBLICA ==========
     public String urlPublica(String nombreArchivo) {
         return cloudinaryService.urlPublica(nombreArchivo);
     }

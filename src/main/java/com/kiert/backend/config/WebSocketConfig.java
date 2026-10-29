@@ -18,16 +18,7 @@ import java.util.List;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtService jwtService;
-
-    // Lista de orígenes permitidos (CORS estricto)
-    private static final List<String> ALLOWED_ORIGINS = List.of(
-            "http://localhost:4200",
-            "http://localhost:53334",
-            "http://localhost:8080",
-            "http://127.0.0.1:4200",
-            "https://kiert.com",
-            "https://www.kiert.com"
-    );
+    private final CorsProperties corsProperties;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
@@ -38,19 +29,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Endpoint con SockJS (CORS restringido)
+        String[] origins = corsProperties.allowedOrigins().toArray(new String[0]);
+
         registry.addEndpoint("/ws")
-                .setAllowedOrigins(ALLOWED_ORIGINS.toArray(new String[0]))
+                .setAllowedOrigins(origins)
                 .withSockJS();
 
-        // Endpoint WebSocket puro (sin SockJS)
         registry.addEndpoint("/ws")
-                .setAllowedOrigins(ALLOWED_ORIGINS.toArray(new String[0]));
+                .setAllowedOrigins(origins);
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        // Aquí se valida el JWT en el frame STOMP CONNECT
         registration.interceptors(new StompAuthChannelInterceptor(jwtService));
     }
 }

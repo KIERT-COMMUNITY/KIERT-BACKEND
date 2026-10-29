@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/AuditoriaService.java
+// src/main/java/com/kiert/backend/features/auditoria/service/AuditoriaService.java
 package com.kiert.backend.features.auditoria.service;
 
 import com.kiert.backend.entity.AuditoriaUsuario;
@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -17,9 +18,11 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @RequiredArgsConstructor
 public class AuditoriaService {
 
+    private static final int DESCRIPCION_MAX_LENGTH = 500;
+
     private final AuditoriaUsuarioRepository repository;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void registrar(Long usuarioId,
                           String email,
                           EventoAuditoria evento,
@@ -28,7 +31,7 @@ public class AuditoriaService {
         registrar(usuarioId, email, evento, descripcion, exito, null);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void registrar(Long usuarioId,
                           String email,
                           EventoAuditoria evento,
@@ -40,25 +43,28 @@ public class AuditoriaService {
                     .usuarioId(usuarioId)
                     .email(email)
                     .evento(evento.name())
-                    .descripcion(descripcion)
+                    .descripcion(truncar(descripcion, DESCRIPCION_MAX_LENGTH))
                     .exito(exito)
                     .ip(obtenerIp())
-                    .userAgent(obtenerUserAgent())
+                    .userAgent(truncar(obtenerUserAgent(), 512))
                     .datosExtra(datosExtra)
                     .build();
             repository.save(a);
 
-            // ⚠️ No loguear datos sensibles completos en INFO
             log.info("Auditoria [{}] {} - {}", evento, enmascararEmail(email),
-                    descripcion);
+                    truncar(descripcion, 200));
         } catch (Exception e) {
-            log.error("Error al guardar auditoría: {}", e.getMessage(), e);
+            // No relanzar: la auditoria nunca debe romper el flujo principal
+            log.warn("Error al guardar auditoria [{}]: {}", evento, e.getMessage());
         }
     }
 
     /**
-     * Obtiene la IP del cliente SIN inyectar HttpServletRequest en el constructor.
-     * Esto permite usar el servicio en contextos sin request (ej. @Scheduled).
+     * Obtiene la IP del cliente.
+     *
+     * SEGURIDAD: si server.forward-headers-strategy=framework esta configurado,
+     * Spring resuelve la IP real a traves de los proxies de confianza.
+     * No confiamos en X-Forwarded-For directamente porque es falsificable.
      */
     private String obtenerIp() {
         try {
@@ -67,20 +73,12 @@ public class AuditoriaService {
             if (attrs == null) return null;
 
             HttpServletRequest request = attrs.getRequest();
-
-            String xf = request.getHeader("X-Forwarded-For");
-            if (xf != null && !xf.isEmpty()) {
-                return xf.split(",")[0].trim();
-            }
             return request.getRemoteAddr();
         } catch (Exception e) {
             return null;
         }
     }
 
-    /**
-     * Obtiene el User-Agent sin inyectar HttpServletRequest.
-     */
     private String obtenerUserAgent() {
         try {
             ServletRequestAttributes attrs =
@@ -93,10 +91,6 @@ public class AuditoriaService {
         }
     }
 
-    /**
-     * Enmascara el email para no exponerlo completo en logs.
-     * Ejemplo: "juan@example.com" → "j***@e***.com"
-     */
     private String enmascararEmail(String email) {
         if (email == null || email.isBlank()) return null;
         int at = email.indexOf('@');
@@ -121,5 +115,10 @@ public class AuditoriaService {
         }
 
         return localMask + "@" + dominioMask;
+    }
+
+    private String truncar(String valor, int max) {
+        if (valor == null) return null;
+        return valor.length() <= max ? valor : valor.substring(0, max);
     }
 }

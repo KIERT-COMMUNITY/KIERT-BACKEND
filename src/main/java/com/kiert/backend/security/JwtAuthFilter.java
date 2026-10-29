@@ -36,34 +36,29 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final UsuarioDetailsService usuarioDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
 
-    // src/main/java/com/kiert/backend/security/JwtAuthFilter.java
-// Reemplaza SOLO el método shouldNotFilter
-
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getRequestURI();
         String metodo = request.getMethod();
 
-        // ✅ WebSocket y preflight CORS: sin JWT
+        // WebSocket y preflight CORS: sin JWT
         if (path.startsWith("/ws") || "OPTIONS".equalsIgnoreCase(metodo)) {
             return true;
         }
 
-        // ✅ Rutas públicas: sin JWT
+        // Rutas publicas: sin JWT
         if (path.startsWith("/api/auth/")
                 || path.startsWith("/api/admin/auth/login")
                 || path.startsWith("/swagger")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/api-docs")
-                || path.startsWith("/webjars")
-                || path.startsWith("/api/archivos/")) {
+                || path.startsWith("/webjars")) {
             return true;
         }
 
-        // ✅ IMPORTANTE: /api/presencia/** YA NO se excluye
-        // Necesitamos que el filtro JWT procese esas rutas
-        // para saber quién está enviando el heartbeat.
+        // /api/archivos/** ya NO se excluye: requiere JWT
+        // /api/presencia/** tampoco: requiere JWT
 
         return false;
     }
@@ -86,59 +81,68 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
             if (tokenBlacklistService.estaInvalidado(token)) {
                 log.warn("[JWT] Token invalidado: {}", request.getRequestURI());
-                enviarError(response, "Token invalidado. Inicia sesión de nuevo.");
+                enviarError(response, "Token invalidado. Inicia sesion de nuevo.");
                 return;
             }
         } catch (Exception e) {
             log.error("[JWT] Error en blacklist: {}", e.getMessage());
         }
 
-        // 2. Validar token
+        // 2. Si ya hay autenticacion en el contexto, continuar
+        if (SecurityContextHolder.getContext().getAuthentication() != null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // 3. Validar y autenticar
         try {
             String email = jwtService.extraerEmail(token);
-
             if (email == null || email.isBlank()) {
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            if (SecurityContextHolder.getContext().getAuthentication() != null) {
-                filterChain.doFilter(request, response);
-                return;
-            }
-
             if (!jwtService.esTokenValido(token, email)) {
-                log.warn("[JWT] Token inválido para: {}", email);
+                log.warn("[JWT] Token invalido para: {}", email);
                 SecurityContextHolder.clearContext();
                 filterChain.doFilter(request, response);
                 return;
             }
 
             UserDetails userDetails = usuarioDetailsService.loadUserByUsername(email);
-            String rol = jwtService.extraerRol(token);   // ← ya devuelve "USER" por defecto
 
-            // ✅ Construir authorities con deduplicación y validación
+            // 4. Validar tokenVersion
+            if (userDetails instanceof UsuarioPrincipal principal) {
+                Integer tokenVersionJwt = jwtService.extraerTokenVersion(token);
+                Integer tokenVersionActual = principal.getUsuario().getTokenVersion();
+                if (tokenVersionActual == null) tokenVersionActual = 0;
+                if (!tokenVersionJwt.equals(tokenVersionActual)) {
+                    log.warn("[JWT] Token de version antigua para: {} (jwt={}, actual={})",
+                            email, tokenVersionJwt, tokenVersionActual);
+                    SecurityContextHolder.clearContext();
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+            }
+
+            String rol = jwtService.extraerRol(token);
             Set<String> rolesSet = new LinkedHashSet<>();
 
-            // 1) Rol del JWT (si no está vacío)
             if (rol != null && !rol.isBlank()) {
                 rolesSet.add("ROLE_" + rol.toUpperCase().trim());
             }
 
-            // 2) Roles del UserDetails (filtrando vacíos como "ROLE_")
             if (userDetails.getAuthorities() != null) {
                 for (GrantedAuthority auth : userDetails.getAuthorities()) {
                     if (auth == null) continue;
                     String authority = auth.getAuthority();
                     if (authority == null) continue;
                     authority = authority.trim();
-                    // Ignorar authorities vacías o solo "ROLE_"
                     if (authority.isEmpty() || authority.equals("ROLE_")) continue;
                     rolesSet.add(authority);
                 }
             }
 
-            // 3) Si no queda nada, añadir ROLE_USER por defecto
             if (rolesSet.isEmpty()) {
                 rolesSet.add(ROLE_POR_DEFECTO);
             }
@@ -159,9 +163,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         } catch (Exception ex) {
             log.warn("[JWT] Error: {}", ex.getMessage());
             SecurityContextHolder.clearContext();
-        } finally {
-            filterChain.doFilter(request, response);
         }
+
+        // Llamada unica al filterChain fuera del try/catch
+        filterChain.doFilter(request, response);
     }
 
     private void enviarError(HttpServletResponse response, String mensaje) throws IOException {

@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/SolicitudContactoRepository.java
+// src/main/java/com/kiert/backend/features/solicitud/repository/SolicitudContactoRepository.java
 package com.kiert.backend.features.solicitud.repository;
 
 import com.kiert.backend.entity.SolicitudContacto;
@@ -35,13 +35,18 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
             @Param("estado") EstadoSolicitud estado
     );
 
-    @Query("""
+    @Query(value = """
             SELECT s FROM SolicitudContacto s
             LEFT JOIN FETCH s.emisor
             LEFT JOIN FETCH s.receptor
             WHERE s.receptor.id = :receptorId
               AND s.estado = :estado
             ORDER BY s.fechaSolicitud DESC
+            """,
+            countQuery = """
+            SELECT COUNT(s) FROM SolicitudContacto s
+            WHERE s.receptor.id = :receptorId
+              AND s.estado = :estado
             """)
     Page<SolicitudContacto> findByReceptorIdAndEstadoPaginado(
             @Param("receptorId") Long receptorId,
@@ -66,13 +71,18 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
             @Param("estado") EstadoSolicitud estado
     );
 
-    @Query("""
+    @Query(value = """
             SELECT s FROM SolicitudContacto s
             LEFT JOIN FETCH s.emisor
             LEFT JOIN FETCH s.receptor
             WHERE s.emisor.id = :emisorId
               AND s.estado = :estado
             ORDER BY s.fechaSolicitud DESC
+            """,
+            countQuery = """
+            SELECT COUNT(s) FROM SolicitudContacto s
+            WHERE s.emisor.id = :emisorId
+              AND s.estado = :estado
             """)
     Page<SolicitudContacto> findByEmisorIdAndEstadoPaginado(
             @Param("emisorId") Long emisorId,
@@ -98,7 +108,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     );
 
     // ============================================================
-    // BUSCAR SOLICITUD ESPECÍFICA
+    // BUSCAR SOLICITUD ESPECIFICA
     // ============================================================
 
     @Query("""
@@ -181,17 +191,23 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
             """)
     long contarContactos(@Param("usuarioId") Long usuarioId);
 
-    @Query("""
-            SELECT
-                CASE WHEN s.emisor.id IN :usuarioIds THEN s.emisor.id
-                     ELSE s.receptor.id
-                END AS usuarioId,
-                COUNT(s)
-            FROM SolicitudContacto s
-            WHERE (s.emisor.id IN :usuarioIds OR s.receptor.id IN :usuarioIds)
-              AND s.estado = 'ACEPTADA'
-            GROUP BY usuarioId
-            """)
+    /**
+     * Cuenta contactos aceptados por usuario en una lista.
+     * Nota: usa UNION para evitar doble conteo cuando el usuario esta en ambos lados.
+     * El resultado es una lista de [usuarioId, count].
+     */
+    @Query(value = """
+            SELECT contacto_usuario_id, COUNT(*) FROM (
+                SELECT CASE
+                    WHEN s.emisor_id IN (:usuarioIds) THEN s.emisor_id
+                    ELSE s.receptor_id
+                END AS contacto_usuario_id
+                FROM solicitudes_contacto s
+                WHERE (s.emisor_id IN (:usuarioIds) OR s.receptor_id IN (:usuarioIds))
+                  AND s.estado = 'ACEPTADA'
+            ) sub
+            GROUP BY contacto_usuario_id
+            """, nativeQuery = true)
     List<Object[]> contarContactosDeUsuarios(@Param("usuarioIds") List<Long> usuarioIds);
 
     // ============================================================
@@ -302,7 +318,7 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     );
 
     // ============================================================
-    // ESTADÍSTICAS
+    // ESTADISTICAS
     // ============================================================
 
     @Query("""
@@ -331,10 +347,6 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
     // SEGURIDAD: Validar permisos
     // ============================================================
 
-    /**
-     * NUEVO: Verifica si el usuario es receptor de la solicitud.
-     * Se usa para evitar que un usuario acepte/rechace solicitudes ajenas.
-     */
     @Query("""
             SELECT COUNT(s) > 0 FROM SolicitudContacto s
             WHERE s.id = :solicitudId
@@ -346,9 +358,6 @@ public interface SolicitudContactoRepository extends JpaRepository<SolicitudCont
             @Param("usuarioId") Long usuarioId
     );
 
-    /**
-     * NUEVO: Verifica si el usuario es emisor de la solicitud (para cancelarla).
-     */
     @Query("""
             SELECT COUNT(s) > 0 FROM SolicitudContacto s
             WHERE s.id = :solicitudId

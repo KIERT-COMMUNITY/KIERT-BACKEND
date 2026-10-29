@@ -21,52 +21,55 @@ public class JwtService {
     private final SecretKey clave;
     private final long expiracionMs;
 
-    /** Rol por defecto para usuarios normales */
     private static final String ROL_POR_DEFECTO = "USER";
+    private static final long EXPIRACION_POR_DEFECTO_MS = 86400000L;
 
     public JwtService(JwtProperties jwtProperties) {
         String secret = jwtProperties.secret();
+
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT Secret no configurado. Define 'kiert.jwt.secret' en application.yml"
+            );
+        }
+
         this.expiracionMs = jwtProperties.expirationMs() != null
                 ? jwtProperties.expirationMs()
-                : 86400000L;
-
-        if (secret == null || secret.isEmpty()) {
-            throw new IllegalStateException("JWT Secret no configurado");
-        }
+                : EXPIRACION_POR_DEFECTO_MS;
 
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length < 32) {
             throw new IllegalStateException(
-                    String.format("Clave JWT insegura: %d bits. Se requieren mínimo 256 bits.", keyBytes.length * 8)
+                    String.format(
+                            "Clave JWT insegura: %d bits. Se requieren minimo 256 bits (32 bytes).",
+                            keyBytes.length * 8
+                    )
             );
         }
 
         this.clave = Keys.hmacShaKeyFor(keyBytes);
-        log.info("JWT Service inicializado con HS256");
+        log.info("JWT Service inicializado con HS256 (expiracion: {} ms)", expiracionMs);
     }
 
     // ============================================================
-    // GENERAR TOKEN BÁSICO (USUARIOS NORMALES)
-    // ✅ AHORA INCLUYE role="USER"
+    // GENERAR TOKEN
     // ============================================================
-    public String generarToken(Long usuarioId, String email) {
+    public String generarToken(Long usuarioId, String email, int tokenVersion) {
         Date ahora = new Date();
         Date expiracion = new Date(ahora.getTime() + expiracionMs);
 
         return Jwts.builder()
                 .subject(email)
                 .claim("usuarioId", usuarioId)
-                .claim("role", ROL_POR_DEFECTO)   // ✅ rol por defecto
+                .claim("role", ROL_POR_DEFECTO)
+                .claim("tokenVersion", tokenVersion)
                 .issuedAt(ahora)
                 .expiration(expiracion)
                 .signWith(clave, Jwts.SIG.HS256)
                 .compact();
     }
 
-    // ============================================================
-    // GENERAR TOKEN CON ROL (ADMINS)
-    // ============================================================
-    public String generarTokenConRol(Long usuarioId, String email, String rol) {
+    public String generarTokenConRol(Long usuarioId, String email, String rol, int tokenVersion) {
         Date ahora = new Date();
         Date expiracion = new Date(ahora.getTime() + expiracionMs);
 
@@ -76,6 +79,7 @@ public class JwtService {
                 .subject(email)
                 .claim("usuarioId", usuarioId)
                 .claim("role", rolFinal)
+                .claim("tokenVersion", tokenVersion)
                 .issuedAt(ahora)
                 .expiration(expiracion)
                 .signWith(clave, Jwts.SIG.HS256)
@@ -94,19 +98,29 @@ public class JwtService {
         if (val == null) return null;
         if (val instanceof Integer i) return i.longValue();
         if (val instanceof Long l) return l;
-        try { return Long.parseLong(val.toString()); } catch (Exception e) { return null; }
+        try {
+            return Long.parseLong(val.toString());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
-    /**
-     * Devuelve el rol del token. Si la claim no existe o viene vacía,
-     * devuelve "USER" por defecto para que el filtro pueda construir
-     * ROLE_USER y no quede ROLE_ vacío.
-     */
     public String extraerRol(String token) {
         Object val = extraerTodosLosClaims(token).get("role");
         if (val == null) return ROL_POR_DEFECTO;
         String rol = val.toString().trim();
         return rol.isEmpty() ? ROL_POR_DEFECTO : rol;
+    }
+
+    public Integer extraerTokenVersion(String token) {
+        Object val = extraerTodosLosClaims(token).get("tokenVersion");
+        if (val == null) return 0;
+        if (val instanceof Number n) return n.intValue();
+        try {
+            return Integer.parseInt(val.toString());
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     public Instant obtenerExpiracion(String token) {
@@ -115,7 +129,7 @@ public class JwtService {
     }
 
     // ============================================================
-    // VALIDACIÓN ESTRICTA
+    // VALIDACION
     // ============================================================
     public boolean esTokenValido(String token, String emailEsperado) {
         try {
@@ -124,7 +138,7 @@ public class JwtService {
                     && email.equalsIgnoreCase(emailEsperado)
                     && !estaExpirado(token);
         } catch (Exception e) {
-            log.warn("Token inválido: {}", e.getMessage());
+            log.warn("Token invalido: {}", e.getMessage());
             return false;
         }
     }

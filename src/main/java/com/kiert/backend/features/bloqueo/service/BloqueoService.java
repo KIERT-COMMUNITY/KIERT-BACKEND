@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/BloqueoService.java
+// src/main/java/com/kiert/backend/features/bloqueo/service/BloqueoService.java
 package com.kiert.backend.features.bloqueo.service;
 
 import com.kiert.backend.features.bloqueo.dto.BloqueoDTO;
@@ -28,6 +28,7 @@ public class BloqueoService {
     private final UsuarioRepository usuarioRepository;
 
     private static final String CACHE_BLOQUEOS = "bloqueos";
+    private static final int MOTIVO_MAX_LENGTH = 500;
 
     // ============================================================
     // BLOQUEAR
@@ -37,7 +38,6 @@ public class BloqueoService {
     public BloqueoDTO bloquear(Long usuarioBloqueadorId, CrearBloqueoDTO dto) {
         log.info("Usuario {} bloquea a {}", usuarioBloqueadorId, dto.usuarioBloqueadoId());
 
-        // Validaciones básicas
         if (usuarioBloqueadorId == null) {
             throw new IllegalArgumentException("Usuario autenticado requerido");
         }
@@ -54,7 +54,6 @@ public class BloqueoService {
         Usuario bloqueado = usuarioRepository.findById(dto.usuarioBloqueadoId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario a bloquear no encontrado"));
 
-        // Si ya existe un bloqueo activo, devolverlo (idempotencia)
         var existente = bloqueoRepository.findBloqueoActivo(
                 usuarioBloqueadorId, dto.usuarioBloqueadoId());
         if (existente.isPresent()) {
@@ -63,13 +62,12 @@ public class BloqueoService {
             return mapearADTO(existente.get());
         }
 
-        // Sanitizar motivo
         String motivo = dto.motivo() != null && !dto.motivo().isBlank()
                 ? dto.motivo().trim()
                 : "Sin motivo especificado";
 
-        if (motivo.length() > 500) {
-            motivo = motivo.substring(0, 500);
+        if (motivo.length() > MOTIVO_MAX_LENGTH) {
+            motivo = motivo.substring(0, MOTIVO_MAX_LENGTH);
         }
 
         Bloqueo bloqueo = Bloqueo.builder()
@@ -96,7 +94,7 @@ public class BloqueoService {
         log.info("Usuario {} desbloquea a {}", usuarioBloqueadorId, usuarioBloqueadoId);
 
         if (usuarioBloqueadorId == null || usuarioBloqueadoId == null) {
-            throw new IllegalArgumentException("Parámetros inválidos");
+            throw new IllegalArgumentException("Parametros invalidos");
         }
 
         Bloqueo bloqueo = bloqueoRepository
@@ -111,7 +109,7 @@ public class BloqueoService {
     }
 
     // ============================================================
-    // VERIFICAR ESTADO (direccional)
+    // VERIFICAR ESTADO
     // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(
@@ -119,7 +117,11 @@ public class BloqueoService {
             key = "'estado:' + #usuarioActualId + ':' + #otroUsuarioId"
     )
     public EstadoBloqueoDTO verificarEstado(Long usuarioActualId, Long otroUsuarioId) {
-        log.debug("Consultando estado de bloqueo: {} → {}", usuarioActualId, otroUsuarioId);
+        if (usuarioActualId == null || otroUsuarioId == null) {
+            return new EstadoBloqueoDTO(false, null, null, null);
+        }
+
+        log.debug("Consultando estado de bloqueo: {} -> {}", usuarioActualId, otroUsuarioId);
 
         var bloqueo = bloqueoRepository.findBloqueoActivo(usuarioActualId, otroUsuarioId);
         if (bloqueo.isPresent()) {
@@ -143,6 +145,10 @@ public class BloqueoService {
             key = "'lista:' + #usuarioId"
     )
     public List<BloqueoDTO> listarBloqueados(Long usuarioId) {
+        if (usuarioId == null) {
+            return List.of();
+        }
+
         log.debug("Listando bloqueados de usuario {}", usuarioId);
 
         return bloqueoRepository.findBloqueosActivosDeUsuario(usuarioId)
@@ -152,7 +158,7 @@ public class BloqueoService {
     }
 
     // ============================================================
-    // VERIFICAR SI HAY BLOQUEO BIDIRECCIONAL
+    // VERIFICAR BLOQUEO BIDIRECCIONAL
     // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(

@@ -46,20 +46,26 @@ public class PostService {
     private static final int MAX_ARCHIVOS = 5;
     private static final long MAX_TOTAL_ARCHIVOS = 30L * 1024L * 1024L;
 
+    // ============================================================
+    // LISTAR
+    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_POSTS, key = "'all'")
     public List<PostDTO> listar() {
-        log.info("[DB] Listando posts");
+        log.debug("[DB] Listando posts");
         List<Post> posts = postRepository.findAllActiveOrderByFechaCreacionDesc();
         return posts.stream()
                 .map(postMapper::aDTO)
                 .toList();
     }
 
+    // ============================================================
+    // OBTENER POR ID
+    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_POST, key = "#id")
     public PostDTO obtenerPorId(Long id) {
-        log.info("[DB] Obteniendo post {}", id);
+        log.debug("[DB] Obteniendo post {}", id);
 
         if (id == null) {
             throw new BadRequestException("ID requerido");
@@ -67,11 +73,14 @@ public class PostService {
 
         Post post = postRepository.findActiveById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
-                        "No se encontró la publicación"));
+                        "No se encontro la publicacion"));
 
         return postMapper.aDTO(post);
     }
 
+    // ============================================================
+    // CREAR POST
+    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_POSTS, allEntries = true),
@@ -97,6 +106,15 @@ public class PostService {
         }
         if (archivos != null && archivos.size() > MAX_ARCHIVOS) {
             throw new BadRequestException("Solo se permiten " + MAX_ARCHIVOS + " archivos");
+        }
+
+        // SEGURIDAD: validar el esquema del enlace
+        String link = datos.link();
+        if (link != null && !link.isBlank()) {
+            String linkLower = link.trim().toLowerCase();
+            if (!linkLower.startsWith("http://") && !linkLower.startsWith("https://")) {
+                throw new BadRequestException("El enlace debe empezar por http:// o https://");
+            }
         }
 
         List<MultipartFile> archivosValidos = (archivos != null)
@@ -126,12 +144,12 @@ public class PostService {
                 .fechaCreacion(Instant.now())
                 .build();
 
-        if (datos.link() != null && !datos.link().isBlank()) {
+        if (link != null && !link.isBlank()) {
             Adjunto adjunto = Adjunto.builder()
                     .post(post)
                     .tipo("link")
                     .nombre("Enlace externo")
-                    .url(datos.link())
+                    .url(link.trim())
                     .build();
             post.getAdjuntos().add(adjunto);
         }
@@ -187,7 +205,7 @@ public class PostService {
 
                 } catch (Exception e) {
                     fallidos++;
-                    log.error("Error al subir '{}': {}",
+                    log.warn("Error al subir '{}': {}",
                             archivo.getOriginalFilename(), e.getMessage());
 
                     if (subidosOk == 0 && fallidos == archivosValidos.size()) {
@@ -198,7 +216,6 @@ public class PostService {
             }
         }
 
-        // Guardar y asegurar que el ID esté disponible
         post = postRepository.save(post);
         postRepository.flush();
 
@@ -212,13 +229,16 @@ public class PostService {
         return postMapper.aDTO(post);
     }
 
+    // ============================================================
+    // LISTAR COMENTARIOS
+    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_COMMENTS, key = "#postId")
     public List<ComentarioDTO> listarComentarios(Long postId) {
-        log.info("[DB] Listando comentarios del post {}", postId);
+        log.debug("[DB] Listando comentarios del post {}", postId);
 
         if (!postRepository.existsActiveById(postId)) {
-            throw new RecursoNoEncontradoException("No se encontró la publicación");
+            throw new RecursoNoEncontradoException("No se encontro la publicacion");
         }
 
         return comentarioRepository.findByPostIdAndEliminadoFalseOrderByFechaCreacionAsc(postId)
@@ -227,6 +247,9 @@ public class PostService {
                 .toList();
     }
 
+    // ============================================================
+    // COMENTAR
+    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_COMMENTS, key = "#postId"),
@@ -244,7 +267,7 @@ public class PostService {
         }
 
         Post post = postRepository.findActiveById(postId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontro la publicacion"));
 
         if (post.isEliminado()) {
             throw new BadRequestException("La publicacion ya no esta disponible");
@@ -264,6 +287,9 @@ public class PostService {
         return postMapper.aDTO(comentario);
     }
 
+    // ============================================================
+    // ELIMINAR POST
+    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = CACHE_POSTS, allEntries = true),
@@ -278,7 +304,7 @@ public class PostService {
         }
 
         Post post = postRepository.findActiveById(postId)
-                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró la publicación"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontro la publicacion"));
 
         if (!post.getAutor().getId().equals(autorId)) {
             throw new SecurityException("No tienes permiso para eliminar esta publicacion");

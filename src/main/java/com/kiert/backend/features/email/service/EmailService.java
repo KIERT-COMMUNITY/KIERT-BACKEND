@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/EmailService.java
+// src/main/java/com/kiert/backend/features/email/service/EmailService.java
 package com.kiert.backend.features.email.service;
 
 import jakarta.mail.internet.MimeMessage;
@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -28,9 +29,6 @@ public class EmailService {
     @Value("${kiert.frontend.url:http://localhost:4200}")
     private String frontendUrl;
 
-    // ============================================================
-    // RATE LIMITING
-    // ============================================================
     private static final String KEY_RATELIMIT_DESTINO = "ratelimit:email:destino:";
     private static final String KEY_RATELIMIT_GLOBAL = "ratelimit:email:global";
 
@@ -40,90 +38,94 @@ public class EmailService {
     private static final int MAX_EMAILS_GLOBAL = 500;
     private static final Duration VENTANA_GLOBAL = Duration.ofHours(1);
 
-    // Validación de email (evita inyección de headers)
+    private static final int MAX_NOMBRE_USUARIO_LENGTH = 100;
+
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
     );
 
     // ============================================================
-    // CÓDIGO DE VERIFICACIÓN DE CUENTA
+    // CODIGO DE VERIFICACION DE CUENTA
     // ============================================================
-    @Async
+    @Async("emailTaskExecutor")
     public void enviarCodigoVerificacion(String emailDestino, String nombreUsuario, String codigo) {
-        if (!validarDestinatario(emailDestino)) return;
-        if (!puedeEnviar(emailDestino, "verificacion")) {
-            log.warn("Rate limit alcanzado, no se envía verificación a {}",
-                    enmascararEmail(emailDestino));
+        String destinatario = normalizarEmail(emailDestino);
+        if (!validarDestinatario(destinatario)) return;
+        if (!puedeEnviar(destinatario, "verificacion")) {
+            log.warn("Rate limit alcanzado, no se envia verificacion a {}",
+                    enmascararEmail(destinatario));
             return;
         }
 
         try {
             String html = plantillaCodigo(
-                    nombreUsuario,
+                    truncar(nombreUsuario, MAX_NOMBRE_USUARIO_LENGTH),
                     "Verifica tu cuenta",
-                    "Usa el siguiente código para activar tu cuenta en Kiert:",
+                    "Usa el siguiente codigo para activar tu cuenta en Kiert:",
                     codigo
             );
-            enviarHtml(emailDestino, "Kiert - Verifica tu cuenta", html);
-            registrarEnvio(emailDestino);
-            log.info("Código de verificación enviado a: {}",
-                    enmascararEmail(emailDestino));
+            enviarHtml(destinatario, "Kiert - Verifica tu cuenta", html);
+            registrarEnvio(destinatario);
+            log.info("Codigo de verificacion enviado a: {}",
+                    enmascararEmail(destinatario));
         } catch (Exception e) {
-            log.error("Error al enviar verificación a {}: {}",
-                    enmascararEmail(emailDestino), e.getMessage());
+            log.error("Error al enviar verificacion a {}: {}",
+                    enmascararEmail(destinatario), e.getMessage());
         }
     }
 
     // ============================================================
-    // CÓDIGO DE RECUPERACIÓN DE CONTRASEÑA
+    // CODIGO DE RECUPERACION DE CONTRASENA
     // ============================================================
-    @Async
+    @Async("emailTaskExecutor")
     public void enviarCodigoRecuperacion(String emailDestino, String nombreUsuario, String codigo) {
-        if (!validarDestinatario(emailDestino)) return;
-        if (!puedeEnviar(emailDestino, "recuperacion")) {
-            log.warn("Rate limit alcanzado, no se envía recuperación a {}",
-                    enmascararEmail(emailDestino));
+        String destinatario = normalizarEmail(emailDestino);
+        if (!validarDestinatario(destinatario)) return;
+        if (!puedeEnviar(destinatario, "recuperacion")) {
+            log.warn("Rate limit alcanzado, no se envia recuperacion a {}",
+                    enmascararEmail(destinatario));
             return;
         }
 
         try {
             String html = plantillaCodigo(
-                    nombreUsuario,
-                    "Recupera tu contraseña",
-                    "Usa el siguiente código para restablecer tu contraseña en Kiert:",
+                    truncar(nombreUsuario, MAX_NOMBRE_USUARIO_LENGTH),
+                    "Recupera tu contrasena",
+                    "Usa el siguiente codigo para restablecer tu contrasena en Kiert:",
                     codigo
             );
-            enviarHtml(emailDestino, "Kiert - Recupera tu contraseña", html);
-            registrarEnvio(emailDestino);
-            log.info("Código de recuperación enviado a: {}",
-                    enmascararEmail(emailDestino));
+            enviarHtml(destinatario, "Kiert - Recupera tu contrasena", html);
+            registrarEnvio(destinatario);
+            log.info("Codigo de recuperacion enviado a: {}",
+                    enmascararEmail(destinatario));
         } catch (Exception e) {
-            log.error("Error al enviar recuperación a {}: {}",
-                    enmascararEmail(emailDestino), e.getMessage());
+            log.error("Error al enviar recuperacion a {}: {}",
+                    enmascararEmail(destinatario), e.getMessage());
         }
     }
 
     // ============================================================
     // BIENVENIDA
     // ============================================================
-    @Async
+    @Async("emailTaskExecutor")
     public void enviarCorreoBienvenida(String emailDestino, String nombreUsuario) {
-        if (!validarDestinatario(emailDestino)) return;
-        if (!puedeEnviar(emailDestino, "bienvenida")) {
-            log.warn("Rate limit alcanzado, no se envía bienvenida a {}",
-                    enmascararEmail(emailDestino));
+        String destinatario = normalizarEmail(emailDestino);
+        if (!validarDestinatario(destinatario)) return;
+        if (!puedeEnviar(destinatario, "bienvenida")) {
+            log.warn("Rate limit alcanzado, no se envia bienvenida a {}",
+                    enmascararEmail(destinatario));
             return;
         }
 
         try {
-            String html = plantillaBienvenida(nombreUsuario);
-            enviarHtml(emailDestino, "Bienvenido a Kiert, comunidad para desarrolladores", html);
-            registrarEnvio(emailDestino);
+            String html = plantillaBienvenida(truncar(nombreUsuario, MAX_NOMBRE_USUARIO_LENGTH));
+            enviarHtml(destinatario, "Bienvenido a Kiert, comunidad para desarrolladores", html);
+            registrarEnvio(destinatario);
             log.info("Correo de bienvenida enviado a: {}",
-                    enmascararEmail(emailDestino));
+                    enmascararEmail(destinatario));
         } catch (Exception e) {
             log.error("Error al enviar bienvenida a {}: {}",
-                    enmascararEmail(emailDestino), e.getMessage());
+                    enmascararEmail(destinatario), e.getMessage());
         }
     }
 
@@ -149,7 +151,8 @@ public class EmailService {
             return true;
         } catch (Exception e) {
             log.error("Error consultando rate limit en Redis: {}", e.getMessage());
-            return true;
+            // Fail-closed: si no podemos verificar, no enviamos para no saturar SMTP
+            return false;
         }
     }
 
@@ -173,16 +176,20 @@ public class EmailService {
     // ============================================================
     // VALIDACIONES
     // ============================================================
+    private String normalizarEmail(String email) {
+        if (email == null) return null;
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
     private boolean validarDestinatario(String emailDestino) {
         if (emailDestino == null || emailDestino.isBlank()) {
-            log.warn("Email destino vacío, no se envía");
+            log.warn("Email destino vacio, no se envia");
             return false;
         }
         if (!EMAIL_PATTERN.matcher(emailDestino).matches()) {
-            log.warn("Email destino inválido: {}", emailDestino);
+            log.warn("Email destino invalido: {}", enmascararEmail(emailDestino));
             return false;
         }
-        // Evitar inyección de headers (CRLF)
         if (emailDestino.contains("\n") || emailDestino.contains("\r")) {
             log.warn("Email contiene caracteres peligrosos");
             return false;
@@ -194,6 +201,10 @@ public class EmailService {
     // HELPERS
     // ============================================================
     private void enviarHtml(String destinatario, String asunto, String html) throws Exception {
+        if (asunto == null || asunto.contains("\n") || asunto.contains("\r")) {
+            throw new IllegalArgumentException("Asunto invalido");
+        }
+
         MimeMessage mensaje = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
         helper.setFrom(fromEmail, "Kiert");
@@ -201,6 +212,11 @@ public class EmailService {
         helper.setSubject(asunto);
         helper.setText(html, true);
         mailSender.send(mensaje);
+    }
+
+    private String truncar(String valor, int max) {
+        if (valor == null) return null;
+        return valor.length() <= max ? valor : valor.substring(0, max);
     }
 
     private String enmascararEmail(String email) {
@@ -254,13 +270,13 @@ public class EmailService {
                           </div>
 
                           <p style="margin:16px 0 0;color:#8b98a5;font-size:0.8rem;line-height:1.5;">
-                            El código expira en <strong style="color:#e6edf3;">15 minutos</strong>. Si no fuiste tú, ignora este correo.
+                            El codigo expira en <strong style="color:#e6edf3;">15 minutos</strong>. Si no fuiste tu, ignora este correo.
                           </p>
 
                           <div style="margin-top:24px;padding:12px 16px;background:rgba(249,202,36,0.08);border-left:3px solid #f9ca24;border-radius:6px;">
                             <p style="margin:0;color:#f9ca24;font-size:0.78rem;line-height:1.5;">
-                              <strong>¿No ves el correo?</strong><br>
-                              Revisa tu carpeta de <strong>Spam</strong> o <strong>Promociones</strong> en Gmail y márcalo como "No es spam" para recibir futuros correos.
+                              <strong>No ves el correo?</strong><br>
+                              Revisa tu carpeta de <strong>Spam</strong> o <strong>Promociones</strong> en Gmail y marcalo como "No es spam" para recibir futuros correos.
                             </p>
                           </div>
                         </td>
@@ -268,7 +284,7 @@ public class EmailService {
                       <tr>
                         <td style="padding:20px 32px;text-align:center;border-top:1px solid #26313c;">
                           <p style="margin:0;color:#5a6a7a;font-size:0.7rem;">
-                            Este es un mensaje automático, no respondas a este correo.
+                            Este es un mensaje automatico, no respondas a este correo.
                           </p>
                           <p style="margin:6px 0 0;color:#5a6a7a;font-size:0.7rem;">
                             Kiert - Comunidad para desarrolladores
@@ -321,7 +337,7 @@ public class EmailService {
                           </p>
 
                           <div style="background:#0d1117;border-radius:12px;padding:20px;margin:20px 0;">
-                            <h2 style="margin:0 0 12px;font-size:0.95rem;color:#e6edf3;font-weight:600;">¿Qué puedes hacer ahora?</h2>
+                            <h2 style="margin:0 0 12px;font-size:0.95rem;color:#e6edf3;font-weight:600;">Que puedes hacer ahora?</h2>
                             <ul style="margin:0;padding-left:20px;color:#8b98a5;font-size:0.85rem;line-height:1.9;">
                               <li>Publicar tus casos y proyectos</li>
                               <li>Comentar y ayudar a otros desarrolladores</li>
@@ -339,7 +355,7 @@ public class EmailService {
 
                           <div style="margin-top:24px;padding:12px 16px;background:rgba(249,202,36,0.08);border-left:3px solid #f9ca24;border-radius:6px;">
                             <p style="margin:0;color:#f9ca24;font-size:0.78rem;line-height:1.5;">
-                              <strong>Consejo:</strong> añade <strong>__FROM_EMAIL__</strong> a tus contactos para que futuros correos no vayan a Spam.
+                              <strong>Consejo:</strong> anade <strong>__FROM_EMAIL__</strong> a tus contactos para que futuros correos no vayan a Spam.
                             </p>
                           </div>
                         </td>

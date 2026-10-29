@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
@@ -31,44 +32,38 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             String authHeader = accessor.getFirstNativeHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                log.warn("[STOMP] CONNECT sin header Authorization válido");
-                return message;
+                log.warn("[STOMP] CONNECT sin header Authorization valido");
+                throw new MessagingException("Token requerido");
             }
 
             String token = authHeader.substring(7);
             try {
-                // 1) Extraer datos del token
                 Long usuarioId = jwtService.extraerUsuarioId(token);
                 String email = jwtService.extraerEmail(token);
 
                 if (usuarioId == null || email == null) {
-                    log.warn("[STOMP] Token sin usuarioId/email");
-                    return message;
+                    throw new MessagingException("Token sin usuarioId/email");
                 }
 
-                // 2) Validar firma + expiración contra el email esperado
                 if (!jwtService.esTokenValido(token, email)) {
-                    log.warn("[STOMP] Token inválido o expirado para {}", email);
-                    return message;
+                    throw new MessagingException("Token invalido o expirado");
                 }
 
-                // 3) Guardar usuarioId en sessionAttributes
-                //    → ChatGlobalController lo lee desde aquí
                 Map<String, Object> attrs = accessor.getSessionAttributes();
                 if (attrs != null) {
                     attrs.put("usuarioId", String.valueOf(usuarioId));
                     attrs.put("email", email);
                 }
 
-                // 4) Asignar Principal (útil para @MessageMapping con Principal)
                 accessor.setUser((Principal) () -> email);
 
                 log.debug("[STOMP] Conectado: usuarioId={} email={}", usuarioId, email);
 
+            } catch (MessagingException e) {
+                throw e;
             } catch (Exception e) {
                 log.error("[STOMP] Error validando JWT: {}", e.getMessage());
-                // No lanzar → deja que el frame CONNECT siga, pero sin atributos
-                // Si prefieres rechazar: throw new MessagingException("Token inválido", e);
+                throw new MessagingException("Token invalido", e);
             }
         }
 

@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/RecursoBibliotecaRepository.java
+// src/main/java/com/kiert/backend/features/recursos/repository/RecursoBibliotecaRepository.java
 package com.kiert.backend.features.recursos.repository;
 
 import com.kiert.backend.entity.RecursoBiblioteca;
@@ -29,12 +29,13 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             """)
     List<RecursoBiblioteca> findAllActiveOrderByFechaAgregadoDesc();
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
             WHERE r.activo = true
             ORDER BY r.esUsuario DESC, r.fechaAgregado DESC
-            """)
+            """,
+            countQuery = "SELECT COUNT(r) FROM RecursoBiblioteca r WHERE r.activo = true")
     Page<RecursoBiblioteca> findAllActivePaginado(Pageable pageable);
 
     @Query("""
@@ -48,12 +49,16 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             @Param("categoria") String categoria
     );
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
             WHERE r.activo = true
               AND r.categoria = :categoria
             ORDER BY r.esUsuario DESC, r.fechaAgregado DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM RecursoBiblioteca r
+            WHERE r.activo = true AND r.categoria = :categoria
             """)
     Page<RecursoBiblioteca> findByCategoriaPaginado(
             @Param("categoria") String categoria,
@@ -69,17 +74,21 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             """)
     List<RecursoBiblioteca> findDestacados();
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
             WHERE r.activo = true
               AND r.destacado = true
             ORDER BY r.esUsuario DESC, r.fechaAgregado DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM RecursoBiblioteca r
+            WHERE r.activo = true AND r.destacado = true
             """)
     Page<RecursoBiblioteca> findDestacadosPaginado(Pageable pageable);
 
     // ============================================================
-    // CATEGORÍAS Y NIVELES
+    // CATEGORIAS Y NIVELES
     // ============================================================
 
     @Query("""
@@ -116,20 +125,21 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
             WHERE r.activo = true
-            ORDER BY 
+            ORDER BY
               CASE WHEN r.usuario.id = :usuarioId THEN 0 ELSE 1 END ASC,
               r.fechaAgregado DESC
             """)
     List<RecursoBiblioteca> findVisiblesParaUsuario(@Param("usuarioId") Long usuarioId);
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
             WHERE r.activo = true
-            ORDER BY 
+            ORDER BY
               CASE WHEN r.usuario.id = :usuarioId THEN 0 ELSE 1 END ASC,
               r.fechaAgregado DESC
-            """)
+            """,
+            countQuery = "SELECT COUNT(r) FROM RecursoBiblioteca r WHERE r.activo = true")
     Page<RecursoBiblioteca> findVisiblesParaUsuarioPaginado(
             @Param("usuarioId") Long usuarioId,
             Pageable pageable
@@ -140,7 +150,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             LEFT JOIN FETCH r.usuario u
             WHERE r.activo = true
               AND r.categoria = :categoria
-            ORDER BY 
+            ORDER BY
               CASE WHEN r.usuario.id = :usuarioId THEN 0 ELSE 1 END ASC,
               r.fechaAgregado DESC
             """)
@@ -149,14 +159,18 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             @Param("categoria") String categoria
     );
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
             WHERE r.activo = true
               AND r.categoria = :categoria
-            ORDER BY 
+            ORDER BY
               CASE WHEN r.usuario.id = :usuarioId THEN 0 ELSE 1 END ASC,
               r.fechaAgregado DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM RecursoBiblioteca r
+            WHERE r.activo = true AND r.categoria = :categoria
             """)
     Page<RecursoBiblioteca> findVisiblesPorCategoriaPaginado(
             @Param("usuarioId") Long usuarioId,
@@ -176,11 +190,15 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             """)
     List<RecursoBiblioteca> findByUsuarioId(@Param("usuarioId") Long usuarioId);
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM RecursoBiblioteca r
             WHERE r.activo = true
               AND r.usuario.id = :usuarioId
             ORDER BY r.fechaAgregado DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM RecursoBiblioteca r
+            WHERE r.activo = true AND r.usuario.id = :usuarioId
             """)
     Page<RecursoBiblioteca> findByUsuarioIdPaginado(
             @Param("usuarioId") Long usuarioId,
@@ -218,7 +236,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     Optional<RecursoBiblioteca> findActivoById(@Param("id") Long id);
 
     // ============================================================
-    // BÚSQUEDA
+    // BUSQUEDA
     // ============================================================
 
     @Query("""
@@ -229,6 +247,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
                 LOWER(r.titulo) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.descripcion) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.autor) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.plataforma) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.subcategoria) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.tags) LIKE LOWER(CONCAT('%', :query, '%'))
               )
@@ -236,7 +255,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             """)
     List<RecursoBiblioteca> buscar(@Param("query") String query);
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario
             WHERE r.activo = true
@@ -244,10 +263,23 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
                 LOWER(r.titulo) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.descripcion) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.autor) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.plataforma) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.subcategoria) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.tags) LIKE LOWER(CONCAT('%', :query, '%'))
               )
             ORDER BY r.fechaAgregado DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM RecursoBiblioteca r
+            WHERE r.activo = true
+              AND (
+                LOWER(r.titulo) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.descripcion) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.autor) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.plataforma) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.subcategoria) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.tags) LIKE LOWER(CONCAT('%', :query, '%'))
+              )
             """)
     Page<RecursoBiblioteca> buscarPaginado(
             @Param("query") String query,
@@ -262,6 +294,10 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
               AND (
                 LOWER(r.titulo) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.descripcion) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.autor) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.plataforma) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.subcategoria) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.tags) LIKE LOWER(CONCAT('%', :query, '%'))
               )
             ORDER BY r.fechaAgregado DESC
             """)
@@ -282,7 +318,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
                 OR LOWER(r.subcategoria) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.tags) LIKE LOWER(CONCAT('%', :query, '%'))
               )
-            ORDER BY 
+            ORDER BY
               CASE WHEN r.usuario.id = :usuarioId THEN 0 ELSE 1 END ASC,
               r.fechaAgregado DESC
             """)
@@ -291,7 +327,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             @Param("query") String query
     );
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM RecursoBiblioteca r
             LEFT JOIN FETCH r.usuario u
             WHERE r.activo = true
@@ -303,9 +339,21 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
                 OR LOWER(r.subcategoria) LIKE LOWER(CONCAT('%', :query, '%'))
                 OR LOWER(r.tags) LIKE LOWER(CONCAT('%', :query, '%'))
               )
-            ORDER BY 
+            ORDER BY
               CASE WHEN r.usuario.id = :usuarioId THEN 0 ELSE 1 END ASC,
               r.fechaAgregado DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM RecursoBiblioteca r
+            WHERE r.activo = true
+              AND (
+                LOWER(r.titulo) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.descripcion) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.autor) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.plataforma) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.subcategoria) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(r.tags) LIKE LOWER(CONCAT('%', :query, '%'))
+              )
             """)
     Page<RecursoBiblioteca> buscarVisiblesParaUsuarioPaginado(
             @Param("usuarioId") Long usuarioId,
@@ -354,6 +402,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
             FROM RecursoBiblioteca r
             WHERE r.activo = true
               AND r.nivel IS NOT NULL
+              AND r.nivel <> ''
             GROUP BY r.nivel
             """)
     List<Object[]> contarPorNivel();
@@ -409,7 +458,7 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     int eliminarDesactivadosAntiguos(@Param("limite") Instant limite);
 
     // ============================================================
-    // ESTADÍSTICAS
+    // ESTADISTICAS
     // ============================================================
 
     @Query("SELECT COUNT(r) FROM RecursoBiblioteca r WHERE r.activo = true")
@@ -430,13 +479,9 @@ public interface RecursoBibliotecaRepository extends JpaRepository<RecursoBiblio
     long countDeUsuariosActivos();
 
     // ============================================================
-    // SEGURIDAD: Validar autoría del recurso
+    // SEGURIDAD: Validar autoria del recurso
     // ============================================================
 
-    /**
-     * NUEVO: Verifica si un usuario es el autor del recurso.
-     * Se usa para impedir que un usuario edite/elimine recursos ajenos.
-     */
     @Query("""
             SELECT COUNT(r) > 0 FROM RecursoBiblioteca r
             WHERE r.id = :recursoId

@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/RecursoBibliotecaService.java
+// src/main/java/com/kiert/backend/features/recursos/service/RecursoBibliotecaService.java
 package com.kiert.backend.features.recursos.service;
 
 import com.kiert.backend.features.recursos.dto.RecursoBibliotecaDTO;
@@ -38,14 +38,13 @@ public class RecursoBibliotecaService {
     private static final String CACHE_CATEGORIAS = "categoriasBiblioteca";
     private static final String CACHE_NIVELES = "nivelesBiblioteca";
 
-    // Límites de validación
     private static final int MAX_TITULO = 200;
     private static final int MAX_DESCRIPCION = 1000;
     private static final int MAX_URL = 500;
     private static final int MAX_TAGS = 10;
     private static final int MAX_TAG_LENGTH = 30;
+    private static final int MAX_RECURSOS_POR_USUARIO = 100;
 
-    // Whitelist de dominios permitidos
     private static final List<String> DOMINIOS_PERMITIDOS = List.of(
             "coursera.org", "edx.org", "udemy.com", "udacity.com", "platzi.com",
             "domestika.org", "crehana.com", "khanacademy.org", "classcentral.com",
@@ -74,6 +73,11 @@ public class RecursoBibliotecaService {
             "futbollibrefullhd.org", "capacitacionlaboral.trabajo.gob.pe"
     );
 
+    private static final List<String> ACORTADORES = List.of(
+            "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly",
+            "is.gd", "buff.ly", "shorturl.at", "cutt.ly", "rb.gy"
+    );
+
     // ============================================================
     // LECTURA
     // ============================================================
@@ -84,7 +88,7 @@ public class RecursoBibliotecaService {
             key = "'usuario:' + (#usuarioId != null ? #usuarioId : 'anon')"
     )
     public List<RecursoBibliotecaDTO> listarTodos(Long usuarioId) {
-        log.info("[DB] Listando recursos visibles para usuario {}", usuarioId);
+        log.debug("[DB] Listando recursos visibles para usuario {}", usuarioId);
         List<RecursoBiblioteca> recursos = (usuarioId != null)
                 ? recursoRepository.findVisiblesParaUsuario(usuarioId)
                 : recursoRepository.findAllActiveOrderByFechaAgregadoDesc();
@@ -97,7 +101,7 @@ public class RecursoBibliotecaService {
             key = "'usuario:' + (#usuarioId != null ? #usuarioId : 'anon') + ':cat:' + #categoria"
     )
     public List<RecursoBibliotecaDTO> listarPorCategoria(Long usuarioId, String categoria) {
-        log.info("[DB] Listando recursos categoría={} para usuario {}", categoria, usuarioId);
+        log.debug("[DB] Listando recursos categoria={} para usuario {}", categoria, usuarioId);
         List<RecursoBiblioteca> recursos = (usuarioId != null)
                 ? recursoRepository.findVisiblesPorCategoria(usuarioId, categoria)
                 : recursoRepository.findByCategoriaOrderByFechaAgregadoDesc(categoria);
@@ -107,7 +111,7 @@ public class RecursoBibliotecaService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_DESTACADOS, key = "'all'")
     public List<RecursoBibliotecaDTO> listarDestacados() {
-        log.info("[DB] Listando recursos destacados");
+        log.debug("[DB] Listando recursos destacados");
         return recursoRepository.findDestacados()
                 .stream()
                 .map(this::toDTO)
@@ -186,6 +190,12 @@ public class RecursoBibliotecaService {
         validarRequest(request);
         validarUrl(request.getUrl());
 
+        // Limite por usuario
+        long totalRecursos = recursoRepository.countByUsuarioId(usuarioId);
+        if (totalRecursos >= MAX_RECURSOS_POR_USUARIO) {
+            throw new BadRequestException("Has alcanzado el limite de recursos. Elimina algunos antes de crear mas.");
+        }
+
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
@@ -201,13 +211,12 @@ public class RecursoBibliotecaService {
                 .plataforma(trimOrNull(request.getPlataforma()))
                 .duracion(trimOrNull(request.getDuracion()))
                 .nivel(trimOrNull(request.getNivel()))
-                .destacado(false) // Solo admin puede destacar
+                .destacado(false)
                 .activo(true)
                 .tags(tagsToString(request.getTags()))
                 .build();
 
-        RecursoBiblioteca guardado = recursoRepository.save(recurso);
-        return toDTO(guardado);
+        return toDTO(recursoRepository.save(recurso));
     }
 
     @Transactional
@@ -222,7 +231,7 @@ public class RecursoBibliotecaService {
         log.info("Actualizando recurso {} del usuario {}", recursoId, usuarioId);
 
         if (usuarioId == null || recursoId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
         if (request == null) {
             throw new BadRequestException("Datos requeridos");
@@ -245,12 +254,9 @@ public class RecursoBibliotecaService {
         recurso.setPlataforma(trimOrNull(request.getPlataforma()));
         recurso.setDuracion(trimOrNull(request.getDuracion()));
         recurso.setNivel(trimOrNull(request.getNivel()));
-        // NO permitir que el usuario se auto-destaque
-        // recurso.setDestacado(...) — solo admin
         recurso.setTags(tagsToString(request.getTags()));
 
-        RecursoBiblioteca actualizado = recursoRepository.save(recurso);
-        return toDTO(actualizado);
+        return toDTO(recursoRepository.save(recurso));
     }
 
     @Transactional
@@ -263,7 +269,7 @@ public class RecursoBibliotecaService {
     })
     public void eliminar(Long usuarioId, Long recursoId) {
         if (usuarioId == null || recursoId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
 
         RecursoBiblioteca recurso = recursoRepository.findActivoById(recursoId)
@@ -273,7 +279,7 @@ public class RecursoBibliotecaService {
 
         recurso.setActivo(false);
         recursoRepository.save(recurso);
-        log.info("Recurso {} eliminado (lógico)", recursoId);
+        log.info("Recurso {} eliminado (logico)", recursoId);
     }
 
     // ============================================================
@@ -281,13 +287,13 @@ public class RecursoBibliotecaService {
     // ============================================================
     private void validarRequest(RecursoUsuarioRequest request) {
         if (request.getTitulo() == null || request.getTitulo().isBlank()) {
-            throw new BadRequestException("El título es obligatorio");
+            throw new BadRequestException("El titulo es obligatorio");
         }
         if (request.getTitulo().length() > MAX_TITULO) {
-            throw new BadRequestException("El título es demasiado largo");
+            throw new BadRequestException("El titulo es demasiado largo");
         }
         if (request.getDescripcion() != null && request.getDescripcion().length() > MAX_DESCRIPCION) {
-            throw new BadRequestException("La descripción es demasiado larga");
+            throw new BadRequestException("La descripcion es demasiado larga");
         }
         if (request.getUrl() == null || request.getUrl().isBlank()) {
             throw new BadRequestException("La URL es obligatoria");
@@ -296,15 +302,15 @@ public class RecursoBibliotecaService {
             throw new BadRequestException("La URL es demasiado larga");
         }
         if (request.getCategoria() == null || request.getCategoria().isBlank()) {
-            throw new BadRequestException("La categoría es obligatoria");
+            throw new BadRequestException("La categoria es obligatoria");
         }
         if (request.getTags() != null && request.getTags().size() > MAX_TAGS) {
-            throw new BadRequestException("Máximo " + MAX_TAGS + " tags");
+            throw new BadRequestException("Maximo " + MAX_TAGS + " tags");
         }
         if (request.getTags() != null) {
             for (String tag : request.getTags()) {
                 if (tag != null && tag.length() > MAX_TAG_LENGTH) {
-                    throw new BadRequestException("Cada tag debe tener máximo " + MAX_TAG_LENGTH + " caracteres");
+                    throw new BadRequestException("Cada tag debe tener maximo " + MAX_TAG_LENGTH + " caracteres");
                 }
             }
         }
@@ -317,7 +323,6 @@ public class RecursoBibliotecaService {
 
         final String urlLimpia = url.trim();
 
-        // Protocolo: SOLO https://
         if (!urlLimpia.startsWith("https://")) {
             throw new BadRequestException("La URL debe comenzar con https://");
         }
@@ -326,12 +331,17 @@ public class RecursoBibliotecaService {
         try {
             uri = URI.create(urlLimpia);
         } catch (Exception e) {
-            throw new BadRequestException("La URL no tiene un formato válido");
+            throw new BadRequestException("La URL no tiene un formato valido");
         }
 
         final String hostRaw = uri.getHost();
         if (hostRaw == null || hostRaw.isBlank()) {
-            throw new BadRequestException("URL inválida: no tiene dominio");
+            throw new BadRequestException("URL invalida: no tiene dominio");
+        }
+
+        // Bloquear IPv6 directas (localhost y privadas)
+        if (hostRaw.startsWith("[")) {
+            throw new BadRequestException("No se permiten direcciones IPv6 directas");
         }
 
         final String host = hostRaw.toLowerCase();
@@ -341,19 +351,31 @@ public class RecursoBibliotecaService {
             throw new BadRequestException("No se permiten IPs directas");
         }
 
-        // Bloquear localhost / IPs privadas
-        if (host.equals("localhost") || host.startsWith("127.") ||
-                host.startsWith("192.168.") || host.startsWith("10.") ||
-                host.startsWith("172.")) {
+        // Bloquear localhost y rangos privados correctos
+        if (host.equals("localhost")
+                || host.startsWith("127.")
+                || host.startsWith("192.168.")
+                || host.startsWith("10.")
+                || host.equals("0.0.0.0")
+                || host.startsWith("169.254.")) {
             throw new BadRequestException("No se permiten URLs internas");
         }
 
+        // Rango 172.16.0.0 - 172.31.255.255 (privado real)
+        if (host.startsWith("172.")) {
+            String[] partes = host.split("\\.");
+            if (partes.length >= 2) {
+                try {
+                    int segundo = Integer.parseInt(partes[1]);
+                    if (segundo >= 16 && segundo <= 31) {
+                        throw new BadRequestException("No se permiten URLs internas");
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
         // Bloquear acortadores
-        final List<String> acortadores = List.of(
-                "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly",
-                "is.gd", "buff.ly", "shorturl.at", "cutt.ly", "rb.gy"
-        );
-        for (final String acortador : acortadores) {
+        for (final String acortador : ACORTADORES) {
             if (host.equals(acortador) || host.endsWith("." + acortador)) {
                 throw new BadRequestException("No se permiten acortadores de URL");
             }
@@ -365,7 +387,7 @@ public class RecursoBibliotecaService {
 
         if (!permitido) {
             throw new BadRequestException(
-                    "El dominio '" + host + "' no está en la lista de sitios permitidos"
+                    "El dominio '" + host + "' no esta en la lista de sitios permitidos"
             );
         }
     }

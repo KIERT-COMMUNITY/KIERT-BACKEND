@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/ReporteRepository.java
+// src/main/java/com/kiert/backend/features/reporte/repository/ReporteRepository.java
 package com.kiert.backend.features.reporte.repository;
 
 import com.kiert.backend.entity.Reporte;
@@ -69,7 +69,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // LISTAR REPORTES (admin)
     // ============================================================
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.usuarioReportante
             LEFT JOIN FETCH r.usuarioReportado
@@ -80,6 +80,11 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             WHERE (:estado IS NULL OR r.estado = :estado)
               AND (:tipo IS NULL OR r.tipoReporte = :tipo)
             ORDER BY r.fechaCreacion DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM Reporte r
+            WHERE (:estado IS NULL OR r.estado = :estado)
+              AND (:tipo IS NULL OR r.tipoReporte = :tipo)
             """)
     Page<Reporte> findWithFilters(
             @Param("estado") String estado,
@@ -129,7 +134,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             @Param("usuarioId") Long usuarioId
     );
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.post
             LEFT JOIN FETCH r.comentario
@@ -137,17 +142,25 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             LEFT JOIN FETCH r.usuarioReportado
             WHERE r.usuarioReportante.id = :usuarioId
             ORDER BY r.fechaCreacion DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM Reporte r
+            WHERE r.usuarioReportante.id = :usuarioId
             """)
     Page<Reporte> findByUsuarioReportanteIdPaginado(
             @Param("usuarioId") Long usuarioId,
             Pageable pageable
     );
 
-    @Query("""
+    @Query(value = """
             SELECT r FROM Reporte r
             LEFT JOIN FETCH r.usuarioReportante
             WHERE r.usuarioReportado.id = :usuarioReportadoId
             ORDER BY r.fechaCreacion DESC
+            """,
+            countQuery = """
+            SELECT COUNT(r) FROM Reporte r
+            WHERE r.usuarioReportado.id = :usuarioReportadoId
             """)
     Page<Reporte> findByUsuarioReportadoId(
             @Param("usuarioReportadoId") Long usuarioReportadoId,
@@ -267,7 +280,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     );
 
     // ============================================================
-    // LIMPIEZA (para @Scheduled)
+    // LIMPIEZA
     // ============================================================
 
     @Modifying
@@ -286,7 +299,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     long countResueltosAntiguos(@Param("limite") Instant limite);
 
     // ============================================================
-    // ESTADÍSTICAS
+    // ESTADISTICAS
     // ============================================================
 
     @Query("SELECT COUNT(r) FROM Reporte r")
@@ -302,9 +315,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     // SEGURIDAD: Validar permisos
     // ============================================================
 
-    /**
-     * NUEVO: Verifica si el usuario es el autor del reporte (para verlo/eliminarlo).
-     */
     @Query("""
             SELECT COUNT(r) > 0 FROM Reporte r
             WHERE r.id = :reporteId
@@ -315,9 +325,6 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
             @Param("usuarioId") Long usuarioId
     );
 
-    /**
-     * NUEVO: Verifica si el usuario es moderador/admin (para poder cambiar estado).
-     */
     @Query("""
             SELECT COUNT(u) > 0 FROM Usuario u
             WHERE u.id = :moderadorId

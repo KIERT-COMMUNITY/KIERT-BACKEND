@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/ComentarioRepository.java
+// src/main/java/com/kiert/backend/features/comentarios/repository/ComentarioRepository.java
 package com.kiert.backend.features.comentarios.repository;
 
 import com.kiert.backend.entity.Comentario;
@@ -16,10 +16,6 @@ import java.util.Optional;
 
 @Repository
 public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
-
-    // ============================================================
-    // LISTAR COMENTARIOS
-    // ============================================================
 
     @Query("""
             SELECT c FROM Comentario c
@@ -44,10 +40,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             Pageable pageable
     );
 
-    // ============================================================
-    // CONTAR COMENTARIOS
-    // ============================================================
-
     @Query("""
             SELECT COUNT(c) FROM Comentario c
             WHERE c.post.id = :postId
@@ -62,15 +54,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             """)
     long countActiveByAutorId(@Param("usuarioId") Long usuarioId);
 
-    // ============================================================
-    // COMENTARIOS SIN RESPUESTAS (para paginación segura)
-    // ============================================================
-
-    /**
-     * Carga los comentarios de un post SIN respuestas.
-     * Las respuestas se cargan en otra query con `RespuestaComentarioRepository`.
-     * Esto permite paginación correcta sin el bug N+1.
-     */
     @Query("""
             SELECT c FROM Comentario c
             LEFT JOIN FETCH c.autor
@@ -79,10 +62,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             ORDER BY c.fechaCreacion ASC
             """)
     List<Comentario> findComentariosDePost(@Param("postId") Long postId);
-
-    // ============================================================
-    // ÚLTIMOS COMENTARIOS DE UN USUARIO (perfil)
-    // ============================================================
 
     @Query("""
             SELECT c FROM Comentario c
@@ -96,10 +75,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             @Param("usuarioId") Long usuarioId,
             Pageable pageable
     );
-
-    // ============================================================
-    // BUSCAR EN COMENTARIOS
-    // ============================================================
 
     @Query("""
             SELECT c FROM Comentario c
@@ -116,10 +91,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             Pageable pageable
     );
 
-    // ============================================================
-    // ELIMINAR EN CASCADA (soft delete)
-    // ============================================================
-
     @Modifying
     @Query("""
             UPDATE Comentario c
@@ -133,10 +104,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             @Param("fecha") Instant fecha
     );
 
-    // ============================================================
-    // CONTADORES PARA CACHÉ
-    // ============================================================
-
     @Query("""
             SELECT c.post.id, COUNT(c)
             FROM Comentario c
@@ -145,10 +112,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             GROUP BY c.post.id
             """)
     List<Object[]> contarComentariosPorPosts(@Param("postIds") List<Long> postIds);
-
-    // ============================================================
-    // HELPERS
-    // ============================================================
 
     @Query("""
             SELECT COUNT(c) > 0 FROM Comentario c
@@ -166,10 +129,6 @@ public interface ComentarioRepository extends JpaRepository<Comentario, Long> {
             """)
     Optional<Comentario> findActivoConAutor(@Param("id") Long id);
 
-    /**
-     * NUEVO: Verifica si un usuario es el autor del comentario.
-     * Se usa para prevenir que un usuario edite/elimine comentarios ajenos.
-     */
     @Query("""
             SELECT COUNT(c) > 0 FROM Comentario c
             WHERE c.id = :comentarioId

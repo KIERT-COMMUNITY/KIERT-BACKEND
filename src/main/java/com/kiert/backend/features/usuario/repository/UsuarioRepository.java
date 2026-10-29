@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/UsuarioRepository.java
+// src/main/java/com/kiert/backend/features/usuario/repository/UsuarioRepository.java
 package com.kiert.backend.features.usuario.repository;
 
 import com.kiert.backend.entity.Usuario;
@@ -57,7 +57,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     boolean existsByNombreUsuario(@Param("nombreUsuario") String nombreUsuario);
 
     // ============================================================
-    // BÚSQUEDA POR NOMBRE (LIKE)
+    // BUSQUEDA POR NOMBRE (LIKE)
     // ============================================================
 
     @Query("""
@@ -201,7 +201,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     boolean estaEliminado(@Param("id") Long id);
 
     // ============================================================
-    // ADMIN: BÚSQUEDA AVANZADA
+    // ADMIN: BUSQUEDA AVANZADA
     // ============================================================
 
     @Query("""
@@ -262,7 +262,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     int desbloquearUsuariosExpirados(@Param("ahora") Instant ahora);
 
     // ============================================================
-    // ESTADÍSTICAS
+    // ESTADISTICAS
     // ============================================================
 
     @Query("""
@@ -304,7 +304,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     Object[] estadisticasGenerales();
 
     // ============================================================
-    // LIMPIEZA (para @Scheduled)
+    // LIMPIEZA
     // ============================================================
 
     @Modifying
@@ -325,12 +325,9 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     int eliminarNoVerificadosAntiguos(@Param("limite") Instant limite);
 
     // ============================================================
-    // SEGURIDAD: Verificar si el usuario es admin
+    // SEGURIDAD
     // ============================================================
 
-    /**
-     * NUEVO: Verifica si un usuario tiene rol de administrador.
-     */
     @Query("""
             SELECT COUNT(u) > 0 FROM Usuario u
             WHERE u.id = :usuarioId

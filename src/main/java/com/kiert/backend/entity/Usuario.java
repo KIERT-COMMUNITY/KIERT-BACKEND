@@ -18,7 +18,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @SQLDelete(sql = "UPDATE usuarios SET eliminado = true, fecha_eliminacion = CURRENT_TIMESTAMP, activo = false WHERE id = ?")
-@SQLRestriction("eliminado = false") // Hace que TODAS las consultas ignoren a los eliminados automáticamente
+@SQLRestriction("eliminado = false")
 public class Usuario {
 
     @Id
@@ -65,7 +65,7 @@ public class Usuario {
     @Column(name = "ultima_conexion")
     private Instant ultimaConexion;
 
-    // ✅ CAMPOS PARA SOFT DELETE
+    // CAMPOS PARA SOFT DELETE
     @Column(nullable = false)
     @Builder.Default
     private Boolean eliminado = false;
@@ -85,6 +85,11 @@ public class Usuario {
 
     @Column(name = "bloqueado_hasta")
     private Instant bloqueadoHasta;
+
+    // NUEVO: version del token para invalidar JWT al cambiar contrasena
+    @Column(name = "token_version", nullable = false)
+    @Builder.Default
+    private Integer tokenVersion = 0;
 
     // ============================================================
     // FECHAS
@@ -141,7 +146,7 @@ public class Usuario {
         if (this.personalizacion != null && this.personalizacion.getMarcoId() != null) {
             return this.personalizacion.getMarcoId();
         }
-        return "none";
+        return this.marcoId != null ? this.marcoId : "none";
     }
 
     @PreUpdate

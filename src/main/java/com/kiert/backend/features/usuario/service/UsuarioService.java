@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/UsuarioService.java
+// src/main/java/com/kiert/backend/features/usuario/service/UsuarioService.java
 package com.kiert.backend.features.usuario.service;
 
 import com.kiert.backend.features.usuario.dto.UsuarioDTO;
@@ -8,6 +8,9 @@ import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import com.kiert.backend.features.presencia.service.PresenciaService;
+import com.kiert.backend.features.passwordYcodigo.service.CodigoVerificacionService;
+import com.kiert.backend.features.email.service.EmailService;
+import com.kiert.backend.entity.TipoCodigo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -17,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -26,6 +30,8 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final PresenciaService presenciaService;
+    private final CodigoVerificacionService codigoVerificacionService;
+    private final EmailService emailService;
 
     private static final String CACHE_USUARIOS = "usuarios";
     private static final String CACHE_BUSQUEDA_USUARIOS = "busquedaUsuarios";
@@ -34,13 +40,15 @@ public class UsuarioService {
     private static final int MAX_EMAIL = 100;
     private static final int MAX_BIO = 255;
 
+    private static final String EMAIL_REGEX = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
+
     // ============================================================
     // OBTENER USUARIO POR ID
     // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_USUARIOS, key = "#id")
     public UsuarioDTO obtenerUsuarioPorId(Long id) {
-        log.info("[DB] Obteniendo usuario por ID: {}", id);
+        log.debug("[DB] Obteniendo usuario por ID: {}", id);
 
         if (id == null) {
             throw new BadRequestException("ID requerido");
@@ -49,13 +57,7 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        return new UsuarioDTO(
-                usuario.getId(),
-                usuario.getNombreUsuario(),
-                usuario.getEmail(),
-                usuario.getFotoPerfilUrl(),
-                usuario.getBio()
-        );
+        return toDTO(usuario);
     }
 
     // ============================================================
@@ -64,11 +66,11 @@ public class UsuarioService {
     @Transactional(readOnly = true)
     @Cacheable(
             value = CACHE_BUSQUEDA_USUARIOS,
-            key = "#usuarioActualId + ':' + #query.toLowerCase().trim()",
+            key = "#usuarioActualId + ':' + (#query != null ? #query.toLowerCase().trim() : '')",
             condition = "#query != null && #query.trim().length() >= 3"
     )
     public List<UsuarioDisponibleDTO> buscarUsuarios(String query, Long usuarioActualId) {
-        log.info("[DB] Buscando usuarios con: '{}' (usuario: {})", query, usuarioActualId);
+        log.debug("[DB] Buscando usuarios con: '{}' (usuario: {})", query, usuarioActualId);
 
         if (query == null || query.trim().length() < 1) {
             return List.of();
@@ -120,10 +122,13 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
+        boolean emailCambio = false;
+
+        // -------- NOMBRE DE USUARIO --------
         if (datos.nombreUsuario() != null) {
             String nombre = datos.nombreUsuario().trim();
             if (nombre.isEmpty()) {
-                throw new BadRequestException("El nombre de usuario no puede estar vacío");
+                throw new BadRequestException("El nombre de usuario no puede estar vacio");
             }
             if (nombre.length() > MAX_NOMBRE_USUARIO) {
                 throw new BadRequestException("El nombre de usuario es demasiado largo");
@@ -133,46 +138,66 @@ public class UsuarioService {
             }
             if (!nombre.equals(usuario.getNombreUsuario())
                     && usuarioRepository.existsByNombreUsuario(nombre)) {
-                throw new BadRequestException("El nombre de usuario ya está en uso");
+                throw new BadRequestException("El nombre de usuario ya esta en uso");
             }
             usuario.setNombreUsuario(nombre);
         }
 
+        // -------- EMAIL --------
         if (datos.email() != null) {
-            String email = datos.email().trim().toLowerCase();
+            String email = datos.email().trim().toLowerCase(Locale.ROOT);
             if (email.isEmpty()) {
-                throw new BadRequestException("El email no puede estar vacío");
+                throw new BadRequestException("El email no puede estar vacio");
             }
             if (email.length() > MAX_EMAIL) {
                 throw new BadRequestException("El email es demasiado largo");
             }
-            if (!email.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
-                throw new BadRequestException("El email no es válido");
+            if (!email.matches(EMAIL_REGEX)) {
+                throw new BadRequestException("El email no es valido");
             }
             if (!email.equals(usuario.getEmail())
                     && usuarioRepository.existsByEmail(email)) {
-                throw new BadRequestException("El email ya está en uso");
+                throw new BadRequestException("El email ya esta en uso");
             }
-            usuario.setEmail(email);
+
+            if (!email.equals(usuario.getEmail())) {
+                emailCambio = true;
+                usuario.setEmail(email);
+            }
         }
 
+        // -------- BIO --------
         if (datos.bio() != null) {
             String bio = datos.bio().trim();
             if (bio.length() > MAX_BIO) {
-                throw new BadRequestException("La biografía es demasiado larga");
+                throw new BadRequestException("La biografia es demasiado larga");
             }
             usuario.setBio(bio.isEmpty() ? null : bio);
         }
 
         usuario = usuarioRepository.save(usuario);
 
-        return new UsuarioDTO(
-                usuario.getId(),
-                usuario.getNombreUsuario(),
-                usuario.getEmail(),
-                usuario.getFotoPerfilUrl(),
-                usuario.getBio()
-        );
+        // SEGURIDAD: si cambio el email, invalidar la cuenta y reenviar codigo
+        if (emailCambio) {
+            try {
+                usuario.setEmailVerificado(false);
+                usuario.setActivo(false);
+                usuario.setFechaVerificacionEmail(null);
+                usuarioRepository.save(usuario);
+
+                String codigo = codigoVerificacionService.generarCodigo(
+                        usuario.getEmail(), TipoCodigo.VERIFICACION_CUENTA);
+                emailService.enviarCodigoVerificacion(
+                        usuario.getEmail(), usuario.getNombreUsuario(), codigo);
+
+                log.info("Email cambiado para usuario {}. Cuenta desactivada y codigo enviado.", id);
+            } catch (Exception e) {
+                log.warn("Error al invalidar cuenta tras cambio de email para usuario {}: {}",
+                        id, e.getMessage());
+            }
+        }
+
+        return toDTO(usuario);
     }
 
     // ============================================================
@@ -186,15 +211,10 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        // Aplicamos el Soft Delete manualmente (por si acaso)
         usuario.setEliminado(true);
         usuario.setFechaEliminacion(Instant.now());
-        usuario.setActivo(false); // Desactivar la cuenta
-        usuario.setEnLinea(false); // Forzar offline
-
-        // Opcional: Anonimizar datos para cumplir con RGPD
-        // usuario.setEmail("deleted_" + usuario.getId() + "@anonimizado.com");
-        // usuario.setNombreUsuario("UsuarioEliminado" + usuario.getId());
+        usuario.setActivo(false);
+        usuario.setEnLinea(false);
 
         usuarioRepository.save(usuario);
         log.info("Cuenta del usuario {} marcada como eliminada.", id);
@@ -212,7 +232,19 @@ public class UsuarioService {
     }
 
     public UsuarioDTO enriquecerConPresencia(UsuarioDTO dto) {
-        if (dto == null) return null;
         return dto;
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    private UsuarioDTO toDTO(Usuario usuario) {
+        return new UsuarioDTO(
+                usuario.getId(),
+                usuario.getNombreUsuario(),
+                usuario.getEmail(),
+                usuario.getFotoPerfilUrl(),
+                usuario.getBio()
+        );
     }
 }

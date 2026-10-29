@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/AnuncioService.java
+// src/main/java/com/kiert/backend/features/anuncio/service/AnuncioService.java
 package com.kiert.backend.features.anuncio.service;
 
 import com.kiert.backend.features.imagen.dto.ImagenSubidaDTO;
@@ -21,6 +21,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AnuncioService {
 
+    private static final int TITULO_MAX_LENGTH = 200;
+    private static final int TEXTO_MAX_LENGTH = 5000;
+
     private final AnuncioRepository anuncioRepository;
     private final CloudinaryService cloudinaryService;
 
@@ -37,19 +40,17 @@ public class AnuncioService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Anuncio no encontrado"));
     }
 
-    // ✅ Obtener el anuncio que va en el banner flotante
     public Anuncio obtenerAnuncioFlotante() {
         return anuncioRepository.findFirstByEsFlotanteTrueAndActivoTrueOrderByFechaCreacionDesc()
-                .orElse(null); // Si no hay, devolvemos null
+                .orElse(null);
     }
 
     @Transactional
     public Anuncio crear(String titulo, String texto, String enlaceUrl, Boolean esFlotante, MultipartFile imagen) {
-        log.info("Creando anuncio: titulo='{}', esFlotante={}, tieneImagen={}", titulo, esFlotante, imagen != null && !imagen.isEmpty());
+        log.info("Creando anuncio: titulo='{}', esFlotante={}, tieneImagen={}",
+                titulo, esFlotante, imagen != null && !imagen.isEmpty());
 
-        if (titulo == null || titulo.isBlank()) throw new BadRequestException("El título es obligatorio");
-        if (texto == null || texto.isBlank()) throw new BadRequestException("El texto es obligatorio");
-        if (titulo.length() > 200) throw new BadRequestException("El título no debe exceder 200 caracteres");
+        validarTituloYTexto(titulo, texto);
 
         Anuncio anuncio = Anuncio.builder()
                 .titulo(titulo.trim())
@@ -85,11 +86,11 @@ public class AnuncioService {
 
     @Transactional
     public Anuncio actualizar(Long id, String titulo, String texto, String enlaceUrl, Boolean esFlotante, MultipartFile nuevaImagen) {
-        log.info("Actualizando anuncio id={}, esFlotante={}, tieneNuevaImagen={}", id, esFlotante, nuevaImagen != null && !nuevaImagen.isEmpty());
-        Anuncio anuncio = obtenerPorId(id);
+        log.info("Actualizando anuncio id={}, esFlotante={}, tieneNuevaImagen={}",
+                id, esFlotante, nuevaImagen != null && !nuevaImagen.isEmpty());
 
-        if (titulo == null || titulo.isBlank()) throw new BadRequestException("El título es obligatorio");
-        if (texto == null || texto.isBlank()) throw new BadRequestException("El texto es obligatorio");
+        Anuncio anuncio = obtenerPorId(id);
+        validarTituloYTexto(titulo, texto);
 
         anuncio.setTitulo(titulo.trim());
         anuncio.setTexto(texto.trim());
@@ -120,6 +121,21 @@ public class AnuncioService {
             cloudinaryService.eliminarArchivo(anuncio.getImagenPublicId(), "image");
         }
         anuncioRepository.delete(anuncio);
+    }
+
+    private void validarTituloYTexto(String titulo, String texto) {
+        if (titulo == null || titulo.isBlank()) {
+            throw new BadRequestException("El titulo es obligatorio");
+        }
+        if (texto == null || texto.isBlank()) {
+            throw new BadRequestException("El texto es obligatorio");
+        }
+        if (titulo.length() > TITULO_MAX_LENGTH) {
+            throw new BadRequestException("El titulo no debe exceder " + TITULO_MAX_LENGTH + " caracteres");
+        }
+        if (texto.length() > TEXTO_MAX_LENGTH) {
+            throw new BadRequestException("El texto no debe exceder " + TEXTO_MAX_LENGTH + " caracteres");
+        }
     }
 
     private void aplicarMetaImagen(Anuncio anuncio, ImagenSubidaDTO meta) {

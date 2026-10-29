@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/repository/GrupoChatRepository.java
+// src/main/java/com/kiert/backend/features/grupo/repository/GrupoChatRepository.java
 package com.kiert.backend.features.grupo.repository;
 
 import com.kiert.backend.entity.GrupoChat;
@@ -116,10 +116,6 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
             Pageable pageable
     );
 
-    /**
-     * Búsqueda segura: solo grupos PÚBLICOS o grupos donde el usuario es miembro.
-     * Evita que un usuario vea grupos privados ajenos.
-     */
     @Query("""
             SELECT g FROM GrupoChat g
             LEFT JOIN FETCH g.creador
@@ -261,13 +257,9 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
     int desactivarEnLote(@Param("ids") List<Long> ids);
 
     // ============================================================
-    // SEGURIDAD: Verificar membresía
+    // SEGURIDAD: Verificar membresia
     // ============================================================
 
-    /**
-     * NUEVO: Verifica si un usuario es miembro activo del grupo.
-     * Se usa para impedir que usuarios ajenos vean mensajes o metadatos.
-     */
     @Query("""
             SELECT COUNT(m) > 0 FROM MiembroGrupo m
             WHERE m.grupo.id = :grupoId
@@ -279,9 +271,6 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
             @Param("usuarioId") Long usuarioId
     );
 
-    /**
-     * NUEVO: Verifica si un usuario puede acceder a un grupo (público o miembro).
-     */
     @Query("""
             SELECT COUNT(g) > 0 FROM GrupoChat g
             WHERE g.id = :grupoId
@@ -297,6 +286,25 @@ public interface GrupoChatRepository extends JpaRepository<GrupoChat, Long> {
               )
             """)
     boolean puedeAccederAlGrupo(
+            @Param("grupoId") Long grupoId,
+            @Param("usuarioId") Long usuarioId
+    );
+
+    @Query("""
+            SELECT COUNT(g) > 0 FROM GrupoChat g
+            WHERE g.id = :grupoId
+              AND g.activo = true
+              AND (
+                g.tipo = 'PUBLICO'
+                OR EXISTS (
+                  SELECT 1 FROM MiembroGrupo m
+                  WHERE m.grupo = g
+                    AND m.usuario.id = :usuarioId
+                    AND m.estado = 'ACTIVO'
+                )
+              )
+            """)
+    boolean puedeVerMiembros(
             @Param("grupoId") Long grupoId,
             @Param("usuarioId") Long usuarioId
     );

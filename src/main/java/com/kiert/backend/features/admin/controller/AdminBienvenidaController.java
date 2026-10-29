@@ -1,4 +1,6 @@
+// src/main/java/com/kiert/backend/features/admin/controller/AdminBienvenidaController.java
 package com.kiert.backend.features.admin.controller;
+
 import com.kiert.backend.features.bienvenida.dto.ActualizarBienvenidaDTO;
 import com.kiert.backend.features.bienvenida.dto.BienvenidaDTO;
 import com.kiert.backend.features.bienvenida.dto.HistorialBienvenidaDTO;
@@ -16,7 +18,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/bienvenida")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class AdminBienvenidaController {
 
     private final BienvenidaService bienvenidaService;

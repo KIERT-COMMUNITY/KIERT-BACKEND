@@ -4,12 +4,10 @@ package com.kiert.backend.features.chatGlobal.controller;
 import com.kiert.backend.features.chatGlobal.dto.EnviarMensajeGlobalDTO;
 import com.kiert.backend.features.chatGlobal.dto.MensajeGlobalDTO;
 import com.kiert.backend.entity.MensajeGlobal;
-import com.kiert.backend.entity.PersonalizacionUsuario;
 import com.kiert.backend.entity.Usuario;
 import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.features.chatGlobal.repository.MensajeGlobalRepository;
-import com.kiert.backend.features.personalizacion.repository.PersonalizacionRepository;
 import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,10 +19,12 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -32,21 +32,27 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ChatGlobalController {
 
+    private static final int PAGE_SIZE_MAX = 100;
+    private static final int PAGE_MAX = 1000;
+    private static final int CONTENIDO_MAX_LENGTH = 500;
+
     private final MensajeGlobalRepository mensajeRepository;
     private final UsuarioRepository usuarioRepository;
-    private final PersonalizacionRepository personalizacionRepository; // ✅ NUEVO
 
-    // ============================================================
-    // REST: historial paginado (público — permite invitados)
-    // ============================================================
     @GetMapping("/mensajes")
+    @PreAuthorize("permitAll()")
     public ResponseEntity<List<MensajeGlobalDTO>> obtenerMensajes(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
 
-        log.info("[CHAT-GLOBAL] Historial solicitado (page={}, size={})", page, size);
+        if (page < 0 || page > PAGE_MAX) {
+            return ResponseEntity.badRequest().build();
+        }
+        int sizeSeguro = Math.min(Math.max(size, 1), PAGE_SIZE_MAX);
 
-        Pageable pageable = PageRequest.of(page, Math.min(size, 100));
+        log.debug("[CHAT-GLOBAL] Historial solicitado (page={}, size={})", page, sizeSeguro);
+
+        Pageable pageable = PageRequest.of(page, sizeSeguro);
         Page<MensajeGlobal> mensajes = mensajeRepository.findUltimosConAutor(pageable);
 
         List<MensajeGlobalDTO> dtos = mensajes.getContent().stream()
@@ -56,49 +62,51 @@ public class ChatGlobalController {
         return ResponseEntity.ok(dtos);
     }
 
-    // ============================================================
-    // STOMP: enviar mensaje (requiere usuario autenticado)
-    // ============================================================
     @MessageMapping("/chat-global.enviar")
     @SendTo("/topic/chat-global")
     public MensajeGlobalDTO enviarMensaje(
             @Payload EnviarMensajeGlobalDTO dto,
             SimpMessageHeaderAccessor headerAccessor) {
 
-        // ✅ Requiere que el usuario esté autenticado en la sesión STOMP
-        String usuarioIdStr = (String) headerAccessor.getSessionAttributes().get("usuarioId");
+        Map<String, Object> attrs = headerAccessor.getSessionAttributes();
+        String usuarioIdStr = attrs != null ? (String) attrs.get("usuarioId") : null;
         if (usuarioIdStr == null) {
             throw new BadRequestException("Usuario no autenticado en el chat");
         }
 
-        Long usuarioId = Long.parseLong(usuarioIdStr);
+        Long usuarioId;
+        try {
+            usuarioId = Long.parseLong(usuarioIdStr);
+        } catch (NumberFormatException e) {
+            throw new BadRequestException("Sesion invalida");
+        }
 
-        if (dto.contenido() == null || dto.contenido().trim().isEmpty()) {
-            throw new BadRequestException("El mensaje no puede estar vacío");
+        if (dto == null || dto.contenido() == null || dto.contenido().trim().isEmpty()) {
+            throw new BadRequestException("El mensaje no puede estar vacio");
         }
-        if (dto.contenido().length() > 500) {
-            throw new BadRequestException("El mensaje es demasiado largo (máx. 500 caracteres)");
+        String contenido = dto.contenido().trim();
+        if (contenido.length() > CONTENIDO_MAX_LENGTH) {
+            throw new BadRequestException("El mensaje es demasiado largo (max. "
+                    + CONTENIDO_MAX_LENGTH + " caracteres)");
         }
+        contenido = contenido.replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
 
         Usuario autor = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
         MensajeGlobal mensaje = MensajeGlobal.builder()
                 .autor(autor)
-                .contenido(dto.contenido().trim())
+                .contenido(contenido)
                 .fechaEnvio(Instant.now())
                 .build();
 
         mensaje = mensajeRepository.save(mensaje);
 
-        log.info("[CHAT-GLOBAL] {}: {}", autor.getNombreUsuario(), mensaje.getContenido());
+        log.info("[CHAT-GLOBAL] Mensaje id={} de usuarioId={}", mensaje.getId(), autor.getId());
 
         return mapearADTO(mensaje);
     }
 
-    // ============================================================
-    // DTO MAPPING
-    // ============================================================
     private MensajeGlobalDTO mapearADTO(MensajeGlobal m) {
         if (m == null) return null;
 
@@ -106,22 +114,14 @@ public class ChatGlobalController {
         Long autorId = autor != null ? autor.getId() : null;
         String nombre = autor != null ? autor.getNombreUsuario() : "Usuario";
         String foto = autor != null ? autor.getFotoPerfilUrl() : null;
-
-        // ✅ Leer marcoId de la personalización del autor (fallback "none")
-        String marcoId = "none";
-        if (autorId != null) {
-            marcoId = personalizacionRepository.findByUsuarioId(autorId)
-                    .map(PersonalizacionUsuario::getMarcoId)
-                    .filter(s -> s != null && !s.isBlank())
-                    .orElse("none");
-        }
+        String marcoId = autor != null ? autor.getMarcoId() : "none";
 
         return new MensajeGlobalDTO(
                 m.getId(),
                 autorId,
                 nombre,
                 foto,
-                marcoId,          // ✅ NUEVO orden: después de foto, antes de contenido
+                marcoId,
                 m.getContenido(),
                 m.getFechaEnvio()
         );

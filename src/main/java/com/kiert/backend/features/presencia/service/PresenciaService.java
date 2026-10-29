@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/PresenciaService.java
+// src/main/java/com/kiert/backend/features/presencia/service/PresenciaService.java
 package com.kiert.backend.features.presencia.service;
 
 import lombok.RequiredArgsConstructor;
@@ -24,31 +24,41 @@ public class PresenciaService {
     private static final Duration TTL_ONLINE = Duration.ofMinutes(5);
     private static final Duration TTL_ULTIMA = Duration.ofDays(7);
 
+    // ============================================================
+    // MARCAR EN LINEA
+    // ============================================================
     public void marcarEnLinea(Long usuarioId) {
         if (usuarioId == null) return;
         try {
             redis.opsForValue().set(KEY_ONLINE + usuarioId, "1", TTL_ONLINE);
             redis.opsForValue().set(KEY_ULTIMA + usuarioId, Instant.now().toString(), TTL_ULTIMA);
         } catch (Exception e) {
-            log.error("Error marcando en línea a {}: {}", usuarioId, e.getMessage());
+            log.warn("Error marcando en linea a {}: {}", usuarioId, e.getMessage());
         }
     }
 
+    // ============================================================
+    // MARCAR DESCONECTADO
+    // ============================================================
     public void marcarDesconectado(Long usuarioId) {
         if (usuarioId == null) return;
         try {
             redis.delete(KEY_ONLINE + usuarioId);
             redis.opsForValue().set(KEY_ULTIMA + usuarioId, Instant.now().toString(), TTL_ULTIMA);
         } catch (Exception e) {
-            log.error("Error marcando desconectado a {}: {}", usuarioId, e.getMessage());
+            log.warn("Error marcando desconectado a {}: {}", usuarioId, e.getMessage());
         }
     }
 
+    // ============================================================
+    // CONSULTAR
+    // ============================================================
     public boolean estaEnLinea(Long usuarioId) {
         if (usuarioId == null) return false;
         try {
             return Boolean.TRUE.equals(redis.hasKey(KEY_ONLINE + usuarioId));
         } catch (Exception e) {
+            log.warn("Error consultando presencia de {}: {}", usuarioId, e.getMessage());
             return false;
         }
     }
@@ -59,6 +69,7 @@ public class PresenciaService {
             String valor = redis.opsForValue().get(KEY_ULTIMA + usuarioId);
             return valor != null ? Instant.parse(valor) : null;
         } catch (Exception e) {
+            log.warn("Error obteniendo ultima conexion de {}: {}", usuarioId, e.getMessage());
             return null;
         }
     }
@@ -75,6 +86,7 @@ public class PresenciaService {
                         obtenerUltimaConexion(id)
                 ));
             } catch (Exception e) {
+                log.warn("Error obteniendo estado de {}: {}", id, e.getMessage());
                 resultado.put(id, new EstadoPresencia(false, null));
             }
         }

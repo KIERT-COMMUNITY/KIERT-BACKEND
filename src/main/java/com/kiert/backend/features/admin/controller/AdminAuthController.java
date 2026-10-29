@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/features/admin/controller/AdminAuthController.java
 package com.kiert.backend.features.admin.controller;
 
 import com.kiert.backend.features.admin.dtos.request.AdminLoginRequestDTO;
@@ -16,7 +17,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class AdminAuthController {
 
     private final AdminService adminService;
@@ -30,7 +30,7 @@ public class AdminAuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.error("[ADMIN] Error inesperado: {}", e.getMessage(), e);
+            log.error("[ADMIN] Error inesperado en login: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error al procesar el login"));
         }

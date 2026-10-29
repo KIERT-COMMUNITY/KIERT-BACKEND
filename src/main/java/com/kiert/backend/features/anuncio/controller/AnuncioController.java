@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/controller/AnuncioController.java
+// src/main/java/com/kiert/backend/features/anuncio/controller/AnuncioController.java
 package com.kiert.backend.features.anuncio.controller;
 
 import com.kiert.backend.entity.Anuncio;
@@ -14,23 +14,25 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/anuncios")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
 public class AnuncioController {
 
     private final AnuncioService anuncioService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<List<Anuncio>> listarTodos() {
         return ResponseEntity.ok(anuncioService.listarTodos());
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<Anuncio> obtener(@PathVariable Long id) {
         return ResponseEntity.ok(anuncioService.obtenerPorId(id));
     }
 
     @PostMapping(consumes = "multipart/form-data")
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<Anuncio> crear(
             @RequestParam("titulo") String titulo,
             @RequestParam("texto") String texto,
@@ -41,6 +43,7 @@ public class AnuncioController {
     }
 
     @PutMapping(value = "/{id}", consumes = "multipart/form-data")
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<Anuncio> actualizar(
             @PathVariable Long id,
             @RequestParam("titulo") String titulo,
@@ -52,6 +55,7 @@ public class AnuncioController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('CEO','ADMIN','MODERADOR')")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         anuncioService.eliminar(id);
         return ResponseEntity.noContent().build();

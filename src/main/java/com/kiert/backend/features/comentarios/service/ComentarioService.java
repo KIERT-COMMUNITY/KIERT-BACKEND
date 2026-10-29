@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/service/ComentarioService.java
+// src/main/java/com/kiert/backend/features/comentarios/service/ComentarioService.java
 package com.kiert.backend.features.comentarios.service;
 
 import com.kiert.backend.entity.*;
@@ -58,7 +58,7 @@ public class ComentarioService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_COMENTARIOS, key = "'post:' + #postId")
     public List<ComentarioDTO> listarPorPost(Long postId) {
-        log.info("[DB] Listando comentarios del post: {}", postId);
+        log.debug("[DB] Listando comentarios del post: {}", postId);
         List<Comentario> comentarios = comentarioRepository
                 .findByPostIdAndEliminadoFalseOrderByFechaCreacionAsc(postId);
         return comentarios.stream()
@@ -75,21 +75,17 @@ public class ComentarioService {
     public ComentarioDTO crearComentario(Long postId, Long autorId, String contenido) {
         log.info("Creando comentario en post: {}, usuario: {}", postId, autorId);
 
+        validarContenido(contenido, "El comentario");
+
         if (postId == null || autorId == null) {
-            throw new BadRequestException("Parámetros inválidos");
-        }
-        if (contenido == null || contenido.isBlank()) {
-            throw new BadRequestException("El comentario no puede estar vacío");
-        }
-        if (contenido.length() > MAX_CONTENIDO) {
-            throw new BadRequestException("El comentario es demasiado largo");
+            throw new BadRequestException("Parametros invalidos");
         }
 
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Post no encontrado"));
 
         if (post.isEliminado()) {
-            throw new BadRequestException("El post ya no está disponible");
+            throw new BadRequestException("El post ya no esta disponible");
         }
 
         Usuario autor = usuarioRepository.findById(autorId)
@@ -109,7 +105,7 @@ public class ComentarioService {
             try {
                 notificationService.crearNotificacionComentario(autorId, postId, comentario.getId());
             } catch (Exception e) {
-                log.warn("Error creando notificación: {}", e.getMessage());
+                log.warn("Error creando notificacion: {}", e.getMessage());
             }
         }
 
@@ -128,14 +124,13 @@ public class ComentarioService {
         log.info("Eliminando comentario: {}", comentarioId);
 
         if (comentarioId == null || usuarioId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
 
         Comentario comentario = comentarioRepository.findActivoConAutor(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
 
         if (!comentario.getAutor().getId().equals(usuarioId)) {
-            // ⚠️ MENSAJE GENÉRICO: no revelar que el comentario existe
             throw new BadRequestException("No tienes permiso para eliminar este comentario");
         }
 
@@ -152,7 +147,7 @@ public class ComentarioService {
     @Transactional(readOnly = true)
     @Cacheable(value = CACHE_RESPUESTAS, key = "'comentario:' + #comentarioId")
     public List<RespuestaDTO> listarRespuestas(Long comentarioId) {
-        log.info("[DB] Listando respuestas del comentario: {}", comentarioId);
+        log.debug("[DB] Listando respuestas del comentario: {}", comentarioId);
         List<RespuestaComentario> respuestas = respuestaRepository
                 .findByComentarioIdAndEliminadoFalseOrderByFechaCreacionAsc(comentarioId);
         return respuestas.stream()
@@ -168,21 +163,17 @@ public class ComentarioService {
     public RespuestaDTO crearRespuesta(Long comentarioId, Long autorId, String contenido) {
         log.info("Creando respuesta al comentario: {}, usuario: {}", comentarioId, autorId);
 
+        validarContenido(contenido, "La respuesta");
+
         if (comentarioId == null || autorId == null) {
-            throw new BadRequestException("Parámetros inválidos");
-        }
-        if (contenido == null || contenido.isBlank()) {
-            throw new BadRequestException("La respuesta no puede estar vacía");
-        }
-        if (contenido.length() > MAX_CONTENIDO) {
-            throw new BadRequestException("La respuesta es demasiado larga");
+            throw new BadRequestException("Parametros invalidos");
         }
 
         Comentario comentario = comentarioRepository.findActivoConAutor(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
 
         if (comentario.isEliminado()) {
-            throw new BadRequestException("El comentario ya no está disponible");
+            throw new BadRequestException("El comentario ya no esta disponible");
         }
 
         Usuario autor = usuarioRepository.findById(autorId)
@@ -202,7 +193,7 @@ public class ComentarioService {
             try {
                 notificationService.crearNotificacionRespuesta(autorId, comentarioId, respuesta.getId());
             } catch (Exception e) {
-                log.warn("Error creando notificación: {}", e.getMessage());
+                log.warn("Error creando notificacion: {}", e.getMessage());
             }
         }
 
@@ -218,7 +209,7 @@ public class ComentarioService {
         log.info("Eliminando respuesta: {}", respuestaId);
 
         if (respuestaId == null || usuarioId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
 
         RespuestaComentario respuesta = respuestaRepository.findActivaById(respuestaId)
@@ -247,17 +238,17 @@ public class ComentarioService {
         log.info("Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioId);
 
         if (comentarioId == null || usuarioId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
         if (tipo == null || !TIPOS_REACCION_VALIDOS.contains(tipo)) {
-            throw new BadRequestException("Tipo de reacción inválido");
+            throw new BadRequestException("Tipo de reaccion invalido");
         }
 
         Comentario comentario = comentarioRepository.findActivoConAutor(comentarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Comentario no encontrado"));
 
         if (comentario.isEliminado()) {
-            throw new BadRequestException("El comentario ya no está disponible");
+            throw new BadRequestException("El comentario ya no esta disponible");
         }
 
         Reaccion reaccion = reaccionRepository
@@ -266,11 +257,11 @@ public class ComentarioService {
 
         if (reaccion != null && reaccion.getTipo().equals(tipo)) {
             reaccionRepository.delete(reaccion);
-            log.info("Reacción eliminada");
+            log.info("Reaccion eliminada");
         } else if (reaccion != null) {
             reaccion.setTipo(tipo);
             reaccionRepository.save(reaccion);
-            log.info("Reacción actualizada a: {}", tipo);
+            log.info("Reaccion actualizada a: {}", tipo);
         } else {
             Usuario usuario = usuarioRepository.findById(usuarioId)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -280,7 +271,7 @@ public class ComentarioService {
                     .tipo(tipo)
                     .build();
             reaccionRepository.save(reaccion);
-            log.info("Nueva reacción creada: {}", tipo);
+            log.info("Nueva reaccion creada: {}", tipo);
         }
 
         return calcularReaccionesComentarioDesdeDB(comentarioId);
@@ -295,17 +286,17 @@ public class ComentarioService {
         log.info("Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioId);
 
         if (respuestaId == null || usuarioId == null) {
-            throw new BadRequestException("Parámetros inválidos");
+            throw new BadRequestException("Parametros invalidos");
         }
         if (tipo == null || !TIPOS_REACCION_VALIDOS.contains(tipo)) {
-            throw new BadRequestException("Tipo de reacción inválido");
+            throw new BadRequestException("Tipo de reaccion invalido");
         }
 
         RespuestaComentario respuesta = respuestaRepository.findActivaById(respuestaId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Respuesta no encontrada"));
 
         if (respuesta.isEliminado()) {
-            throw new BadRequestException("La respuesta ya no está disponible");
+            throw new BadRequestException("La respuesta ya no esta disponible");
         }
 
         ReaccionRespuesta reaccion = reaccionRespuestaRepository
@@ -314,11 +305,11 @@ public class ComentarioService {
 
         if (reaccion != null && reaccion.getTipo().equals(tipo)) {
             reaccionRespuestaRepository.delete(reaccion);
-            log.info("Reacción a respuesta eliminada");
+            log.info("Reaccion a respuesta eliminada");
         } else if (reaccion != null) {
             reaccion.setTipo(tipo);
             reaccionRespuestaRepository.save(reaccion);
-            log.info("Reacción a respuesta actualizada a: {}", tipo);
+            log.info("Reaccion a respuesta actualizada a: {}", tipo);
         } else {
             Usuario usuario = usuarioRepository.findById(usuarioId)
                     .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
@@ -328,14 +319,14 @@ public class ComentarioService {
                     .tipo(tipo)
                     .build();
             reaccionRespuestaRepository.save(reaccion);
-            log.info("Nueva reacción a respuesta creada: {}", tipo);
+            log.info("Nueva reaccion a respuesta creada: {}", tipo);
         }
 
         return calcularReaccionesRespuestaDesdeDB(respuestaId);
     }
 
     // ============================================================
-    // OBTENER REACCIONES (con caché)
+    // OBTENER REACCIONES (con cache)
     // ============================================================
 
     @Cacheable(
@@ -359,6 +350,16 @@ public class ComentarioService {
     // ============================================================
     // HELPERS
     // ============================================================
+
+    private void validarContenido(String contenido, String campo) {
+        if (contenido == null || contenido.isBlank()) {
+            throw new BadRequestException(campo + " no puede estar vacio");
+        }
+        if (contenido.length() > MAX_CONTENIDO) {
+            throw new BadRequestException(campo + " es demasiado largo (max. "
+                    + MAX_CONTENIDO + " caracteres)");
+        }
+    }
 
     private Map<String, Long> calcularReaccionesComentarioDesdeDB(Long comentarioId) {
         Map<String, Long> reacciones = new HashMap<>();
