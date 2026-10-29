@@ -1,9 +1,32 @@
+# ============================================================
+# application.yml
+# Configuracion comun a todos los perfiles
+# ============================================================
 spring:
   application:
     name: kiert-backend
+
   cloud:
     vault:
       enabled: false
       fail-fast: false
+
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:prod}
+
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 60MB
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1800000
+      cache-null-values: false
