@@ -26,14 +26,27 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // SockJS requiere setAllowedOriginPatterns (no setAllowedOrigins) si
+        // quieres permitir varios origenes con credenciales.
+        // En produccion, restringimos a los dominios reales.
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(
+                        "https://kiert-community.vercel.app",
+                        "https://www.kiert.com",
+                        "https://kiert.com",
+                        "http://localhost:4200"
+                )
                 .withSockJS();
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        // ORDEN CRITICO: StompAuth primero, SecurityContext despues
+        // ORDEN CRITICO:
+        // 1. StompAuthChannelInterceptor: lee el JWT del frame CONNECT y llama
+        //    a accessor.setUser(...), dejando el Principal listo.
+        // 2. SecurityContextChannelInterceptor: propaga ese Principal al
+        //    SecurityContextHolder para que el frame SEND lo vea como autenticado.
+        // Si los inviertes, el SEND llega como anonimo y es rechazado.
         registration.interceptors(
                 new StompAuthChannelInterceptor(jwtService),
                 new SecurityContextChannelInterceptor()

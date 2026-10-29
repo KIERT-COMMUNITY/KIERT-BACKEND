@@ -11,6 +11,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +31,21 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final CorsProperties corsProperties;
+
+    // ============================================================
+    // CRITICO: excluir /ws/** del JwtAuthFilter
+    // ============================================================
+    // El handshake de SockJS (/ws/info, /ws/xxx/websocket, /ws/xxx/xhr_streaming, etc.)
+    // NO lleva el header Authorization. Si el JwtAuthFilter se ejecuta en esas rutas,
+    // las rechaza con 401/403 y SockJS nunca completa el handshake.
+    //
+    // Con web.ignoring(), esas rutas BYPASSEAN toda la cadena de Spring Security.
+    // La autenticacion real del STOMP ocurre luego en el frame CONNECT,
+    // que si valida el JWT con StompAuthChannelInterceptor.
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring().requestMatchers("/ws/**");
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -66,7 +82,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/grupos/invitacion/*/unirse").authenticated()
                         .requestMatchers("/api/archivos/**").authenticated()
-                        .requestMatchers("/ws", "/ws/**").permitAll()
 
                         // Bienvenida
                         .requestMatchers(HttpMethod.GET, "/api/bienvenida/**").permitAll()
