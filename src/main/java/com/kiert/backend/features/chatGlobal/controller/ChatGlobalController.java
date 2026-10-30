@@ -39,6 +39,9 @@ public class ChatGlobalController {
     private final MensajeGlobalRepository mensajeRepository;
     private final UsuarioRepository usuarioRepository;
 
+    // ============================================================
+    // REST: historial (publico)
+    // ============================================================
     @GetMapping("/mensajes")
     @PreAuthorize("permitAll()")
     public ResponseEntity<List<MensajeGlobalDTO>> obtenerMensajes(
@@ -62,7 +65,14 @@ public class ChatGlobalController {
         return ResponseEntity.ok(dtos);
     }
 
-    @MessageMapping("/chat-global.enviar")
+    // ============================================================
+    // STOMP: enviar mensaje
+    // ============================================================
+    // IMPORTANTE: el destino debe ser "/chat-global/enviar" (con slash).
+    // El frontend publica a "/app/chat-global/enviar"; Spring elimina el
+    // prefijo "/app" configurado con setApplicationDestinationPrefixes(),
+    // dejando "/chat-global/enviar", que es lo que debe coincidir aqui.
+    @MessageMapping("/chat-global/enviar")
     @SendTo("/topic/chat-global")
     public MensajeGlobalDTO enviarMensaje(
             @Payload EnviarMensajeGlobalDTO dto,

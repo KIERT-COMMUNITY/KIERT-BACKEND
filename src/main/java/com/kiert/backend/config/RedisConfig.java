@@ -36,24 +36,10 @@ public class RedisConfig implements CachingConfigurer {
     // ============================================================
     // OBJECT MAPPER PARA REDIS
     // ============================================================
-    /**
-     * ObjectMapper EXCLUSIVO para Redis:
-     *
-     *  - JavaTimeModule → soporta Instant, LocalDateTime, etc.
-     *  - defaultTyping NON_FINAL con @class → permite reconstruir tipos
-     *    (ArrayList, HashMap, DTOs, etc.) al deserializar.
-     *  - Visibility ANY → serializa campos privados.
-     *
-     * ⚠️ IMPORTANTE:
-     * Se activa defaultTyping aquí porque VAMOS A PASAR este mapper
-     * al GenericJackson2JsonRedisSerializer. Si lo dejamos al
-     * constructor sin argumentos, se crea un mapper interno SIN
-     * JavaTimeModule y vuelve a fallar con Instant.
-     */
     private ObjectMapper buildRedisObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
 
-        // Soporte para java.time
+        // Soporte para java.time (Instant, LocalDateTime, etc.)
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
@@ -61,10 +47,13 @@ public class RedisConfig implements CachingConfigurer {
         // Serializar campos privados
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
 
-        // Tipo embebido (@class) — necesario para Redis
+        // IMPORTANTE: EVERYTHING en lugar de NON_FINAL para que tambien
+        // tipen Long, String, Integer, etc. Asi se evita el error
+        // "missing type id property '@class'" cuando el valor cacheado
+        // es un tipo de java.lang o un Map generico.
         mapper.activateDefaultTyping(
                 LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.NON_FINAL,
+                ObjectMapper.DefaultTyping.EVERYTHING,
                 JsonTypeInfo.As.PROPERTY
         );
 
@@ -88,10 +77,6 @@ public class RedisConfig implements CachingConfigurer {
     // ============================================================
     // SERIALIZADOR
     // ============================================================
-    /**
-     * Serializer Redis que SÍ conoce JavaTimeModule, porque recibe
-     * nuestro ObjectMapper ya preparado con defaultTyping + JavaTime.
-     */
     private GenericJackson2JsonRedisSerializer buildSerializer() {
         return new GenericJackson2JsonRedisSerializer(buildRedisObjectMapper());
     }
@@ -165,7 +150,6 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("resumenReportes", buildConfig(Duration.ofMinutes(2), serializer))
                 .withCacheConfiguration("misReportes", buildConfig(Duration.ofMinutes(5), serializer))
 
-                // ✅ Cache de BIENVENIDA (no necesita invalidación frecuente)
                 .withCacheConfiguration("bienvenida", buildConfig(Duration.ofMinutes(30), serializer))
 
                 .build();
