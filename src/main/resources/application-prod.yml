@@ -101,6 +101,7 @@ kiert:
       - "https://www.kiert.com"
       - "https://kiert.com"
   frontend:
+    url: "${KIERT_FRONTEND_URL:https://kiert.app}"  # <-- AGREGADO
     reset-password-url: ${KIERT_FRONTEND_RESET_URL:https://kiert-community.vercel.app/restablecer-contrasena}
   cloudinary:
     cloud-name: ${CLOUDINARY_CLOUD_NAME}
