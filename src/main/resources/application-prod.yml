@@ -98,6 +98,7 @@ kiert:
   cors:
     allowed-origins:
       - "https://kiert-community.vercel.app"
+      -  "https://kiert-frontend.adriandelaguila-2005.workers.dev"
       - "https://www.kiert.com"
       - "https://kiert.com"
   frontend:
