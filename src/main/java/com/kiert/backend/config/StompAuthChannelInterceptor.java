@@ -14,6 +14,7 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 
 import java.security.Principal;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -29,14 +30,24 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         if (accessor == null) return message;
 
         // ============================================================
-        // CONNECT: validar JWT y setear Principal
+        // CONNECT
         // ============================================================
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             String authHeader = accessor.getFirstNativeHeader("Authorization");
 
+            // ✅ Si no hay token, permitimos conexion como INVITADO.
+            // El invitado podra suscribirse a /topic/chat-global y recibir
+            // mensajes en tiempo real, pero NO podra enviar (el controller
+            // valida principal.getName() y lanzara BadRequestException).
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                log.warn("[STOMP] CONNECT sin header Authorization valido");
-                throw new MessagingException("Token requerido");
+                String invitadoId = "invitado-" + UUID.randomUUID();
+                accessor.setUser((Principal) () -> invitadoId);
+                Map<String, Object> attrs = accessor.getSessionAttributes();
+                if (attrs != null) {
+                    attrs.put("invitado", "true");
+                }
+                log.debug("[STOMP] Conectado como invitado: {}", invitadoId);
+                return message;
             }
 
             String token = authHeader.substring(7);
@@ -44,7 +55,6 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 Long usuarioId = jwtService.extraerUsuarioId(token);
                 String emailExtraido = jwtService.extraerEmail(token);
 
-                // Fallback: si el token del admin no tiene email, usa el subject
                 if (emailExtraido == null) {
                     try {
                         emailExtraido = jwtService.extraerSubject(token);
@@ -61,18 +71,13 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                     throw new MessagingException("Token invalido o expirado");
                 }
 
-                // Guardamos email y usuarioId en los sessionAttributes
-                // (utiles para logs y para el frame SEND si se necesita)
                 Map<String, Object> attrs = accessor.getSessionAttributes();
                 if (attrs != null) {
                     attrs.put("usuarioId", String.valueOf(usuarioId));
                     attrs.put("email", emailExtraido);
                 }
 
-                // ✅ CRITICO: el Principal debe llevar el usuarioId como name.
-                // Asi el controlador puede hacer principal.getName() y parsear
-                // el ID sin depender de sessionAttributes (que en produccion
-                // pueden llegar vacios al frame SEND detras de un proxy/SockJS).
+                // El Principal lleva el usuarioId como name (para el controller)
                 final String usuarioIdFinal = String.valueOf(usuarioId);
                 accessor.setUser((Principal) () -> usuarioIdFinal);
 
@@ -87,8 +92,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         }
 
         // ============================================================
-        // SEND: propagar usuarioId/email a los native headers
-        // (por si algun controller usa @Header en lugar de Principal)
+        // SEND: propagar usuarioId/email a native headers
         // ============================================================
         if (StompCommand.SEND.equals(accessor.getCommand())) {
             Map<String, Object> attrs = accessor.getSessionAttributes();
