@@ -16,7 +16,7 @@ public interface MensajeGlobalRepository extends JpaRepository<MensajeGlobal, Lo
             SELECT m FROM MensajeGlobal m
             JOIN FETCH m.autor a
             LEFT JOIN FETCH a.personalizacion
-            ORDER BY m.fechaEnvio DESC
+            ORDER BY m.fechaEnvio DESC, m.id DESC
             """,
             countQuery = "SELECT COUNT(m) FROM MensajeGlobal m")
     Page<MensajeGlobal> findUltimosConAutor(Pageable pageable);
@@ -26,7 +26,7 @@ public interface MensajeGlobalRepository extends JpaRepository<MensajeGlobal, Lo
             JOIN FETCH m.autor a
             LEFT JOIN FETCH a.personalizacion
             WHERE m.id < :antesDeId
-            ORDER BY m.fechaEnvio DESC
+            ORDER BY m.fechaEnvio DESC, m.id DESC
             """,
             countQuery = "SELECT COUNT(m) FROM MensajeGlobal m WHERE m.id < :antesDeId")
     Page<MensajeGlobal> findAnterioresConAutor(@Param("antesDeId") Long antesDeId, Pageable pageable);

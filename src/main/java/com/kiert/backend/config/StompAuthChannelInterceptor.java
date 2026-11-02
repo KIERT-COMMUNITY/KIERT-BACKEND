@@ -61,19 +61,22 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                     throw new MessagingException("Token invalido o expirado");
                 }
 
-                // ✅ variable final para la lambda
-                final String email = emailExtraido;
-
+                // Guardamos email y usuarioId en los sessionAttributes
+                // (utiles para logs y para el frame SEND si se necesita)
                 Map<String, Object> attrs = accessor.getSessionAttributes();
                 if (attrs != null) {
                     attrs.put("usuarioId", String.valueOf(usuarioId));
-                    attrs.put("email", email);
+                    attrs.put("email", emailExtraido);
                 }
 
-                // Setear Principal (email como nombre)
-                accessor.setUser((Principal) () -> email);
+                // ✅ CRITICO: el Principal debe llevar el usuarioId como name.
+                // Asi el controlador puede hacer principal.getName() y parsear
+                // el ID sin depender de sessionAttributes (que en produccion
+                // pueden llegar vacios al frame SEND detras de un proxy/SockJS).
+                final String usuarioIdFinal = String.valueOf(usuarioId);
+                accessor.setUser((Principal) () -> usuarioIdFinal);
 
-                log.debug("[STOMP] Conectado: usuarioId={} email={}", usuarioId, email);
+                log.debug("[STOMP] Conectado: usuarioId={} email={}", usuarioId, emailExtraido);
 
             } catch (MessagingException e) {
                 throw e;
@@ -85,7 +88,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
         // ============================================================
         // SEND: propagar usuarioId/email a los native headers
-        // (por si el controller usa @Header en lugar de Principal)
+        // (por si algun controller usa @Header en lugar de Principal)
         // ============================================================
         if (StompCommand.SEND.equals(accessor.getCommand())) {
             Map<String, Object> attrs = accessor.getSessionAttributes();

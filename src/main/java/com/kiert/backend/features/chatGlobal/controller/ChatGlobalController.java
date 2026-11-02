@@ -18,13 +18,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.SendTo;
-import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @RestController
@@ -72,21 +71,23 @@ public class ChatGlobalController {
     // El frontend publica a "/app/chat-global/enviar"; Spring elimina el
     // prefijo "/app" configurado con setApplicationDestinationPrefixes(),
     // dejando "/chat-global/enviar", que es lo que debe coincidir aqui.
+    //
+    // El usuarioId se obtiene del Principal (seteado en el CONNECT por
+    // StompAuthChannelInterceptor). NO se usan sessionAttributes porque
+    // detras de un proxy/SockJS en produccion pueden llegar vacios al SEND.
     @MessageMapping("/chat-global/enviar")
     @SendTo("/topic/chat-global")
     public MensajeGlobalDTO enviarMensaje(
             @Payload EnviarMensajeGlobalDTO dto,
-            SimpMessageHeaderAccessor headerAccessor) {
+            Principal principal) {
 
-        Map<String, Object> attrs = headerAccessor.getSessionAttributes();
-        String usuarioIdStr = attrs != null ? (String) attrs.get("usuarioId") : null;
-        if (usuarioIdStr == null) {
+        if (principal == null) {
             throw new BadRequestException("Usuario no autenticado en el chat");
         }
 
         Long usuarioId;
         try {
-            usuarioId = Long.parseLong(usuarioIdStr);
+            usuarioId = Long.parseLong(principal.getName());
         } catch (NumberFormatException e) {
             throw new BadRequestException("Sesion invalida");
         }
