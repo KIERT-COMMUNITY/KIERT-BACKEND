@@ -3,9 +3,12 @@ package com.kiert.backend.config;
 
 import com.kiert.backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.messaging.context.SecurityContextChannelInterceptor;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -18,9 +21,25 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtService jwtService;
 
+    // TaskScheduler para los heartbeats del SimpleBroker.
+    // Se inyecta con @Lazy para romper el ciclo de dependencias entre
+    // WebSocketConfig y la infraestructura de mensajería de Spring.
+    private TaskScheduler messageBrokerTaskScheduler;
+
+    @Autowired
+    public void setMessageBrokerTaskScheduler(@Lazy TaskScheduler taskScheduler) {
+        this.messageBrokerTaskScheduler = taskScheduler;
+    }
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic");
+        // Heartbeats: el servidor envia un latido cada 10s y espera uno del
+        // cliente cada 10s. Esto mantiene viva la conexion a traves de proxies
+        // y balanceadores que cierran conexiones inactivas (~60s por defecto).
+        config.enableSimpleBroker("/topic")
+                .setHeartbeatValue(new long[]{10000, 10000})
+                .setTaskScheduler(this.messageBrokerTaskScheduler);
+
         config.setApplicationDestinationPrefixes("/app");
     }
 
