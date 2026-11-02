@@ -53,6 +53,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         "https://kiert-community.vercel.app",
                         "https://www.kiert.com",
                         "https://kiert.com",
+                        "https://kiert-frontend.adriandelaguila-2005.workers.dev", // <-- AGREGAR
                         "http://localhost:4200"
                 )
                 .withSockJS();
