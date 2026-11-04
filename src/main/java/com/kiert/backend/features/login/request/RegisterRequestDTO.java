@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/features/login/request/RegisterRequestDTO.java
 package com.kiert.backend.features.login.request;
 
 import jakarta.validation.constraints.Email;
@@ -10,5 +11,6 @@ public record RegisterRequestDTO(
         @NotBlank @Email String email,
         @NotBlank @Size(min = 8) @Pattern(regexp = "^(?=.*[A-Z])(?=.*\\d).+$",
                 message = "La contraseña debe tener al menos una mayúscula y un número")
-        String password
+        String password,
+        @NotBlank(message = "El token de seguridad es obligatorio") String turnstileToken
 ) {}

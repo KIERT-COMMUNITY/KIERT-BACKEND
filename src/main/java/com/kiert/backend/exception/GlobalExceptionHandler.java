@@ -37,21 +37,32 @@ public class GlobalExceptionHandler {
         return construirRespuesta(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
-    // NUEVO: Manejar IllegalStateException (solicitudes duplicadas, etc.)
+    // ============================================================
+    // NUEVO: Turnstile
+    // ============================================================
+    @ExceptionHandler(TurnstileValidationException.class)
+    public ResponseEntity<Map<String, Object>> manejarTurnstile(TurnstileValidationException ex) {
+        log.warn("Turnstile falló: {}", ex.getMessage());
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", Instant.now().toString());
+        body.put("status", HttpStatus.FORBIDDEN.value());
+        body.put("error", "TURNSTILE_FAILED");
+        body.put("mensaje", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> manejarIllegalState(IllegalStateException ex) {
         log.warn("IllegalState: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.CONFLICT, ex.getMessage());
     }
 
-    // NUEVO: Manejar IllegalArgumentException
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> manejarIllegalArgument(IllegalArgumentException ex) {
         log.warn("IllegalArgument: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    // NUEVO: Manejar SecurityException
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<Map<String, Object>> manejarSecurity(SecurityException ex) {
         log.warn("Security: {}", ex.getMessage());

@@ -7,11 +7,9 @@ spring:
     activate:
       on-profile: prod
 
-  # Desactivar lazy-init para que Tomcat abra el puerto cuanto antes
   main:
     lazy-initialization: false
 
-  # Datasource desde variables de entorno
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -36,7 +34,6 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
-        # Hibernate 6: no consultar metadatos de la BD al arrancar (ahorra 15-20s)
         boot:
           allow_jdbc_metadata_access: false
         jdbc:
@@ -48,7 +45,6 @@ spring:
     init:
       mode: never
 
-  # Redis desde variables de entorno
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST}
@@ -65,7 +61,6 @@ spring:
           max-idle: 8
           min-idle: 0
 
-  # Mail desde variables de entorno
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -90,24 +85,35 @@ server:
   compression:
     enabled: true
 
-# CORS produccion: solo dominios reales, nunca localhost ni *
 kiert:
   jwt:
     secret: ${KIERT_JWT_SECRET}
     expiration-ms: 86400000
+
   cors:
     allowed-origins:
       - "https://kiert-community.vercel.app"
-      -  "https://kiert-frontend.adriandelaguila-2005.workers.dev"
+      - "https://kiert-frontend.adriandelaguila-2005.workers.dev"
       - "https://www.kiert.com"
       - "https://kiert.com"
+
   frontend:
-    url: "${KIERT_FRONTEND_URL:https://kiert.app}"  # <-- AGREGADO
+    url: "${KIERT_FRONTEND_URL:https://kiert.app}"
     reset-password-url: ${KIERT_FRONTEND_RESET_URL:https://kiert-community.vercel.app/restablecer-contrasena}
+
   cloudinary:
     cloud-name: ${CLOUDINARY_CLOUD_NAME}
     api-key: ${CLOUDINARY_API_KEY}
     api-secret: ${CLOUDINARY_API_SECRET}
+
+  # ============================================================
+  # TURNSTILE - PRODUCCION
+  #=============================================================
+  turnstile:
+    enabled: true
+    site-key: 0x4AAAAAAFz2iwhmq6b7vJ7U
+    secret-key: ${TURNSTILE_SECRET_KEY}   # <-- Se lee de Render Environment
+    verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
 
 springdoc:
   api-docs:

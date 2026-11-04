@@ -5,12 +5,14 @@ import com.kiert.backend.features.login.request.LoginRequestDTO;
 import com.kiert.backend.features.login.request.RegisterRequestDTO;
 import com.kiert.backend.features.auth.dto.response.AuthResponseDTO;
 import com.kiert.backend.exception.BadRequestException;
+import com.kiert.backend.exception.TurnstileValidationException;
 import com.kiert.backend.features.passwordYcodigo.dto.ReenviarCodigoDTO;
 import com.kiert.backend.features.passwordYcodigo.dto.ResetPasswordConCodigoDTO;
 import com.kiert.backend.features.passwordYcodigo.dto.SolicitarRecuperacionDTO;
 import com.kiert.backend.features.passwordYcodigo.dto.VerificarCodigoDTO;
 import com.kiert.backend.features.auth.service.AuthService;
 import com.kiert.backend.security.JwtService;
+import com.kiert.backend.features.turnstile.service.TurnstileService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtService jwtService;
+    private final TurnstileService turnstileService;
 
     private static final String PREFIJO_BEARER = "Bearer ";
 
@@ -38,6 +41,12 @@ public class AuthController {
     @PostMapping("/registro")
     public ResponseEntity<?> registrar(@Valid @RequestBody RegisterRequestDTO datos) {
         log.info("Registrando usuario: {}", datos.email());
+
+        // 1. Verificar Turnstile
+        if (!turnstileService.verify(datos.turnstileToken())) {
+            throw new TurnstileValidationException("Verificación de seguridad fallida");
+        }
+
         try {
             authService.registrar(datos);
             return ResponseEntity.ok(Map.of(
@@ -88,6 +97,12 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequestDTO datos) {
         log.info("Login para usuario: {}", datos.email());
+
+        // 1. Verificar Turnstile
+        if (!turnstileService.verify(datos.turnstileToken())) {
+            throw new TurnstileValidationException("Verificación de seguridad fallida");
+        }
+
         try {
             AuthResponseDTO response = authService.login(datos);
             return ResponseEntity.ok(response);
@@ -110,21 +125,17 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
-    // ============================================================
-    // LOGOUT BEACON
-    // ============================================================
     @PostMapping("/logout-beacon")
     public ResponseEntity<Void> logoutBeacon(HttpServletRequest request) {
         String token = extraerTokenDelHeader(request);
         Long usuarioId = extraerUsuarioIdDelToken(token);
-
         log.info("Logout via beacon para usuario: {}", usuarioId);
         authService.logout(usuarioId, token);
         return ResponseEntity.ok().build();
     }
 
     // ============================================================
-    // SOLICITAR RECUPERACION
+    // RECUPERACION
     // ============================================================
     @PostMapping("/recuperar")
     public ResponseEntity<?> solicitarRecuperacion(@Valid @RequestBody SolicitarRecuperacionDTO datos) {
@@ -132,15 +143,12 @@ public class AuthController {
         try {
             authService.solicitarRecuperacion(datos.email());
         } catch (BadRequestException e) {
-            // No revelar si el email existe. Respuesta generica.
+            // No revelar si el email existe
         }
         return ResponseEntity.ok(Map.of(
                 "mensaje", "Si el correo esta registrado, recibiras un codigo en breve."));
     }
 
-    // ============================================================
-    // NUEVO: VERIFICAR CODIGO DE RECUPERACION
-    // ============================================================
     @PostMapping("/verificar-codigo-recuperacion")
     public ResponseEntity<?> verificarCodigoRecuperacion(@Valid @RequestBody VerificarCodigoDTO req) {
         log.info("Verificando codigo de recuperacion para: {}", req.email());
@@ -156,9 +164,6 @@ public class AuthController {
         }
     }
 
-    // ============================================================
-    // RESET PASSWORD CON CODIGO (compatibilidad flujo antiguo)
-    // ============================================================
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordConCodigoDTO req) {
         log.info("Reset password para: {}", req.email());
@@ -171,9 +176,6 @@ public class AuthController {
         }
     }
 
-    // ============================================================
-    // NUEVO: RESET PASSWORD CON TOKEN TEMPORAL (flujo del frontend nuevo)
-    // ============================================================
     @PostMapping("/reset-password-token")
     public ResponseEntity<?> resetPasswordConToken(@RequestBody Map<String, String> body) {
         String resetToken = body.get("token");

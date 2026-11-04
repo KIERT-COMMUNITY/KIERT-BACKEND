@@ -1,15 +1,14 @@
+// src/main/java/com/kiert/backend/KiertBackendApplication.java
 package com.kiert.backend;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.annotation.EnableCaching;
 
 @SpringBootApplication
-@ConfigurationPropertiesScan
+@ConfigurationPropertiesScan   // escanea todos los @ConfigurationProperties del paquete base
 @EnableCaching
-@EnableConfigurationProperties  //  Habilita el uso de @ConfigurationProperties
 public class KiertBackendApplication {
 
     public static void main(String[] args) {
