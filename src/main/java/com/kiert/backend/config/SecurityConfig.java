@@ -32,16 +32,6 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final CorsProperties corsProperties;
 
-    // ============================================================
-    // CRITICO: excluir /ws/** del JwtAuthFilter
-    // ============================================================
-    // El handshake de SockJS (/ws/info, /ws/xxx/websocket, /ws/xxx/xhr_streaming, etc.)
-    // NO lleva el header Authorization. Si el JwtAuthFilter se ejecuta en esas rutas,
-    // las rechaza con 401/403 y SockJS nunca completa el handshake.
-    //
-    // Con web.ignoring(), esas rutas BYPASSEAN toda la cadena de Spring Security.
-    // La autenticacion real del STOMP ocurre luego en el frame CONNECT,
-    // que si valida el JWT con StompAuthChannelInterceptor.
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer() {
         return (web) -> web.ignoring().requestMatchers("/ws/**");
@@ -60,7 +50,7 @@ public class SecurityConfig {
                                 "/v3/api-docs/**", "/api-docs/**", "/webjars/**"
                         ).permitAll()
 
-                        // Auth: endpoints publicos enumerados explicitamente
+                        // Auth: endpoints públicos
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/registro",
@@ -114,22 +104,24 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,  "/api/reacciones/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/reacciones/**").authenticated()
 
-                        // Anuncios publicos (solo lectura)
+                        // Anuncios públicos (solo lectura)
                         .requestMatchers(HttpMethod.GET,    "/api/anuncios/**").permitAll()
                         .requestMatchers(HttpMethod.POST,   "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.PUT,    "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.PATCH,  "/api/anuncios/**").denyAll()
 
-                        // Admin (bloque general)
+                        // Admin
                         .requestMatchers("/api/admin/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
 
-                        // Chat global
+                        // Chat global (sigue activo)
                         .requestMatchers(HttpMethod.GET,  "/api/chat-global/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/chat-global/**").authenticated()
 
-                        // Chat privado / grupos
-                        .requestMatchers("/api/chat/**").authenticated()
+                        // ❌ CHAT PRIVADO BLOQUEADO
+                        .requestMatchers("/api/chat/**").denyAll()
+
+                        // Chat grupal (sigue activo)
                         .requestMatchers("/api/grupos/**").authenticated()
 
                         // Usuarios / contactos
@@ -137,7 +129,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/usuarios/contactos").authenticated()
                         .requestMatchers("/api/usuarios/solicitudes/pendientes").authenticated()
 
-                        // Reportes: lectura y actualizacion solo moderadores
+                        // Reportes
                         .requestMatchers(HttpMethod.GET, "/api/reportes").hasAnyRole("CEO", "ADMIN", "MODERADOR")
                         .requestMatchers(HttpMethod.GET, "/api/reportes/resumen").hasAnyRole("CEO", "ADMIN", "MODERADOR")
                         .requestMatchers(HttpMethod.PUT, "/api/reportes/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
@@ -145,7 +137,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/reportes/mis-reportes").authenticated()
                         .requestMatchers("/api/reportes/**").authenticated()
 
-                        // Stickers: publicos sin auth, resto autenticado
+                        // Stickers
                         .requestMatchers(HttpMethod.GET, "/api/stickers/publicos").permitAll()
                         .requestMatchers("/api/stickers/**").authenticated()
 
@@ -192,3 +184,203 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 }
+
+
+
+
+//chat activo
+
+/*
+package com.kiert.backend.config;
+
+import com.kiert.backend.security.JwtAuthFilter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final JwtAuthFilter jwtAuthFilter;
+    private final CorsProperties corsProperties;
+
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring().requestMatchers("/ws/**");
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+
+                        // Swagger / documentación
+                        .requestMatchers(
+                                "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**",
+                                "/v3/api-docs/**", "/api-docs/**", "/webjars/**"
+                        ).permitAll()
+
+                        // Autenticación: endpoints públicos
+                        .requestMatchers(
+                                "/api/auth/login",
+                                "/api/auth/registro",
+                                "/api/auth/verificar-cuenta",
+                                "/api/auth/reenviar-codigo",
+                                "/api/auth/recuperar",
+                                "/api/auth/verificar-codigo-recuperacion",
+                                "/api/auth/reset-password",
+                                "/api/auth/reset-password-token"
+                        ).permitAll()
+                        .requestMatchers("/api/auth/**").authenticated()
+                        .requestMatchers("/api/admin/auth/login").permitAll()
+
+                        // Presencia
+                        .requestMatchers("/api/presencia/**")
+                        .hasAnyRole("USER", "CEO", "ADMIN", "MODERADOR")
+
+                        // Grupos y archivos
+                      // .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
+                     //   .requestMatchers(HttpMethod.POST, "/api/grupos/invitacion/*///unirse").authenticated() */
+      //  .requestMatchers("/api/archivos/**").authenticated()
+
+// Bienvenida
+        //                .requestMatchers(HttpMethod.GET, "/api/bienvenida/**").permitAll()
+          //              .requestMatchers(HttpMethod.GET, "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+            //            .requestMatchers(HttpMethod.PUT, "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+              //          .requestMatchers(HttpMethod.POST, "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                //        .requestMatchers(HttpMethod.DELETE, "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+/*
+// Biblioteca
+                        .requestMatchers(HttpMethod.GET, "/api/biblioteca/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/biblioteca/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/biblioteca/**").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/biblioteca/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/biblioteca/**").authenticated()
+
+// Publicaciones
+                        .requestMatchers(HttpMethod.GET, "/api/publicaciones/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/publicaciones/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/publicaciones/**").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/publicaciones/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/publicaciones/**").authenticated()*/
+/*
+// Comentarios
+                        .requestMatchers(HttpMethod.GET, "/api/comentarios/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/comentarios/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/comentarios/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/comentarios/**").authenticated()*/
+/*
+// Reacciones
+                        .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/reacciones/**").authenticated()
+
+// Anuncios públicos: solo lectura
+                        .requestMatchers(HttpMethod.GET, "/api/anuncios/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.PATCH, "/api/anuncios/**").denyAll()
+
+// Administración
+                        .requestMatchers("/api/admin/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+
+// Chat global
+                        .requestMatchers(HttpMethod.GET, "/api/chat-global/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/chat-global/**").authenticated()
+
+// Chat privado bloqueado
+                        .requestMatchers("/api/chat/**").denyAll()
+
+// Chat grupal
+                        .requestMatchers("/api/grupos/**").authenticated()
+
+// Usuarios y contactos
+                        .requestMatchers("/api/usuarios/solicitud/**").authenticated()
+                        .requestMatchers("/api/usuarios/contactos").authenticated()
+                        .requestMatchers("/api/usuarios/solicitudes/pendientes").authenticated()
+
+// Reportes
+                        .requestMatchers(HttpMethod.GET, "/api/reportes").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/reportes/resumen").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/reportes/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.POST, "/api/reportes").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/reportes/mis-reportes").authenticated()
+                        .requestMatchers("/api/reportes/**").authenticated()
+
+// Stickers
+                        .requestMatchers(HttpMethod.GET, "/api/stickers/publicos").permitAll()
+                        .requestMatchers("/api/stickers/**").authenticated()
+
+// Otras funcionalidades protegidas
+                        .requestMatchers("/api/personalizacion/**").authenticated()
+                        .requestMatchers("/api/notificaciones/**").authenticated()
+                        .requestMatchers("/api/bloqueos/**").authenticated()
+                        .requestMatchers("/api/perfil/**").authenticated()
+                        .requestMatchers("/api/usuarios/**").authenticated()
+
+// Cualquier otra petición requiere autenticación
+                        .anyRequest().authenticated()
+                )
+                        .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }*/
+
+/*Configuración CORS
+@Bean
+public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration configuration = new CorsConfiguration();
+    configuration.setAllowedOrigins(corsProperties.allowedOrigins());
+    configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
+    configuration.setAllowedHeaders(List.of(
+            "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"
+    ));
+    configuration.setExposedHeaders(List.of(
+            "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"
+    ));
+    configuration.setAllowCredentials(true);
+    configuration.setMaxAge(3600L);
+
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/**", configuration);
+    return source;
+
+    */
+//}
+/*
+// Codificación segura de contraseñas mediante BCrypt
+@Bean
+public PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+}
+
+// Administrador de autenticación
+@Bean
+public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+    return config.getAuthenticationManager();
+}
+}
+*/

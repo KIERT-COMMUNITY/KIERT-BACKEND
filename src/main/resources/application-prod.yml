@@ -16,8 +16,9 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      maximum-pool-size: 5
-      minimum-idle: 2
+      # Subido de 5 a 15 para soportar ~30-50 usuarios activos
+      maximum-pool-size: 15
+      minimum-idle: 5
       connection-timeout: 10000
       initialization-fail-timeout: 10000
       idle-timeout: 600000
@@ -108,12 +109,19 @@ kiert:
 
   # ============================================================
   # TURNSTILE - PRODUCCION
-  #=============================================================
+  # ============================================================
   turnstile:
     enabled: true
     site-key: 0x4AAAAAAFz2iwhmq6b7vJ7U
-    secret-key: ${TURNSTILE_SECRET_KEY}   # <-- Se lee de Render Environment
+    secret-key: ${TURNSTILE_SECRET_KEY}
     verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
+
+  # ============================================================
+  # FEATURE FLAGS
+  # ============================================================
+  features:
+    chat-privado:
+      enabled: false   # false = chat privado deshabilitado (API + WebSocket bloqueados)
 
 springdoc:
   api-docs:
@@ -130,12 +138,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       probes:
         enabled: true
       show-details: never
+    metrics:
+      enabled: true
   health:
     db:
       enabled: false
@@ -143,6 +153,9 @@ management:
       enabled: false
     diskspace:
       enabled: false
+  metrics:
+    enable:
+      hikaricp: true
 
 logging:
   level:
