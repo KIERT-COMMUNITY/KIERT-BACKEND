@@ -1,4 +1,4 @@
-// src/main/java/com/kiert/backend/dto/RecursoBibliotecaDTO.java
+// src/main/java/com/kiert/backend/features/recursos/dto/RecursoBibliotecaDTO.java
 package com.kiert.backend.features.recursos.dto;
 
 import java.time.Instant;

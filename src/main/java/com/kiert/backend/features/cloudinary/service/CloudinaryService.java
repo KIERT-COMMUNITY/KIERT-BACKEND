@@ -2,6 +2,7 @@
 package com.kiert.backend.features.cloudinary.service;
 
 import com.cloudinary.Cloudinary;
+import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
 import com.kiert.backend.features.archivo.dto.ArchivoSubidoDTO;
 import com.kiert.backend.features.imagen.dto.ImagenSubidaDTO;
@@ -41,6 +42,14 @@ public class CloudinaryService {
             "marcos", "portadas", "avatares", "perfil",
             "reportes", "temp"
     );
+
+    private Transformation obtenerTransformacionOptimizada() {
+        return new Transformation()
+                .fetchFormat("auto")
+                .quality("auto")
+                .width(1200)
+                .crop("limit");
+    }
 
     // ========== SUBIR ARCHIVO (CHAT) ==========
     public String subirArchivo(MultipartFile archivo) {
@@ -253,6 +262,13 @@ public class CloudinaryService {
 
             String resto = url.substring(uploadIdx + "/upload/".length());
 
+            if (resto.matches("^[a-zA-Z_,]+/.*")) {
+                int slashIdx = resto.indexOf("/");
+                if (slashIdx != -1) {
+                    resto = resto.substring(slashIdx + 1);
+                }
+            }
+
             if (resto.startsWith("v")) {
                 int slashIdx = resto.indexOf("/");
                 if (slashIdx != -1) {
@@ -295,11 +311,21 @@ public class CloudinaryService {
                             "folder", carpeta != null ? carpeta : "imagenes",
                             "resource_type", "image",
                             "use_filename", true,
-                            "unique_filename", true
+                            "unique_filename", true,
+                            "eager_async", true
                     )
             );
 
-            return uploadResult.get("secure_url").toString();
+            String publicId = string(uploadResult.get("public_id"));
+
+            String urlOptimizada = cloudinary.url()
+                    .resourceType("image")
+                    .type("upload")
+                    .transformation(obtenerTransformacionOptimizada())
+                    .generate(publicId);
+
+            log.info("Imagen subida y optimizada: {}", urlOptimizada);
+            return urlOptimizada;
 
         } catch (IOException e) {
             log.error("Error al subir imagen: {}", e.getMessage());
@@ -329,11 +355,11 @@ public class CloudinaryService {
                             "folder", carpeta != null ? carpeta : "anuncios",
                             "resource_type", "image",
                             "use_filename", true,
-                            "unique_filename", true
+                            "unique_filename", true,
+                            "eager_async", true
                     )
             );
 
-            String url      = string(uploadResult.get("secure_url"));
             String publicId = string(uploadResult.get("public_id"));
             String formato  = string(uploadResult.get("format"));
             Integer ancho   = intValue(uploadResult.get("width"));
@@ -341,10 +367,16 @@ public class CloudinaryService {
             Long bytes      = longValue(uploadResult.get("bytes"));
             Integer pesoKb  = bytes != null ? (int) (bytes / 1024) : null;
 
-            log.info("Imagen subida con detalles: url={}, publicId={}, formato={}, {}x{}, {}KB",
-                    url, publicId, formato, ancho, alto, pesoKb);
+            String urlOptimizada = cloudinary.url()
+                    .resourceType("image")
+                    .type("upload")
+                    .transformation(obtenerTransformacionOptimizada())
+                    .generate(publicId);
 
-            return new ImagenSubidaDTO(url, publicId, formato, pesoKb, ancho, alto);
+            log.info("Imagen subida con detalles: urlOptimizada={}, publicId={}, formato={}, {}x{}, {}KB",
+                    urlOptimizada, publicId, formato, ancho, alto, pesoKb);
+
+            return new ImagenSubidaDTO(urlOptimizada, publicId, formato, pesoKb, ancho, alto);
 
         } catch (IOException e) {
             log.error("Error al subir imagen con detalles: {}", e.getMessage());
@@ -449,7 +481,13 @@ public class CloudinaryService {
                     )
             );
 
-            return uploadResult.get("secure_url").toString();
+            String publicId = string(uploadResult.get("public_id"));
+
+            return cloudinary.url()
+                    .resourceType("image")
+                    .type("upload")
+                    .transformation(obtenerTransformacionOptimizada())
+                    .generate(publicId);
 
         } catch (IOException e) {
             log.error("Error al subir marco: {}", e.getMessage());

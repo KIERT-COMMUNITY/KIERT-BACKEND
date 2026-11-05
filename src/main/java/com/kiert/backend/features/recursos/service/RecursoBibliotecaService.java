@@ -1,15 +1,21 @@
 // src/main/java/com/kiert/backend/features/recursos/service/RecursoBibliotecaService.java
 package com.kiert.backend.features.recursos.service;
 
-import com.kiert.backend.features.recursos.dto.RecursoBibliotecaDTO;
-import com.kiert.backend.features.recursos.dto.request.RecursoUsuarioRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kiert.backend.entity.HistorialRecursoBiblioteca;
 import com.kiert.backend.entity.RecursoBiblioteca;
 import com.kiert.backend.entity.Usuario;
 import com.kiert.backend.exception.AccesoDenegadoException;
 import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
+import com.kiert.backend.features.recursos.dto.HistorialRecursoDTO;
+import com.kiert.backend.features.recursos.dto.RecursoBibliotecaDTO;
+import com.kiert.backend.features.recursos.dto.request.RecursoUsuarioRequest;
+import com.kiert.backend.features.recursos.repository.HistorialRecursoBibliotecaRepository;
 import com.kiert.backend.features.recursos.repository.RecursoBibliotecaRepository;
 import com.kiert.backend.features.usuario.repository.UsuarioRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -31,6 +37,8 @@ public class RecursoBibliotecaService {
 
     private final RecursoBibliotecaRepository recursoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final HistorialRecursoBibliotecaRepository historialRepository;
+    private final ObjectMapper objectMapper;
 
     private static final String CACHE_RECURSOS = "recursosBiblioteca";
     private static final String CACHE_RECURSO = "recursoBiblioteca";
@@ -45,48 +53,12 @@ public class RecursoBibliotecaService {
     private static final int MAX_TAG_LENGTH = 30;
     private static final int MAX_RECURSOS_POR_USUARIO = 100;
 
-    private static final List<String> DOMINIOS_PERMITIDOS = List.of(
-            "coursera.org", "edx.org", "udemy.com", "udacity.com", "platzi.com",
-            "domestika.org", "crehana.com", "khanacademy.org", "classcentral.com",
-            "freecodecamp.org", "codecademy.com", "aprendesql.dev", "midu.link",
-            "mygreatlearning.com", "exceedlms.com", "nobook.com",
-            "developer.mozilla.org", "docs.microsoft.com", "docs.python.org",
-            "docs.oracle.com", "docs.spring.io", "angular.io", "react.dev",
-            "vuejs.org", "nodejs.org", "kotlinlang.org", "go.dev", "rust-lang.org",
-            "minecraft.wiki", "wikipedia.org",
-            "github.com", "gitlab.com", "bitbucket.org", "stackoverflow.com",
-            "figma.com", "notion.so", "trello.com", "miro.com",
-            "photopea.com", "ninite.com", "ventoy.net", "rufus.ie",
-            "optijuegos.net", "4download.net", "technical.city", "ifixit.com",
-            "duolingo.com", "babbel.com", "busuu.com", "lingoda.com",
-            "youtube.com", "vimeo.com", "ted.com",
-            "medium.com", "dev.to", "vidaextra.com", "scholar.google.com",
-            "hackthebox.com", "tryhackme.com", "netacad.com",
-            "openai.com", "anthropic.com", "claude.ai", "chatgpt.com",
-            "gemini.google.com", "perplexity.ai", "deepseek.com", "kimi.ai",
-            "grok.com", "toolify.ai", "opencode.ai", "pippit.ai",
-            "kaggle.com", "hackerrank.com", "leetcode.com", "codewars.com",
-            "encoded.pe", "rebajitas.com", "itsfree.dev", "minecraftsearch.com",
-            "frivlegend.com", "kawaiianimes.app", "moewalls.com",
-            "wallpapercave.com", "wallpaper.mob.org", "alphacoders.com",
-            "geode-sdk.org", "viper.pages.dev", "rojatvdirecta.online",
-            "futbollibrefullhd.org", "capacitacionlaboral.trabajo.gob.pe"
-    );
-
-    private static final List<String> ACORTADORES = List.of(
-            "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly",
-            "is.gd", "buff.ly", "shorturl.at", "cutt.ly", "rb.gy"
-    );
-
     // ============================================================
     // LECTURA
     // ============================================================
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_RECURSOS,
-            key = "'usuario:' + (#usuarioId != null ? #usuarioId : 'anon')"
-    )
+    @Cacheable(value = CACHE_RECURSOS, key = "'usuario:' + (#usuarioId != null ? #usuarioId : 'anon')")
     public List<RecursoBibliotecaDTO> listarTodos(Long usuarioId) {
         log.debug("[DB] Listando recursos visibles para usuario {}", usuarioId);
         List<RecursoBiblioteca> recursos = (usuarioId != null)
@@ -96,10 +68,7 @@ public class RecursoBibliotecaService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(
-            value = CACHE_RECURSOS,
-            key = "'usuario:' + (#usuarioId != null ? #usuarioId : 'anon') + ':cat:' + #categoria"
-    )
+    @Cacheable(value = CACHE_RECURSOS, key = "'usuario:' + (#usuarioId != null ? #usuarioId : 'anon') + ':cat:' + #categoria")
     public List<RecursoBibliotecaDTO> listarPorCategoria(Long usuarioId, String categoria) {
         log.debug("[DB] Listando recursos categoria={} para usuario {}", categoria, usuarioId);
         List<RecursoBiblioteca> recursos = (usuarioId != null)
@@ -167,7 +136,7 @@ public class RecursoBibliotecaService {
     }
 
     // ============================================================
-    // CRUD DEL USUARIO
+    // CRUD DEL USUARIO (con historial)
     // ============================================================
 
     @Transactional
@@ -177,20 +146,15 @@ public class RecursoBibliotecaService {
             @CacheEvict(value = CACHE_CATEGORIAS, allEntries = true),
             @CacheEvict(value = CACHE_NIVELES, allEntries = true)
     })
-    public RecursoBibliotecaDTO crear(Long usuarioId, RecursoUsuarioRequest request) {
+    public RecursoBibliotecaDTO crear(Long usuarioId, RecursoUsuarioRequest request, HttpServletRequest httpRequest) {
         log.info("Creando recurso para usuario {}", usuarioId);
 
-        if (usuarioId == null) {
-            throw new BadRequestException("Usuario requerido");
-        }
-        if (request == null) {
-            throw new BadRequestException("Datos requeridos");
-        }
+        if (usuarioId == null) throw new BadRequestException("Usuario requerido");
+        if (request == null) throw new BadRequestException("Datos requeridos");
 
         validarRequest(request);
         validarUrl(request.getUrl());
 
-        // Limite por usuario
         long totalRecursos = recursoRepository.countByUsuarioId(usuarioId);
         if (totalRecursos >= MAX_RECURSOS_POR_USUARIO) {
             throw new BadRequestException("Has alcanzado el limite de recursos. Elimina algunos antes de crear mas.");
@@ -216,7 +180,11 @@ public class RecursoBibliotecaService {
                 .tags(tagsToString(request.getTags()))
                 .build();
 
-        return toDTO(recursoRepository.save(recurso));
+        recurso = recursoRepository.save(recurso);
+
+        registrarHistorial(recurso, usuario, "CREAR", null, toDTO(recurso), httpRequest);
+
+        return toDTO(recurso);
     }
 
     @Transactional
@@ -227,15 +195,11 @@ public class RecursoBibliotecaService {
             @CacheEvict(value = CACHE_CATEGORIAS, allEntries = true),
             @CacheEvict(value = CACHE_NIVELES, allEntries = true)
     })
-    public RecursoBibliotecaDTO actualizar(Long usuarioId, Long recursoId, RecursoUsuarioRequest request) {
+    public RecursoBibliotecaDTO actualizar(Long usuarioId, Long recursoId, RecursoUsuarioRequest request, HttpServletRequest httpRequest) {
         log.info("Actualizando recurso {} del usuario {}", recursoId, usuarioId);
 
-        if (usuarioId == null || recursoId == null) {
-            throw new BadRequestException("Parametros invalidos");
-        }
-        if (request == null) {
-            throw new BadRequestException("Datos requeridos");
-        }
+        if (usuarioId == null || recursoId == null) throw new BadRequestException("Parametros invalidos");
+        if (request == null) throw new BadRequestException("Datos requeridos");
 
         validarRequest(request);
         validarUrl(request.getUrl());
@@ -244,6 +208,8 @@ public class RecursoBibliotecaService {
                 .orElseThrow(() -> new RecursoNoEncontradoException("Recurso no encontrado"));
 
         validarPropiedad(recurso, usuarioId);
+
+        RecursoBibliotecaDTO anterior = toDTO(recurso);
 
         recurso.setTitulo(request.getTitulo().trim());
         recurso.setDescripcion(trimOrEmpty(request.getDescripcion()));
@@ -256,7 +222,11 @@ public class RecursoBibliotecaService {
         recurso.setNivel(trimOrNull(request.getNivel()));
         recurso.setTags(tagsToString(request.getTags()));
 
-        return toDTO(recursoRepository.save(recurso));
+        recurso = recursoRepository.save(recurso);
+
+        registrarHistorial(recurso, recurso.getUsuario(), "EDITAR", anterior, toDTO(recurso), httpRequest);
+
+        return toDTO(recurso);
     }
 
     @Transactional
@@ -267,19 +237,72 @@ public class RecursoBibliotecaService {
             @CacheEvict(value = CACHE_CATEGORIAS, allEntries = true),
             @CacheEvict(value = CACHE_NIVELES, allEntries = true)
     })
-    public void eliminar(Long usuarioId, Long recursoId) {
-        if (usuarioId == null || recursoId == null) {
-            throw new BadRequestException("Parametros invalidos");
-        }
+    public void eliminar(Long usuarioId, Long recursoId, HttpServletRequest httpRequest) {
+        log.info("Eliminando recurso {} del usuario {}", recursoId, usuarioId);
+
+        if (usuarioId == null || recursoId == null) throw new BadRequestException("Parametros invalidos");
 
         RecursoBiblioteca recurso = recursoRepository.findActivoById(recursoId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Recurso no encontrado"));
 
         validarPropiedad(recurso, usuarioId);
 
+        RecursoBibliotecaDTO anterior = toDTO(recurso);
+
         recurso.setActivo(false);
         recursoRepository.save(recurso);
+
+        registrarHistorial(recurso, recurso.getUsuario(), "ELIMINAR", anterior, null, httpRequest);
+
         log.info("Recurso {} eliminado (logico)", recursoId);
+    }
+
+    // ============================================================
+    // HISTORIAL
+    // ============================================================
+
+    @Transactional(readOnly = true)
+    public List<HistorialRecursoDTO> obtenerHistorial(Long recursoId) {
+        return historialRepository.findByRecursoIdOrderByFechaAccionDesc(recursoId)
+                .stream()
+                .map(this::toHistorialDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<HistorialRecursoDTO> obtenerHistorialUsuario(Long usuarioId) {
+        return historialRepository.findByUsuarioIdOrderByFechaAccionDesc(usuarioId)
+                .stream()
+                .map(this::toHistorialDTO)
+                .collect(Collectors.toList());
+    }
+
+    // ============================================================
+    // AUXILIARES
+    // ============================================================
+
+    private void registrarHistorial(RecursoBiblioteca recurso, Usuario usuario, String accion,
+                                    RecursoBibliotecaDTO anterior, RecursoBibliotecaDTO nuevo,
+                                    HttpServletRequest request) {
+        try {
+            HistorialRecursoBiblioteca historial = HistorialRecursoBiblioteca.builder()
+                    .recurso(recurso)
+                    .usuario(usuario)
+                    .accion(accion)
+                    .datosAnteriores(anterior != null ? objectMapper.writeValueAsString(anterior) : null)
+                    .datosNuevos(nuevo != null ? objectMapper.writeValueAsString(nuevo) : null)
+                    .ipUsuario(request != null ? obtenerIp(request) : null)
+                    .build();
+            historialRepository.save(historial);
+        } catch (JsonProcessingException e) {
+            log.warn("No se pudo serializar el historial para recurso {}: {}", recurso.getId(), e.getMessage());
+        }
+    }
+
+    private String obtenerIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isBlank()) ip = request.getRemoteAddr();
+        return ip != null ? ip.split(",")[0].trim() : null;
     }
 
     // ============================================================
@@ -316,6 +339,12 @@ public class RecursoBibliotecaService {
         }
     }
 
+    /**
+     * Validacion de URL simplificada:
+     * - Solo exige https://
+     * - Rechaza IPs directas, localhost y rangos privados (seguridad basica)
+     * - Permite CUALQUIER dominio externo (netflix.com, twitch.tv, etc.)
+     */
     private void validarUrl(String url) {
         if (url == null || url.trim().isEmpty()) {
             throw new BadRequestException("La URL es obligatoria");
@@ -339,7 +368,6 @@ public class RecursoBibliotecaService {
             throw new BadRequestException("URL invalida: no tiene dominio");
         }
 
-        // Bloquear IPv6 directas (localhost y privadas)
         if (hostRaw.startsWith("[")) {
             throw new BadRequestException("No se permiten direcciones IPv6 directas");
         }
@@ -351,7 +379,7 @@ public class RecursoBibliotecaService {
             throw new BadRequestException("No se permiten IPs directas");
         }
 
-        // Bloquear localhost y rangos privados correctos
+        // Bloquear localhost y rangos privados
         if (host.equals("localhost")
                 || host.startsWith("127.")
                 || host.startsWith("192.168.")
@@ -361,7 +389,6 @@ public class RecursoBibliotecaService {
             throw new BadRequestException("No se permiten URLs internas");
         }
 
-        // Rango 172.16.0.0 - 172.31.255.255 (privado real)
         if (host.startsWith("172.")) {
             String[] partes = host.split("\\.");
             if (partes.length >= 2) {
@@ -374,27 +401,9 @@ public class RecursoBibliotecaService {
             }
         }
 
-        // Bloquear acortadores
-        for (final String acortador : ACORTADORES) {
-            if (host.equals(acortador) || host.endsWith("." + acortador)) {
-                throw new BadRequestException("No se permiten acortadores de URL");
-            }
-        }
-
-        // Lista blanca de dominios
-        final boolean permitido = DOMINIOS_PERMITIDOS.stream()
-                .anyMatch(d -> host.equals(d) || host.endsWith("." + d));
-
-        if (!permitido) {
-            throw new BadRequestException(
-                    "El dominio '" + host + "' no esta en la lista de sitios permitidos"
-            );
-        }
+        // NOTA: Ya NO se valida contra lista blanca. Cualquier dominio externo se acepta.
     }
 
-    // ============================================================
-    // HELPERS
-    // ============================================================
     private void validarPropiedad(RecursoBiblioteca recurso, Long usuarioId) {
         if (!Boolean.TRUE.equals(recurso.getEsUsuario())
                 || recurso.getUsuario() == null
@@ -422,6 +431,19 @@ public class RecursoBibliotecaService {
                 .distinct()
                 .collect(Collectors.joining(","));
         return joined.isEmpty() ? null : joined;
+    }
+
+    private HistorialRecursoDTO toHistorialDTO(HistorialRecursoBiblioteca h) {
+        return new HistorialRecursoDTO(
+                h.getId(),
+                h.getRecurso() != null ? h.getRecurso().getId() : null,
+                h.getAccion(),
+                h.getDatosAnteriores(),
+                h.getDatosNuevos(),
+                h.getIpUsuario(),
+                h.getUsuario() != null ? h.getUsuario().getNombreUsuario() : null,
+                h.getFechaAccion()
+        );
     }
 
     private RecursoBibliotecaDTO toDTO(RecursoBiblioteca entity) {

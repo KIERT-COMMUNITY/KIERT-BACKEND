@@ -77,8 +77,16 @@ public class AnuncioService {
             return anuncioRepository.save(anuncio);
         } catch (Exception e) {
             log.error("Error al guardar el anuncio: {}", e.getMessage());
+            // Limpieza defensiva: si se subio imagen pero fallo el guardado en BD,
+            // intentar borrar la imagen de Cloudinary sin bloquear la excepcion original
             if (anuncio.getImagenPublicId() != null) {
-                cloudinaryService.eliminarArchivo(anuncio.getImagenPublicId(), "image");
+                try {
+                    cloudinaryService.eliminarArchivo(anuncio.getImagenPublicId(), "image");
+                    log.info("Imagen huerfana eliminada de Cloudinary: {}", anuncio.getImagenPublicId());
+                } catch (Exception cleanupError) {
+                    log.warn("No se pudo eliminar la imagen huerfana {}: {}",
+                            anuncio.getImagenPublicId(), cleanupError.getMessage());
+                }
             }
             throw new BadRequestException("No se pudo guardar el anuncio");
         }
@@ -107,8 +115,17 @@ public class AnuncioService {
                 log.error("Error al subir la nueva imagen: {}", e.getMessage());
                 throw new BadRequestException("No se pudo subir la nueva imagen");
             }
+
+            // Si se subio la nueva imagen correctamente, intentar eliminar la anterior
             if (publicIdAnterior != null) {
-                cloudinaryService.eliminarArchivo(publicIdAnterior, "image");
+                try {
+                    cloudinaryService.eliminarArchivo(publicIdAnterior, "image");
+                    log.info("Imagen anterior eliminada de Cloudinary: {}", publicIdAnterior);
+                } catch (Exception cleanupError) {
+                    // No relanzar: la actualizacion ya fue exitosa, la imagen vieja queda huerfana
+                    log.warn("No se pudo eliminar la imagen anterior {}: {}",
+                            publicIdAnterior, cleanupError.getMessage());
+                }
             }
         }
         return anuncioRepository.save(anuncio);
@@ -116,11 +133,25 @@ public class AnuncioService {
 
     @Transactional
     public void eliminar(Long id) {
+        log.info("Eliminando anuncio id={}", id);
+
         Anuncio anuncio = obtenerPorId(id);
-        if (anuncio.getImagenPublicId() != null) {
-            cloudinaryService.eliminarArchivo(anuncio.getImagenPublicId(), "image");
+
+        // Intentar eliminar la imagen de Cloudinary ANTES de borrar el registro
+        // Si falla, no bloqueamos el borrado del anuncio
+        if (anuncio.getImagenPublicId() != null && !anuncio.getImagenPublicId().isBlank()) {
+            try {
+                cloudinaryService.eliminarArchivo(anuncio.getImagenPublicId(), "image");
+                log.info("Imagen del anuncio eliminada de Cloudinary: {}", anuncio.getImagenPublicId());
+            } catch (Exception e) {
+                log.warn("No se pudo eliminar la imagen {} de Cloudinary: {}",
+                        anuncio.getImagenPublicId(), e.getMessage());
+                // Continuamos: el anuncio debe borrarse aunque la imagen quede huerfana
+            }
         }
+
         anuncioRepository.delete(anuncio);
+        log.info("Anuncio {} eliminado de la base de datos", id);
     }
 
     private void validarTituloYTexto(String titulo, String texto) {

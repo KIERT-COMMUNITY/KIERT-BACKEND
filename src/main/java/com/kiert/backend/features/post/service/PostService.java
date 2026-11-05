@@ -288,7 +288,7 @@ public class PostService {
     }
 
     // ============================================================
-    // ELIMINAR POST
+    // ELIMINAR POST (CON LIMPIEZA DE CLOUDINARY)
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -310,8 +310,29 @@ public class PostService {
             throw new SecurityException("No tienes permiso para eliminar esta publicacion");
         }
 
+        // Limpiar archivos de Cloudinary antes del soft delete
+        if (post.getAdjuntos() != null && !post.getAdjuntos().isEmpty()) {
+            log.info("Eliminando {} adjunto(s) de Cloudinary para el post {}",
+                    post.getAdjuntos().size(), postId);
+
+            for (Adjunto adjunto : post.getAdjuntos()) {
+                try {
+                    if (adjunto.getUrl() != null && !adjunto.getUrl().isBlank()) {
+                        cloudinaryService.eliminarArchivoPorUrl(adjunto.getUrl());
+                        log.info("Adjunto eliminado de Cloudinary: {}", adjunto.getUrl());
+                    }
+                } catch (Exception e) {
+                    log.warn("No se pudo eliminar adjunto {} de Cloudinary: {}",
+                            adjunto.getUrl(), e.getMessage());
+                    // No lanzamos excepcion para no bloquear el soft delete
+                }
+            }
+        }
+
         post.setEliminado(true);
         post.setFechaEliminacion(Instant.now());
         postRepository.save(post);
+
+        log.info("Post {} marcado como eliminado y adjuntos limpiados", postId);
     }
 }
