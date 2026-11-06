@@ -1,6 +1,6 @@
 # ============================================================
 # application-prod.yml
-# Perfil: prod (produccion en Render)
+# Perfil: prod (produccion en Render - Plan 512 MB RAM)
 # ============================================================
 spring:
   config:
@@ -16,12 +16,12 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      # Subido de 5 a 15 para soportar ~30-50 usuarios activos
-      maximum-pool-size: 15
-      minimum-idle: 5
+      # Bajamos de 15 a 8 para no saturar la RAM con 512 MB
+      maximum-pool-size: 8
+      minimum-idle: 2
       connection-timeout: 10000
       initialization-fail-timeout: 10000
-      idle-timeout: 600000
+      idle-timeout: 300000
       max-lifetime: 1800000
 
   jpa:
@@ -41,11 +41,18 @@ spring:
           batch_size: 20
         order_inserts: true
         order_updates: true
+        # Limita el cache de segundo nivel para ahorrar RAM
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
 
   sql:
     init:
       mode: never
 
+  # ============================================================
+  # REDIS: Si no lo usas, comentalo. Si lo usas, dejalo con estos limites
+  # ============================================================
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST}
@@ -58,8 +65,8 @@ spring:
         enabled: false
       lettuce:
         pool:
-          max-active: 8
-          max-idle: 8
+          max-active: 4
+          max-idle: 4
           min-idle: 0
 
   mail:
@@ -107,21 +114,15 @@ kiert:
     api-key: ${CLOUDINARY_API_KEY}
     api-secret: ${CLOUDINARY_API_SECRET}
 
-  # ============================================================
-  # TURNSTILE - PRODUCCION
-  # ============================================================
   turnstile:
     enabled: true
     site-key: 0x4AAAAAAFz2iwhmq6b7vJ7U
     secret-key: ${TURNSTILE_SECRET_KEY}
     verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
 
-  # ============================================================
-  # FEATURE FLAGS
-  # ============================================================
   features:
     chat-privado:
-      enabled: false   # false = chat privado deshabilitado (API + WebSocket bloqueados)
+      enabled: false
 
 springdoc:
   api-docs:
@@ -138,14 +139,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info
   endpoint:
     health:
       probes:
         enabled: true
       show-details: never
     metrics:
-      enabled: true
+      enabled: false
   health:
     db:
       enabled: false
@@ -155,7 +156,7 @@ management:
       enabled: false
   metrics:
     enable:
-      hikaricp: true
+      hikaricp: false
 
 logging:
   level:
