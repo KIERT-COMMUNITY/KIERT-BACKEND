@@ -165,7 +165,7 @@ public class PersonalizacionService {
     }
 
     // ============================================================
-    // SUBIR FOTO DE PERFIL
+    // SUBIR FOTO DE PERFIL (CORREGIDO)
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -205,7 +205,8 @@ public class PersonalizacionService {
 
         String url;
         try {
-            url = cloudinaryService.subirImagen(archivo, "perfiles");
+            // ✅ CORREGIDO: "perfil" en singular para que coincida con la whitelist
+            url = cloudinaryService.subirImagen(archivo, "perfil");
         } catch (BadRequestException e) {
             throw e;
         } catch (Exception e) {

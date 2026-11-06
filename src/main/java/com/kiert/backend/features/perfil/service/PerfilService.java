@@ -27,9 +27,6 @@ public class PerfilService {
     private final UsuarioRepository usuarioRepository;
     private final CloudinaryService cloudinaryService;
 
-    // ============================================================
-    // OBTENER PERFIL
-    // ============================================================
     @Transactional(readOnly = true)
     @Cacheable(value = "perfil", key = "#usuarioId")
     public UsuarioDTO obtenerPerfil(Long usuarioId) {
@@ -38,9 +35,6 @@ public class PerfilService {
         return aDTO(usuario);
     }
 
-    // ============================================================
-    // SUBIR FOTO DE PERFIL
-    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "perfil", key = "#usuarioId"),
@@ -72,7 +66,8 @@ public class PerfilService {
         String urlAnterior = usuario.getFotoPerfilUrl();
 
         try {
-            String urlNueva = cloudinaryService.subirImagen(archivo, "perfiles");
+            // ✅ CORREGIDO: "perfil" en singular para que coincida con la lista blanca
+            String urlNueva = cloudinaryService.subirImagen(archivo, "perfil");
             log.info("Foto de perfil subida para usuario {}", usuarioId);
 
             if (urlAnterior != null && !urlAnterior.isBlank()) {
@@ -92,9 +87,6 @@ public class PerfilService {
         }
     }
 
-    // ============================================================
-    // ACTUALIZAR FOTO POR URL
-    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "perfil", key = "#usuarioId"),
@@ -116,7 +108,6 @@ public class PerfilService {
             throw new BadRequestException("URL de foto requerida");
         }
 
-        // SEGURIDAD: solo URLs de Cloudinary
         if (!urlFoto.startsWith(CLOUDINARY_PREFIX)) {
             throw new BadRequestException("La URL de la foto no es valida");
         }
@@ -134,9 +125,6 @@ public class PerfilService {
         return aDTO(usuario);
     }
 
-    // ============================================================
-    // ELIMINAR FOTO DE PERFIL
-    // ============================================================
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "perfil", key = "#usuarioId"),
@@ -171,17 +159,11 @@ public class PerfilService {
         return aDTO(usuario);
     }
 
-    // ============================================================
-    // LIMPIAR CACHE
-    // ============================================================
     @CacheEvict(value = "perfil", key = "#usuarioId")
     public void eliminarCachePerfil(Long usuarioId) {
         log.debug("Eliminando cache del usuario {}", usuarioId);
     }
 
-    // ============================================================
-    // HELPERS
-    // ============================================================
     private Usuario buscar(Long usuarioId) {
         if (usuarioId == null) {
             throw new BadRequestException("Usuario requerido");
