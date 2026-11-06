@@ -77,8 +77,6 @@ public class AnuncioService {
             return anuncioRepository.save(anuncio);
         } catch (Exception e) {
             log.error("Error al guardar el anuncio: {}", e.getMessage());
-            // Limpieza defensiva: si se subio imagen pero fallo el guardado en BD,
-            // intentar borrar la imagen de Cloudinary sin bloquear la excepcion original
             if (anuncio.getImagenPublicId() != null) {
                 try {
                     cloudinaryService.eliminarArchivo(anuncio.getImagenPublicId(), "image");
@@ -104,6 +102,15 @@ public class AnuncioService {
         anuncio.setTexto(texto.trim());
         anuncio.setEnlaceUrl(enlaceUrl);
         anuncio.setEsFlotante(esFlotante != null ? esFlotante : false);
+
+        // Saneamiento defensivo por si el registro es viejo y tiene NULL donde no debe
+        if (anuncio.getActivo() == null) {
+            anuncio.setActivo(true);
+        }
+        if (anuncio.getFechaPublicacion() == null) {
+            anuncio.setFechaPublicacion(LocalDateTime.now());
+        }
+
         anuncio.setFechaActualizacion(LocalDateTime.now());
 
         if (nuevaImagen != null && !nuevaImagen.isEmpty()) {
@@ -116,13 +123,11 @@ public class AnuncioService {
                 throw new BadRequestException("No se pudo subir la nueva imagen");
             }
 
-            // Si se subio la nueva imagen correctamente, intentar eliminar la anterior
             if (publicIdAnterior != null) {
                 try {
                     cloudinaryService.eliminarArchivo(publicIdAnterior, "image");
                     log.info("Imagen anterior eliminada de Cloudinary: {}", publicIdAnterior);
                 } catch (Exception cleanupError) {
-                    // No relanzar: la actualizacion ya fue exitosa, la imagen vieja queda huerfana
                     log.warn("No se pudo eliminar la imagen anterior {}: {}",
                             publicIdAnterior, cleanupError.getMessage());
                 }
@@ -137,8 +142,6 @@ public class AnuncioService {
 
         Anuncio anuncio = obtenerPorId(id);
 
-        // Intentar eliminar la imagen de Cloudinary ANTES de borrar el registro
-        // Si falla, no bloqueamos el borrado del anuncio
         if (anuncio.getImagenPublicId() != null && !anuncio.getImagenPublicId().isBlank()) {
             try {
                 cloudinaryService.eliminarArchivo(anuncio.getImagenPublicId(), "image");
@@ -146,7 +149,6 @@ public class AnuncioService {
             } catch (Exception e) {
                 log.warn("No se pudo eliminar la imagen {} de Cloudinary: {}",
                         anuncio.getImagenPublicId(), e.getMessage());
-                // Continuamos: el anuncio debe borrarse aunque la imagen quede huerfana
             }
         }
 
