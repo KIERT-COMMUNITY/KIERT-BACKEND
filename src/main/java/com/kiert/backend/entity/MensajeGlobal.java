@@ -13,7 +13,8 @@ import java.time.Instant;
 @Builder
 @Entity
 @Table(name = "mensaje_global", indexes = {
-        @Index(name = "idx_mensaje_global_fecha", columnList = "fecha_envio")
+        @Index(name = "idx_mensaje_global_fecha", columnList = "fecha_envio"),
+        @Index(name = "idx_mensaje_global_respuesta", columnList = "respuesta_a_id")
 })
 public class MensajeGlobal {
 
@@ -31,4 +32,7 @@ public class MensajeGlobal {
     @Column(name = "fecha_envio", nullable = false)
     @Builder.Default
     private Instant fechaEnvio = Instant.now();
+
+    @Column(name = "respuesta_a_id")
+    private Long respuestaAId;
 }

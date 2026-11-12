@@ -67,14 +67,6 @@ public class ChatGlobalController {
     // ============================================================
     // STOMP: enviar mensaje
     // ============================================================
-    // IMPORTANTE: el destino debe ser "/chat-global/enviar" (con slash).
-    // El frontend publica a "/app/chat-global/enviar"; Spring elimina el
-    // prefijo "/app" configurado con setApplicationDestinationPrefixes(),
-    // dejando "/chat-global/enviar", que es lo que debe coincidir aqui.
-    //
-    // El usuarioId se obtiene del Principal (seteado en el CONNECT por
-    // StompAuthChannelInterceptor). NO se usan sessionAttributes porque
-    // detras de un proxy/SockJS en produccion pueden llegar vacios al SEND.
     @MessageMapping("/chat-global/enviar")
     @SendTo("/topic/chat-global")
     public MensajeGlobalDTO enviarMensaje(
@@ -102,6 +94,12 @@ public class ChatGlobalController {
         }
         contenido = contenido.replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
 
+        // ✅ NUEVO — validar respuestaAId (si se envía). Si no existe, se ignora.
+        Long respuestaValida = null;
+        if (dto.respuestaAId() != null && mensajeRepository.existsById(dto.respuestaAId())) {
+            respuestaValida = dto.respuestaAId();
+        }
+
         Usuario autor = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
@@ -109,11 +107,13 @@ public class ChatGlobalController {
                 .autor(autor)
                 .contenido(contenido)
                 .fechaEnvio(Instant.now())
+                .respuestaAId(respuestaValida)   // ✅ NUEVO
                 .build();
 
         mensaje = mensajeRepository.save(mensaje);
 
-        log.info("[CHAT-GLOBAL] Mensaje id={} de usuarioId={}", mensaje.getId(), autor.getId());
+        log.info("[CHAT-GLOBAL] Mensaje id={} de usuarioId={} respuestaAId={}",
+                mensaje.getId(), autor.getId(), respuestaValida);
 
         return mapearADTO(mensaje);
     }
@@ -134,7 +134,8 @@ public class ChatGlobalController {
                 foto,
                 marcoId,
                 m.getContenido(),
-                m.getFechaEnvio()
+                m.getFechaEnvio(),
+                m.getRespuestaAId()   // ✅ NUEVO
         );
     }
 }

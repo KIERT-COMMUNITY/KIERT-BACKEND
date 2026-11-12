@@ -8,7 +8,8 @@ public record MensajeGlobalDTO(
         Long autorId,
         String autorNombreUsuario,
         String autorFotoPerfilUrl,
-        String marcoId,          // ✅ NUEVO — necesitamos el marco para pintarlo en el chat
+        String marcoId,
         String contenido,
-        Instant fechaEnvio
+        Instant fechaEnvio,
+        Long respuestaAId
 ) {}
