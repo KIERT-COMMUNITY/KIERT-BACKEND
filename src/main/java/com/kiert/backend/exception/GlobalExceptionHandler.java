@@ -19,12 +19,33 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // ============================================================
+    // 1. ERRORES DE REGLA DE NEGOCIO (400 BAD REQUEST)
+    // ============================================================
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, Object>> manejarBadRequest(BadRequestException ex) {
         log.warn("BadRequest: {}", ex.getMessage());
         return construirRespuesta(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> manejarIllegalArgument(IllegalArgumentException ex) {
+        log.warn("IllegalArgument: {}", ex.getMessage());
+        return construirRespuesta(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    // ============================================================
+    // 2. RATE LIMIT (429 TOO MANY REQUESTS)
+    // ============================================================
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<Map<String, Object>> manejarTooManyRequests(TooManyRequestsException ex) {
+        log.warn("RateLimit alcanzado: {}", ex.getMessage());
+        return construirRespuesta(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
+    // ============================================================
+    // 3. RECURSOS Y PERMISOS (404, 403)
+    // ============================================================
     @ExceptionHandler(RecursoNoEncontradoException.class)
     public ResponseEntity<Map<String, Object>> manejarNoEncontrado(RecursoNoEncontradoException ex) {
         log.warn("No encontrado: {}", ex.getMessage());
@@ -37,8 +58,14 @@ public class GlobalExceptionHandler {
         return construirRespuesta(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<Map<String, Object>> manejarSecurity(SecurityException ex) {
+        log.warn("Security: {}", ex.getMessage());
+        return construirRespuesta(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
     // ============================================================
-    // NUEVO: Turnstile
+    // 4. CAPTCHA (TURNSTILE - 403 FORBIDDEN)
     // ============================================================
     @ExceptionHandler(TurnstileValidationException.class)
     public ResponseEntity<Map<String, Object>> manejarTurnstile(TurnstileValidationException ex) {
@@ -51,24 +78,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, Object>> manejarIllegalState(IllegalStateException ex) {
-        log.warn("IllegalState: {}", ex.getMessage());
-        return construirRespuesta(HttpStatus.CONFLICT, ex.getMessage());
-    }
-
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> manejarIllegalArgument(IllegalArgumentException ex) {
-        log.warn("IllegalArgument: {}", ex.getMessage());
-        return construirRespuesta(HttpStatus.BAD_REQUEST, ex.getMessage());
-    }
-
-    @ExceptionHandler(SecurityException.class)
-    public ResponseEntity<Map<String, Object>> manejarSecurity(SecurityException ex) {
-        log.warn("Security: {}", ex.getMessage());
-        return construirRespuesta(HttpStatus.FORBIDDEN, ex.getMessage());
-    }
-
+    // ============================================================
+    // 5. VALIDACIONES DE SPRING (400 BAD REQUEST)
+    // ============================================================
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> manejarValidacion(MethodArgumentNotValidException ex) {
         Map<String, String> errores = new HashMap<>();
@@ -89,6 +101,9 @@ public class GlobalExceptionHandler {
                 "JSON malformado: " + ex.getMostSpecificCause().getMessage());
     }
 
+    // ============================================================
+    // 6. ERROR GENÉRICO (500 INTERNAL SERVER ERROR)
+    // ============================================================
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> manejarGenerico(Exception ex) {
         log.error("ERROR INESPERADO: {}", ex.getMessage(), ex);

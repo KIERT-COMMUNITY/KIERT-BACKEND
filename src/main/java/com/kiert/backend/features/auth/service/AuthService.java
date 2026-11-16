@@ -65,8 +65,9 @@ public class AuthService {
     public void registrar(RegisterRequestDTO datos) {
         log.info("Registrando usuario: {}", datos.email());
 
-        rateLimitService.verificar("registro:email:" + datos.email(), 3, Duration.ofHours(1));
-        rateLimitService.verificar("registro:ip:" + obtenerIpCliente(), 10, Duration.ofHours(1));
+        // Límites más flexibles para evitar bloqueos masivos
+        rateLimitService.verificar("registro:email:" + datos.email(), 5, Duration.ofMinutes(30));
+        rateLimitService.verificar("registro:ip:" + obtenerIpCliente(), 30, Duration.ofHours(1));
 
         if (usuarioRepository.existsByEmail(datos.email())) {
             auditoriaService.registrar(null, datos.email(),
@@ -420,6 +421,21 @@ public class AuthService {
             if (attrs == null) return "unknown";
 
             HttpServletRequest request = attrs.getRequest();
+
+            // 1. Intentar con X-Forwarded-For (el estándar detrás de proxies como Render)
+            String ip = request.getHeader("X-Forwarded-For");
+            if (ip != null && !ip.isBlank()) {
+                // X-Forwarded-For puede traer varias IPs: "cliente, proxy1, proxy2"
+                return ip.split(",")[0].trim();
+            }
+
+            // 2. Intentar con X-Real-IP (usado por Nginx)
+            ip = request.getHeader("X-Real-IP");
+            if (ip != null && !ip.isBlank()) {
+                return ip.trim();
+            }
+
+            // 3. Fallback
             return request.getRemoteAddr();
         } catch (Exception e) {
             return "unknown";
