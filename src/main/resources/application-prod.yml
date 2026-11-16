@@ -70,7 +70,7 @@ spring:
           min-idle: 0
 
   # ============================================================
-  # MAIL: Configuración correcta para el puerto 465 (SSL)
+  # MAIL: Configuración correcta para el puerto 587 (STARTTLS)
   # ============================================================
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
@@ -121,7 +121,7 @@ kiert:
     api-secret: ${CLOUDINARY_API_SECRET}
 
   turnstile:
-    enabled: true
+    enabled: false   # <-- DESACTIVADO TEMPORALMENTE (el backend no valida el CAPTCHA)
     site-key: 0x4AAAAAAFz2iwhmq6b7vJ7U
     secret-key: ${TURNSTILE_SECRET_KEY}
     verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
