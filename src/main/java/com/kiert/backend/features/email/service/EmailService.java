@@ -199,9 +199,9 @@ public class EmailService {
 
         // Forzamos un timeout de 3000ms (3 segundos) para no colgar el hilo de Render
         Properties props = new Properties();
-        props.put("mail.smtp.connectiontimeout", "3000");
-        props.put("mail.smtp.timeout", "3000");
-        props.put("mail.smtp.writetimeout", "3000");
+        props.put("mail.smtp.connectiontimeout", "10000");
+        props.put("mail.smtp.timeout", "10000");
+        props.put("mail.smtp.writetimeout", "10000");
 
         MimeMessage mensaje = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
