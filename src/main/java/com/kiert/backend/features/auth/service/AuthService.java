@@ -65,8 +65,9 @@ public class AuthService {
     public void registrar(RegisterRequestDTO datos) {
         log.info("Registrando usuario: {}", datos.email());
 
-        rateLimitService.verificar("registro:email:" + datos.email(), 5, Duration.ofMinutes(30));
-        rateLimitService.verificar("registro:ip:" + obtenerIpCliente(), 30, Duration.ofHours(1));
+        // LÍMITES BAJADOS A 5 MINUTOS MÁXIMO
+        rateLimitService.verificar("registro:email:" + datos.email(), 5, Duration.ofMinutes(5));
+        rateLimitService.verificar("registro:ip:" + obtenerIpCliente(), 20, Duration.ofMinutes(5));
 
         if (usuarioRepository.existsByEmail(datos.email())) {
             auditoriaService.registrar(null, datos.email(),
@@ -122,7 +123,7 @@ public class AuthService {
     public void verificarCuenta(String email, String codigo) {
         log.info("Verificando cuenta: {}", email);
 
-        rateLimitService.verificar("verificar:email:" + email, 5, Duration.ofMinutes(15));
+        rateLimitService.verificar("verificar:email:" + email, 5, Duration.ofMinutes(5));
 
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
@@ -170,7 +171,7 @@ public class AuthService {
     public void reenviarCodigoVerificacion(String email) {
         log.info("Reenviando codigo de verificacion: {}", email);
 
-        rateLimitService.verificar("reenvio:email:" + email, 3, Duration.ofHours(1));
+        rateLimitService.verificar("reenvio:email:" + email, 3, Duration.ofMinutes(5));
 
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));
@@ -201,8 +202,8 @@ public class AuthService {
     public AuthResponseDTO login(LoginRequestDTO datos) {
         log.info("Login para usuario: {}", datos.email());
 
-        rateLimitService.verificar("login:email:" + datos.email(), 5, Duration.ofMinutes(15));
-        rateLimitService.verificar("login:ip:" + obtenerIpCliente(), 20, Duration.ofMinutes(15));
+        rateLimitService.verificar("login:email:" + datos.email(), 5, Duration.ofMinutes(5));
+        rateLimitService.verificar("login:ip:" + obtenerIpCliente(), 20, Duration.ofMinutes(5));
 
         Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(datos.email());
 
@@ -293,8 +294,8 @@ public class AuthService {
     public void solicitarRecuperacion(String email) {
         log.info("Solicitando recuperacion para: {}", email);
 
-        rateLimitService.verificar("recuperacion:email:" + email, 3, Duration.ofHours(1));
-        rateLimitService.verificar("recuperacion:ip:" + obtenerIpCliente(), 10, Duration.ofHours(1));
+        rateLimitService.verificar("recuperacion:email:" + email, 3, Duration.ofMinutes(5));
+        rateLimitService.verificar("recuperacion:ip:" + obtenerIpCliente(), 10, Duration.ofMinutes(5));
 
         Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(email);
 
@@ -330,7 +331,7 @@ public class AuthService {
     public String verificarCodigoRecuperacion(String email, String codigo) {
         log.info("Verificando codigo de recuperacion para: {}", email);
 
-        rateLimitService.verificar("verificar-reset:email:" + email, 5, Duration.ofMinutes(15));
+        rateLimitService.verificar("verificar-reset:email:" + email, 5, Duration.ofMinutes(5));
 
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("Codigo incorrecto o expirado"));
@@ -396,7 +397,7 @@ public class AuthService {
     public void restablecerPasswordConCodigo(String email, String codigo, String nuevaPassword) {
         log.info("Restableciendo password para: {}", email);
 
-        rateLimitService.verificar("reset:email:" + email, 5, Duration.ofMinutes(15));
+        rateLimitService.verificar("reset:email:" + email, 5, Duration.ofMinutes(5));
 
         Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new BadRequestException("Usuario no encontrado"));

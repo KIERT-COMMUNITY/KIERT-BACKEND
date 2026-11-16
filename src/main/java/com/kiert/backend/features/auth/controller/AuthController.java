@@ -17,11 +17,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @RestController
@@ -32,8 +34,21 @@ public class AuthController {
     private final AuthService authService;
     private final JwtService jwtService;
     private final TurnstileService turnstileService;
+    private final StringRedisTemplate redis; // Inyectado para el endpoint temporal
 
     private static final String PREFIJO_BEARER = "Bearer ";
+
+    // ============================================================
+    // ENDPOINT TEMPORAL PARA LIMPIAR RATE LIMIT
+    // ============================================================
+    @GetMapping("/admin/clear-ratelimit")
+    public ResponseEntity<?> clearRateLimit() {
+        Set<String> keys = redis.keys("ratelimit:*");
+        if (keys != null && !keys.isEmpty()) {
+            redis.delete(keys);
+        }
+        return ResponseEntity.ok(Map.of("claves_borradas", keys != null ? keys.size() : 0));
+    }
 
     // ============================================================
     // REGISTRO
