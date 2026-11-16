@@ -74,20 +74,18 @@ spring:
   # ============================================================
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:465}
+    port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
           auth: true
-          # ⚠️ CRÍTICO: El puerto 465 usa SSL directo, NO STARTTLS
-          ssl:
-            enable: true
-            trust: smtp.gmail.com
           starttls:
+            enable: true
+            required: true
+          ssl:
             enable: false
-          # Timeouts para que Render no se quede colgado si Gmail falla
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000
