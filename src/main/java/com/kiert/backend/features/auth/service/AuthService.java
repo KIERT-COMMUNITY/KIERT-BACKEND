@@ -69,16 +69,25 @@ public class AuthService {
         rateLimitService.verificar("registro:ip:" + obtenerIpCliente(), 20, Duration.ofMinutes(1));
 
         if (usuarioRepository.existsByEmail(datos.email())) {
-            auditoriaService.registrar(null, datos.email(),
-                    EventoAuditoria.REGISTRO,
-                    "Intento de registro con email ya existente", false);
+            // Auditoría blindada: si falla, no rompe el flujo
+            try {
+                auditoriaService.registrar(null, datos.email(),
+                        EventoAuditoria.REGISTRO,
+                        "Intento de registro con email ya existente", false);
+            } catch (Exception e) {
+                log.warn("Error auditoría (email duplicado): {}", e.getMessage());
+            }
             throw new BadRequestException("El email ya esta registrado");
         }
 
         if (usuarioRepository.existsByNombreUsuario(datos.nombreUsuario())) {
-            auditoriaService.registrar(null, datos.email(),
-                    EventoAuditoria.REGISTRO,
-                    "Intento de registro con nombre de usuario ya existente", false);
+            try {
+                auditoriaService.registrar(null, datos.email(),
+                        EventoAuditoria.REGISTRO,
+                        "Intento de registro con nombre de usuario ya existente", false);
+            } catch (Exception e) {
+                log.warn("Error auditoría (usuario duplicado): {}", e.getMessage());
+            }
             throw new BadRequestException("El nombre de usuario ya esta en uso");
         }
 
@@ -99,7 +108,7 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 datos.email(), TipoCodigo.VERIFICACION_CUENTA);
 
-        // 🔥 FIX: Enviar correo en un hilo separado para no bloquear la petición
+        // Correo en hilo separado
         final String emailFinal = datos.email();
         final String nombreFinal = datos.nombreUsuario();
         final String codigoFinal = codigo;
@@ -113,9 +122,14 @@ public class AuthService {
             }
         }).start();
 
-        auditoriaService.registrar(usuario.getId(), datos.email(),
-                EventoAuditoria.REGISTRO,
-                "Usuario registrado. Codigo de verificacion enviado al email.", true);
+        // Auditoría blindada: si falla, no revierte el registro
+        try {
+            auditoriaService.registrar(usuario.getId(), datos.email(),
+                    EventoAuditoria.REGISTRO,
+                    "Usuario registrado. Codigo de verificacion enviado al email.", true);
+        } catch (Exception e) {
+            log.warn("Error auditoría (registro exitoso, pero auditoría falló): {}", e.getMessage());
+        }
 
         log.info("Usuario registrado (pendiente verificacion): {}", datos.email());
     }
@@ -141,9 +155,13 @@ public class AuthService {
             codigoVerificacionService.validarYConsumir(
                     email, codigo, TipoCodigo.VERIFICACION_CUENTA);
         } catch (Exception e) {
-            auditoriaService.registrar(usuario.getId(), email,
-                    EventoAuditoria.VERIFICACION_EMAIL,
-                    "Intento fallido: codigo incorrecto o expirado", false);
+            try {
+                auditoriaService.registrar(usuario.getId(), email,
+                        EventoAuditoria.VERIFICACION_EMAIL,
+                        "Intento fallido: codigo incorrecto o expirado", false);
+            } catch (Exception ex) {
+                log.warn("Error auditoría (verificación fallida): {}", ex.getMessage());
+            }
             throw e;
         }
 
@@ -154,7 +172,7 @@ public class AuthService {
         usuario.setFechaVerificacionEmail(Instant.now());
         usuarioRepository.save(usuario);
 
-        // 🔥 FIX: Correo de bienvenida en hilo separado
+        // Correo de bienvenida en hilo separado
         final String nombreUsuarioFinal = usuario.getNombreUsuario();
         new Thread(() -> {
             try {
@@ -164,9 +182,13 @@ public class AuthService {
             }
         }).start();
 
-        auditoriaService.registrar(usuario.getId(), email,
-                EventoAuditoria.VERIFICACION_EMAIL,
-                "Cuenta verificada correctamente. Email de bienvenida enviado.", true);
+        try {
+            auditoriaService.registrar(usuario.getId(), email,
+                    EventoAuditoria.VERIFICACION_EMAIL,
+                    "Cuenta verificada correctamente. Email de bienvenida enviado.", true);
+        } catch (Exception e) {
+            log.warn("Error auditoría (cuenta verificada): {}", e.getMessage());
+        }
 
         log.info("Cuenta verificada y bienvenida enviada: {}", email);
     }
@@ -190,7 +212,6 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 email, TipoCodigo.VERIFICACION_CUENTA);
 
-        // 🔥 FIX: Correo en hilo separado
         final String nombreFinal = usuario.getNombreUsuario();
         final String codigoFinal = codigo;
         new Thread(() -> {
@@ -201,9 +222,13 @@ public class AuthService {
             }
         }).start();
 
-        auditoriaService.registrar(usuario.getId(), email,
-                EventoAuditoria.REENVIO_CODIGO,
-                "Codigo de verificacion reenviado al email", true);
+        try {
+            auditoriaService.registrar(usuario.getId(), email,
+                    EventoAuditoria.REENVIO_CODIGO,
+                    "Codigo de verificacion reenviado al email", true);
+        } catch (Exception e) {
+            log.warn("Error auditoría (reenvío): {}", e.getMessage());
+        }
     }
 
     // ============================================================
@@ -221,27 +246,39 @@ public class AuthService {
         if (usuarioOpt.isEmpty()) {
             passwordEncoder.matches(datos.password(),
                     "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy");
-            auditoriaService.registrar(null, datos.email(),
-                    EventoAuditoria.LOGIN_FALLIDO,
-                    "Intento de login con email no registrado", false);
+            try {
+                auditoriaService.registrar(null, datos.email(),
+                        EventoAuditoria.LOGIN_FALLIDO,
+                        "Intento de login con email no registrado", false);
+            } catch (Exception e) {
+                log.warn("Error auditoría (login fallido): {}", e.getMessage());
+            }
             throw new BadRequestException("Credenciales invalidas");
         }
 
         Usuario usuario = usuarioOpt.get();
 
         if (Boolean.FALSE.equals(usuario.getActivo())) {
-            auditoriaService.registrar(usuario.getId(), datos.email(),
-                    EventoAuditoria.CUENTA_NO_VERIFICADA,
-                    "Intento de login con cuenta sin verificar", false);
+            try {
+                auditoriaService.registrar(usuario.getId(), datos.email(),
+                        EventoAuditoria.CUENTA_NO_VERIFICADA,
+                        "Intento de login con cuenta sin verificar", false);
+            } catch (Exception e) {
+                log.warn("Error auditoría (cuenta no verificada): {}", e.getMessage());
+            }
             throw new BadRequestException("Credenciales invalidas");
         }
 
         String rol = usuario.getRol() != null ? usuario.getRol() : "USER";
         if (ROLES_ADMIN.contains(rol)) {
             log.warn("Intento de login normal con cuenta admin: {}", datos.email());
-            auditoriaService.registrar(usuario.getId(), datos.email(),
-                    EventoAuditoria.LOGIN_FALLIDO,
-                    "Intento de login normal con cuenta de administrador", false);
+            try {
+                auditoriaService.registrar(usuario.getId(), datos.email(),
+                        EventoAuditoria.LOGIN_FALLIDO,
+                        "Intento de login normal con cuenta de administrador", false);
+            } catch (Exception e) {
+                log.warn("Error auditoría (login admin): {}", e.getMessage());
+            }
             throw new BadRequestException("Credenciales invalidas");
         }
 
@@ -251,9 +288,13 @@ public class AuthService {
             );
             SecurityContextHolder.getContext().setAuthentication(authentication);
         } catch (Exception e) {
-            auditoriaService.registrar(usuario.getId(), datos.email(),
-                    EventoAuditoria.LOGIN_FALLIDO,
-                    "Contrasena incorrecta", false);
+            try {
+                auditoriaService.registrar(usuario.getId(), datos.email(),
+                        EventoAuditoria.LOGIN_FALLIDO,
+                        "Contrasena incorrecta", false);
+            } catch (Exception ex) {
+                log.warn("Error auditoría (contraseña incorrecta): {}", ex.getMessage());
+            }
             throw new BadRequestException("Credenciales invalidas");
         }
 
@@ -262,9 +303,13 @@ public class AuthService {
 
         usuarioService.marcarEnLinea(usuario.getId());
 
-        auditoriaService.registrar(usuario.getId(), datos.email(),
-                EventoAuditoria.LOGIN,
-                "Inicio de sesion correcto", true);
+        try {
+            auditoriaService.registrar(usuario.getId(), datos.email(),
+                    EventoAuditoria.LOGIN,
+                    "Inicio de sesion correcto", true);
+        } catch (Exception e) {
+            log.warn("Error auditoría (login exitoso): {}", e.getMessage());
+        }
 
         int tokenVersion = usuario.getTokenVersion() != null ? usuario.getTokenVersion() : 0;
         String token = jwtService.generarTokenConRol(
@@ -292,9 +337,13 @@ public class AuthService {
                 }
             }
 
-            auditoriaService.registrar(usuarioId, null,
-                    EventoAuditoria.LOGOUT,
-                    "Cierre de sesion", true);
+            try {
+                auditoriaService.registrar(usuarioId, null,
+                        EventoAuditoria.LOGOUT,
+                        "Cierre de sesion", true);
+            } catch (Exception e) {
+                log.warn("Error auditoría (logout): {}", e.getMessage());
+            }
         }
     }
 
@@ -311,9 +360,13 @@ public class AuthService {
         Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(email);
 
         if (usuarioOpt.isEmpty()) {
-            auditoriaService.registrar(null, email,
-                    EventoAuditoria.SOLICITUD_RECUPERACION,
-                    "Solicitud de recuperacion para email no registrado", false);
+            try {
+                auditoriaService.registrar(null, email,
+                        EventoAuditoria.SOLICITUD_RECUPERACION,
+                        "Solicitud de recuperacion para email no registrado", false);
+            } catch (Exception e) {
+                log.warn("Error auditoría (recuperación email no reg): {}", e.getMessage());
+            }
             return;
         }
 
@@ -321,7 +374,6 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 email, TipoCodigo.RECUPERACION_PASSWORD);
 
-        // 🔥 FIX: Correo en hilo separado
         final String nombreFinal = usuario.getNombreUsuario();
         final String codigoFinal = codigo;
         new Thread(() -> {
@@ -332,9 +384,13 @@ public class AuthService {
             }
         }).start();
 
-        auditoriaService.registrar(usuario.getId(), email,
-                EventoAuditoria.SOLICITUD_RECUPERACION,
-                "Codigo de recuperacion enviado al email", true);
+        try {
+            auditoriaService.registrar(usuario.getId(), email,
+                    EventoAuditoria.SOLICITUD_RECUPERACION,
+                    "Codigo de recuperacion enviado al email", true);
+        } catch (Exception e) {
+            log.warn("Error auditoría (recuperación): {}", e.getMessage());
+        }
 
         log.info("Codigo de recuperacion enviado a: {}", email);
     }
@@ -355,9 +411,13 @@ public class AuthService {
             codigoVerificacionService.validarYConsumir(
                     email, codigo, TipoCodigo.RECUPERACION_PASSWORD);
         } catch (Exception e) {
-            auditoriaService.registrar(usuario.getId(), email,
-                    EventoAuditoria.CAMBIO_PASSWORD,
-                    "Intento fallido de verificacion de codigo de recuperacion", false);
+            try {
+                auditoriaService.registrar(usuario.getId(), email,
+                        EventoAuditoria.CAMBIO_PASSWORD,
+                        "Intento fallido de verificacion de codigo de recuperacion", false);
+            } catch (Exception ex) {
+                log.warn("Error auditoría (verificación fallida recuperación): {}", ex.getMessage());
+            }
             throw new BadRequestException("Codigo incorrecto o expirado");
         }
 
@@ -368,9 +428,13 @@ public class AuthService {
                 RESET_TOKEN_TTL
         );
 
-        auditoriaService.registrar(usuario.getId(), email,
-                EventoAuditoria.CAMBIO_PASSWORD,
-                "Codigo de recuperacion verificado. Token temporal emitido.", true);
+        try {
+            auditoriaService.registrar(usuario.getId(), email,
+                    EventoAuditoria.CAMBIO_PASSWORD,
+                    "Codigo de recuperacion verificado. Token temporal emitido.", true);
+        } catch (Exception e) {
+            log.warn("Error auditoría (código verificado): {}", e.getMessage());
+        }
 
         return resetToken;
     }
@@ -398,9 +462,13 @@ public class AuthService {
         usuario.setTokenVersion(tokenVersionActual + 1);
         usuarioRepository.save(usuario);
 
-        auditoriaService.registrar(usuario.getId(), email,
-                EventoAuditoria.CAMBIO_PASSWORD,
-                "Contrasena restablecida correctamente con token temporal", true);
+        try {
+            auditoriaService.registrar(usuario.getId(), email,
+                    EventoAuditoria.CAMBIO_PASSWORD,
+                    "Contrasena restablecida correctamente con token temporal", true);
+        } catch (Exception e) {
+            log.warn("Error auditoría (reset token): {}", e.getMessage());
+        }
 
         log.info("Contrasena restablecida para {}", email);
     }
@@ -421,9 +489,13 @@ public class AuthService {
             codigoVerificacionService.validarYConsumir(
                     email, codigo, TipoCodigo.RECUPERACION_PASSWORD);
         } catch (Exception e) {
-            auditoriaService.registrar(usuario.getId(), email,
-                    EventoAuditoria.CAMBIO_PASSWORD,
-                    "Intento fallido: codigo incorrecto o expirado", false);
+            try {
+                auditoriaService.registrar(usuario.getId(), email,
+                        EventoAuditoria.CAMBIO_PASSWORD,
+                        "Intento fallido: codigo incorrecto o expirado", false);
+            } catch (Exception ex) {
+                log.warn("Error auditoría (código incorrecto reset): {}", ex.getMessage());
+            }
             throw e;
         }
 
@@ -435,9 +507,13 @@ public class AuthService {
         usuario.setTokenVersion(tokenVersionActual + 1);
         usuarioRepository.save(usuario);
 
-        auditoriaService.registrar(usuario.getId(), email,
-                EventoAuditoria.CAMBIO_PASSWORD,
-                "Contrasena restablecida correctamente con codigo", true);
+        try {
+            auditoriaService.registrar(usuario.getId(), email,
+                    EventoAuditoria.CAMBIO_PASSWORD,
+                    "Contrasena restablecida correctamente con codigo", true);
+        } catch (Exception e) {
+            log.warn("Error auditoría (reset código): {}", e.getMessage());
+        }
 
         log.info("Contrasena restablecida para {}", email);
     }

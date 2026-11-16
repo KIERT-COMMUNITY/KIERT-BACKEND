@@ -127,7 +127,7 @@ public class EmailService {
         try {
             String html = plantillaBienvenida(truncar(nombreUsuario, MAX_NOMBRE_USUARIO_LENGTH));
             log.info("[EMAIL] Llamando a enviarHtml para: {}", emailDestino);
-            enviarHtml(destinatario, "Bienvenido a Kiert, comunidad para desarrolladores", html);
+            enviarHtml(destinatario, "Bienvenido a Kiert", html);
             registrarEnvio(destinatario);
             log.info("[EMAIL] Correo de bienvenida enviado exitosamente a: {}", emailDestino);
         } catch (Exception e) {
@@ -283,7 +283,7 @@ public class EmailService {
                             Este es un mensaje automatico, no respondas a este correo.
                           </p>
                           <p style="margin:6px 0 0;color:#5a6a7a;font-size:0.7rem;">
-                            Kiert - Comunidad para desarrolladores
+                            Kiert - Comunidad para compartir y ayudar
                           </p>
                         </td>
                       </tr>
@@ -320,7 +320,7 @@ public class EmailService {
                           <div style="font-family:'JetBrains Mono',monospace;font-size:1.6rem;font-weight:700;color:#e6edf3;">
                             <span style="color:#2dd4bf;">&gt;_</span> kiert
                           </div>
-                          <p style="margin:8px 0 0;color:#8b98a5;font-size:0.75rem;">Comunidad para desarrolladores</p>
+                          <p style="margin:8px 0 0;color:#8b98a5;font-size:0.75rem;">Comunidad para compartir y ayudar</p>
                         </td>
                       </tr>
                       <tr>
@@ -329,14 +329,14 @@ public class EmailService {
                             Bienvenido, __NOMBRE__
                           </h1>
                           <p style="margin:0 0 20px;color:#8b98a5;font-size:0.95rem;line-height:1.6;">
-                            Tu cuenta ha sido activada correctamente. Ya eres parte de <strong style="color:#2dd4bf;">Kiert</strong>, la comunidad donde desarrolladores comparten casos, dudas e historias reales.
+                            Tu cuenta ha sido activada correctamente. Ya eres parte de <strong style="color:#2dd4bf;">Kiert</strong>, la comunidad donde puedes compartir casos, experiencias, dudas y ayudar a otras personas.
                           </p>
 
                           <div style="background:#0d1117;border-radius:12px;padding:20px;margin:20px 0;">
                             <h2 style="margin:0 0 12px;font-size:0.95rem;color:#e6edf3;font-weight:600;">Que puedes hacer ahora?</h2>
                             <ul style="margin:0;padding-left:20px;color:#8b98a5;font-size:0.85rem;line-height:1.9;">
-                              <li>Publicar tus casos y proyectos</li>
-                              <li>Comentar y ayudar a otros desarrolladores</li>
+                              <li>Publicar tus casos y experiencias</li>
+                              <li>Comentar y ayudar a otras personas</li>
                               <li>Conectar con la comunidad</li>
                               <li>Personalizar tu perfil con temas y marcos</li>
                             </ul>
@@ -359,7 +359,7 @@ public class EmailService {
                       <tr>
                         <td style="padding:20px 32px;text-align:center;border-top:1px solid #26313c;">
                           <p style="margin:0;color:#5a6a7a;font-size:0.7rem;">
-                            Kiert - Comunidad para desarrolladores
+                            Kiert - Comunidad para compartir y ayudar
                           </p>
                         </td>
                       </tr>
