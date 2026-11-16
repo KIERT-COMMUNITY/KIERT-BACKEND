@@ -118,7 +118,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,  "/api/chat-global/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/chat-global/**").authenticated()
 
-                        // ❌ CHAT PRIVADO BLOQUEADO
+                        //  CHAT PRIVADO BLOQUEADO
                         .requestMatchers("/api/chat/**").denyAll()
 
                         // Chat grupal (sigue activo)

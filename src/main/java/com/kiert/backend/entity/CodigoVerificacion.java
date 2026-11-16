@@ -31,7 +31,7 @@ public class CodigoVerificacion {
     @Column(nullable = false, length = 120)
     private String email;
 
-    @Column(nullable = false, length = 6)
+    @Column(nullable = false, length = 255)
     private String codigo;
 
     @Enumerated(EnumType.STRING)
