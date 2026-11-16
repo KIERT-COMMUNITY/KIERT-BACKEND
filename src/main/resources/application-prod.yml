@@ -69,6 +69,9 @@ spring:
           max-idle: 4
           min-idle: 0
 
+  # ============================================================
+  # MAIL: Configuración correcta para el puerto 465 (SSL)
+  # ============================================================
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:465}
@@ -78,8 +81,13 @@ spring:
       mail:
         smtp:
           auth: true
-          starttls:
+          # ⚠️ CRÍTICO: El puerto 465 usa SSL directo, NO STARTTLS
+          ssl:
             enable: true
+            trust: smtp.gmail.com
+          starttls:
+            enable: false
+          # Timeouts para que Render no se quede colgado si Gmail falla
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000
@@ -166,3 +174,5 @@ logging:
     org.hibernate: WARN
     org.springframework.data.redis: WARN
     org.springframework.messaging: WARN
+    # Útil para ver errores de correo en Render
+    org.springframework.mail: DEBUG
