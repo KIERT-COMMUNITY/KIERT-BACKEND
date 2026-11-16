@@ -65,7 +65,6 @@ public class AuthService {
     public void registrar(RegisterRequestDTO datos) {
         log.info("Registrando usuario: {}", datos.email());
 
-        // Límites más flexibles para evitar bloqueos masivos
         rateLimitService.verificar("registro:email:" + datos.email(), 5, Duration.ofMinutes(30));
         rateLimitService.verificar("registro:ip:" + obtenerIpCliente(), 30, Duration.ofHours(1));
 
@@ -100,7 +99,14 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 datos.email(), TipoCodigo.VERIFICACION_CUENTA);
 
-        emailService.enviarCodigoVerificacion(datos.email(), datos.nombreUsuario(), codigo);
+        // EL FIX ESTÁ AQUÍ: Envolvemos el envío de correo en un try-catch
+        try {
+            emailService.enviarCodigoVerificacion(datos.email(), datos.nombreUsuario(), codigo);
+            log.info("Correo de verificacion enviado a {}", datos.email());
+        } catch (Exception e) {
+            log.error("Error enviando correo de verificacion a {}: {}", datos.email(), e.getMessage(), e);
+            // No lanzamos la excepción para que el usuario se guarde igualmente
+        }
 
         auditoriaService.registrar(usuario.getId(), datos.email(),
                 EventoAuditoria.REGISTRO,
@@ -143,7 +149,12 @@ public class AuthService {
         usuario.setFechaVerificacionEmail(Instant.now());
         usuarioRepository.save(usuario);
 
-        emailService.enviarCorreoBienvenida(email, usuario.getNombreUsuario());
+        // EL FIX TAMBIÉN AQUÍ
+        try {
+            emailService.enviarCorreoBienvenida(email, usuario.getNombreUsuario());
+        } catch (Exception e) {
+            log.error("Error enviando correo de bienvenida a {}: {}", email, e.getMessage());
+        }
 
         auditoriaService.registrar(usuario.getId(), email,
                 EventoAuditoria.VERIFICACION_EMAIL,
@@ -171,7 +182,12 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 email, TipoCodigo.VERIFICACION_CUENTA);
 
-        emailService.enviarCodigoVerificacion(email, usuario.getNombreUsuario(), codigo);
+        // EL FIX TAMBIÉN AQUÍ
+        try {
+            emailService.enviarCodigoVerificacion(email, usuario.getNombreUsuario(), codigo);
+        } catch (Exception e) {
+            log.error("Error reenviando correo a {}: {}", email, e.getMessage());
+        }
 
         auditoriaService.registrar(usuario.getId(), email,
                 EventoAuditoria.REENVIO_CODIGO,
@@ -293,7 +309,12 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 email, TipoCodigo.RECUPERACION_PASSWORD);
 
-        emailService.enviarCodigoRecuperacion(email, usuario.getNombreUsuario(), codigo);
+        // EL FIX TAMBIÉN AQUÍ
+        try {
+            emailService.enviarCodigoRecuperacion(email, usuario.getNombreUsuario(), codigo);
+        } catch (Exception e) {
+            log.error("Error enviando correo de recuperacion a {}: {}", email, e.getMessage());
+        }
 
         auditoriaService.registrar(usuario.getId(), email,
                 EventoAuditoria.SOLICITUD_RECUPERACION,
@@ -422,20 +443,16 @@ public class AuthService {
 
             HttpServletRequest request = attrs.getRequest();
 
-            // 1. Intentar con X-Forwarded-For (el estándar detrás de proxies como Render)
             String ip = request.getHeader("X-Forwarded-For");
             if (ip != null && !ip.isBlank()) {
-                // X-Forwarded-For puede traer varias IPs: "cliente, proxy1, proxy2"
                 return ip.split(",")[0].trim();
             }
 
-            // 2. Intentar con X-Real-IP (usado por Nginx)
             ip = request.getHeader("X-Real-IP");
             if (ip != null && !ip.isBlank()) {
                 return ip.trim();
             }
 
-            // 3. Fallback
             return request.getRemoteAddr();
         } catch (Exception e) {
             return "unknown";
