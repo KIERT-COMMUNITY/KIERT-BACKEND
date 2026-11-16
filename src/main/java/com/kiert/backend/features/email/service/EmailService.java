@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -48,7 +47,6 @@ public class EmailService {
     // ============================================================
     // CODIGO DE VERIFICACION DE CUENTA
     // ============================================================
-    @Async("emailTaskExecutor")
     public void enviarCodigoVerificacion(String emailDestino, String nombreUsuario, String codigo) {
         log.info("[EMAIL] Intentando enviar correo de verificacion a: {}", emailDestino);
 
@@ -81,7 +79,6 @@ public class EmailService {
     // ============================================================
     // CODIGO DE RECUPERACION DE CONTRASENA
     // ============================================================
-    @Async("emailTaskExecutor")
     public void enviarCodigoRecuperacion(String emailDestino, String nombreUsuario, String codigo) {
         log.info("[EMAIL] Intentando enviar correo de recuperacion a: {}", emailDestino);
 
@@ -114,7 +111,6 @@ public class EmailService {
     // ============================================================
     // BIENVENIDA
     // ============================================================
-    @Async("emailTaskExecutor")
     public void enviarCorreoBienvenida(String emailDestino, String nombreUsuario) {
         log.info("[EMAIL] Intentando enviar correo de bienvenida a: {}", emailDestino);
 
