@@ -65,7 +65,6 @@ public class AuthService {
     public void registrar(RegisterRequestDTO datos) {
         log.info("Registrando usuario: {}", datos.email());
 
-        // LÍMITES BAJADOS A 1 MINUTO MÁXIMO
         rateLimitService.verificar("registro:email:" + datos.email(), 5, Duration.ofMinutes(1));
         rateLimitService.verificar("registro:ip:" + obtenerIpCliente(), 20, Duration.ofMinutes(1));
 
@@ -100,14 +99,19 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 datos.email(), TipoCodigo.VERIFICACION_CUENTA);
 
-        // EL FIX ESTÁ AQUÍ: Envolvemos el envío de correo en un try-catch
-        try {
-            emailService.enviarCodigoVerificacion(datos.email(), datos.nombreUsuario(), codigo);
-            log.info("Correo de verificacion enviado a {}", datos.email());
-        } catch (Exception e) {
-            log.error("Error enviando correo de verificacion a {}: {}", datos.email(), e.getMessage(), e);
-            // No lanzamos la excepción para que el usuario se guarde igualmente
-        }
+        // 🔥 FIX: Enviar correo en un hilo separado para no bloquear la petición
+        final String emailFinal = datos.email();
+        final String nombreFinal = datos.nombreUsuario();
+        final String codigoFinal = codigo;
+
+        new Thread(() -> {
+            try {
+                emailService.enviarCodigoVerificacion(emailFinal, nombreFinal, codigoFinal);
+                log.info("Correo de verificacion enviado a {}", emailFinal);
+            } catch (Exception e) {
+                log.error("Error enviando correo de verificacion a {}: {}", emailFinal, e.getMessage());
+            }
+        }).start();
 
         auditoriaService.registrar(usuario.getId(), datos.email(),
                 EventoAuditoria.REGISTRO,
@@ -150,12 +154,15 @@ public class AuthService {
         usuario.setFechaVerificacionEmail(Instant.now());
         usuarioRepository.save(usuario);
 
-        // EL FIX TAMBIÉN AQUÍ
-        try {
-            emailService.enviarCorreoBienvenida(email, usuario.getNombreUsuario());
-        } catch (Exception e) {
-            log.error("Error enviando correo de bienvenida a {}: {}", email, e.getMessage());
-        }
+        // 🔥 FIX: Correo de bienvenida en hilo separado
+        final String nombreUsuarioFinal = usuario.getNombreUsuario();
+        new Thread(() -> {
+            try {
+                emailService.enviarCorreoBienvenida(email, nombreUsuarioFinal);
+            } catch (Exception e) {
+                log.error("Error enviando correo de bienvenida a {}: {}", email, e.getMessage());
+            }
+        }).start();
 
         auditoriaService.registrar(usuario.getId(), email,
                 EventoAuditoria.VERIFICACION_EMAIL,
@@ -183,12 +190,16 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 email, TipoCodigo.VERIFICACION_CUENTA);
 
-        // EL FIX TAMBIÉN AQUÍ
-        try {
-            emailService.enviarCodigoVerificacion(email, usuario.getNombreUsuario(), codigo);
-        } catch (Exception e) {
-            log.error("Error reenviando correo a {}: {}", email, e.getMessage());
-        }
+        // 🔥 FIX: Correo en hilo separado
+        final String nombreFinal = usuario.getNombreUsuario();
+        final String codigoFinal = codigo;
+        new Thread(() -> {
+            try {
+                emailService.enviarCodigoVerificacion(email, nombreFinal, codigoFinal);
+            } catch (Exception e) {
+                log.error("Error reenviando correo a {}: {}", email, e.getMessage());
+            }
+        }).start();
 
         auditoriaService.registrar(usuario.getId(), email,
                 EventoAuditoria.REENVIO_CODIGO,
@@ -310,12 +321,16 @@ public class AuthService {
         String codigo = codigoVerificacionService.generarCodigo(
                 email, TipoCodigo.RECUPERACION_PASSWORD);
 
-        // EL FIX TAMBIÉN AQUÍ
-        try {
-            emailService.enviarCodigoRecuperacion(email, usuario.getNombreUsuario(), codigo);
-        } catch (Exception e) {
-            log.error("Error enviando correo de recuperacion a {}: {}", email, e.getMessage());
-        }
+        // 🔥 FIX: Correo en hilo separado
+        final String nombreFinal = usuario.getNombreUsuario();
+        final String codigoFinal = codigo;
+        new Thread(() -> {
+            try {
+                emailService.enviarCodigoRecuperacion(email, nombreFinal, codigoFinal);
+            } catch (Exception e) {
+                log.error("Error enviando correo de recuperacion a {}: {}", email, e.getMessage());
+            }
+        }).start();
 
         auditoriaService.registrar(usuario.getId(), email,
                 EventoAuditoria.SOLICITUD_RECUPERACION,
