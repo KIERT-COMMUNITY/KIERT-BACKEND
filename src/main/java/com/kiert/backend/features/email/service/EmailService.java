@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Properties;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -49,11 +50,15 @@ public class EmailService {
     // ============================================================
     @Async("emailTaskExecutor")
     public void enviarCodigoVerificacion(String emailDestino, String nombreUsuario, String codigo) {
+        log.info("[EMAIL] Intentando enviar correo de verificacion a: {}", emailDestino);
+
         String destinatario = normalizarEmail(emailDestino);
-        if (!validarDestinatario(destinatario)) return;
+        if (!validarDestinatario(destinatario)) {
+            log.warn("[EMAIL] Destinatario invalido: {}", emailDestino);
+            return;
+        }
         if (!puedeEnviar(destinatario, "verificacion")) {
-            log.warn("Rate limit alcanzado, no se envia verificacion a {}",
-                    enmascararEmail(destinatario));
+            log.warn("[EMAIL] Rate limit alcanzado, no se envia verificacion a: {}", emailDestino);
             return;
         }
 
@@ -64,13 +69,12 @@ public class EmailService {
                     "Usa el siguiente codigo para activar tu cuenta en Kiert:",
                     codigo
             );
+            log.info("[EMAIL] Llamando a enviarHtml para: {}", emailDestino);
             enviarHtml(destinatario, "Kiert - Verifica tu cuenta", html);
             registrarEnvio(destinatario);
-            log.info("Codigo de verificacion enviado a: {}",
-                    enmascararEmail(destinatario));
+            log.info("[EMAIL] Codigo de verificacion enviado exitosamente a: {}", emailDestino);
         } catch (Exception e) {
-            log.error("Error al enviar verificacion a {}: {}",
-                    enmascararEmail(destinatario), e.getMessage());
+            log.error("[EMAIL] ERROR al enviar verificacion a {}: {}", emailDestino, e.getMessage(), e);
         }
     }
 
@@ -79,11 +83,15 @@ public class EmailService {
     // ============================================================
     @Async("emailTaskExecutor")
     public void enviarCodigoRecuperacion(String emailDestino, String nombreUsuario, String codigo) {
+        log.info("[EMAIL] Intentando enviar correo de recuperacion a: {}", emailDestino);
+
         String destinatario = normalizarEmail(emailDestino);
-        if (!validarDestinatario(destinatario)) return;
+        if (!validarDestinatario(destinatario)) {
+            log.warn("[EMAIL] Destinatario invalido: {}", emailDestino);
+            return;
+        }
         if (!puedeEnviar(destinatario, "recuperacion")) {
-            log.warn("Rate limit alcanzado, no se envia recuperacion a {}",
-                    enmascararEmail(destinatario));
+            log.warn("[EMAIL] Rate limit alcanzado, no se envia recuperacion a: {}", emailDestino);
             return;
         }
 
@@ -94,13 +102,12 @@ public class EmailService {
                     "Usa el siguiente codigo para restablecer tu contrasena en Kiert:",
                     codigo
             );
+            log.info("[EMAIL] Llamando a enviarHtml para: {}", emailDestino);
             enviarHtml(destinatario, "Kiert - Recupera tu contrasena", html);
             registrarEnvio(destinatario);
-            log.info("Codigo de recuperacion enviado a: {}",
-                    enmascararEmail(destinatario));
+            log.info("[EMAIL] Codigo de recuperacion enviado exitosamente a: {}", emailDestino);
         } catch (Exception e) {
-            log.error("Error al enviar recuperacion a {}: {}",
-                    enmascararEmail(destinatario), e.getMessage());
+            log.error("[EMAIL] ERROR al enviar recuperacion a {}: {}", emailDestino, e.getMessage(), e);
         }
     }
 
@@ -109,23 +116,26 @@ public class EmailService {
     // ============================================================
     @Async("emailTaskExecutor")
     public void enviarCorreoBienvenida(String emailDestino, String nombreUsuario) {
+        log.info("[EMAIL] Intentando enviar correo de bienvenida a: {}", emailDestino);
+
         String destinatario = normalizarEmail(emailDestino);
-        if (!validarDestinatario(destinatario)) return;
+        if (!validarDestinatario(destinatario)) {
+            log.warn("[EMAIL] Destinatario invalido: {}", emailDestino);
+            return;
+        }
         if (!puedeEnviar(destinatario, "bienvenida")) {
-            log.warn("Rate limit alcanzado, no se envia bienvenida a {}",
-                    enmascararEmail(destinatario));
+            log.warn("[EMAIL] Rate limit alcanzado, no se envia bienvenida a: {}", emailDestino);
             return;
         }
 
         try {
             String html = plantillaBienvenida(truncar(nombreUsuario, MAX_NOMBRE_USUARIO_LENGTH));
+            log.info("[EMAIL] Llamando a enviarHtml para: {}", emailDestino);
             enviarHtml(destinatario, "Bienvenido a Kiert, comunidad para desarrolladores", html);
             registrarEnvio(destinatario);
-            log.info("Correo de bienvenida enviado a: {}",
-                    enmascararEmail(destinatario));
+            log.info("[EMAIL] Correo de bienvenida enviado exitosamente a: {}", emailDestino);
         } catch (Exception e) {
-            log.error("Error al enviar bienvenida a {}: {}",
-                    enmascararEmail(destinatario), e.getMessage());
+            log.error("[EMAIL] ERROR al enviar bienvenida a {}: {}", emailDestino, e.getMessage(), e);
         }
     }
 
@@ -137,22 +147,20 @@ public class EmailService {
             String keyDestino = KEY_RATELIMIT_DESTINO + emailDestino;
             String valorDestino = stringRedis.opsForValue().get(keyDestino);
             if (valorDestino != null && Long.parseLong(valorDestino) >= MAX_EMAILS_POR_DESTINO) {
-                log.warn("Rate limit destino alcanzado para {} ({})",
-                        enmascararEmail(emailDestino), tipo);
+                log.warn("[EMAIL] Rate limit destino alcanzado para {} ({})", emailDestino, tipo);
                 return false;
             }
 
             String valorGlobal = stringRedis.opsForValue().get(KEY_RATELIMIT_GLOBAL);
             if (valorGlobal != null && Long.parseLong(valorGlobal) >= MAX_EMAILS_GLOBAL) {
-                log.error("Rate limit GLOBAL alcanzado. Protegiendo SMTP.");
+                log.error("[EMAIL] Rate limit GLOBAL alcanzado. Protegiendo SMTP.");
                 return false;
             }
 
             return true;
         } catch (Exception e) {
-            log.error("Error consultando rate limit en Redis: {}", e.getMessage());
-            // Fail-closed: si no podemos verificar, no enviamos para no saturar SMTP
-            return false;
+            log.error("[EMAIL] Error consultando rate limit en Redis: {}", e.getMessage());
+            return false; // Fail-closed
         }
     }
 
@@ -169,12 +177,12 @@ public class EmailService {
                 stringRedis.expire(KEY_RATELIMIT_GLOBAL, VENTANA_GLOBAL);
             }
         } catch (Exception e) {
-            log.error("Error actualizando rate limit en Redis: {}", e.getMessage());
+            log.error("[EMAIL] Error actualizando rate limit en Redis: {}", e.getMessage());
         }
     }
 
     // ============================================================
-    // VALIDACIONES
+    // VALIDACIONES Y HELPERS
     // ============================================================
     private String normalizarEmail(String email) {
         if (email == null) return null;
@@ -182,28 +190,22 @@ public class EmailService {
     }
 
     private boolean validarDestinatario(String emailDestino) {
-        if (emailDestino == null || emailDestino.isBlank()) {
-            log.warn("Email destino vacio, no se envia");
-            return false;
-        }
-        if (!EMAIL_PATTERN.matcher(emailDestino).matches()) {
-            log.warn("Email destino invalido: {}", enmascararEmail(emailDestino));
-            return false;
-        }
-        if (emailDestino.contains("\n") || emailDestino.contains("\r")) {
-            log.warn("Email contiene caracteres peligrosos");
-            return false;
-        }
+        if (emailDestino == null || emailDestino.isBlank()) return false;
+        if (!EMAIL_PATTERN.matcher(emailDestino).matches()) return false;
+        if (emailDestino.contains("\n") || emailDestino.contains("\r")) return false;
         return true;
     }
 
-    // ============================================================
-    // HELPERS
-    // ============================================================
     private void enviarHtml(String destinatario, String asunto, String html) throws Exception {
         if (asunto == null || asunto.contains("\n") || asunto.contains("\r")) {
             throw new IllegalArgumentException("Asunto invalido");
         }
+
+        // Forzamos un timeout de 3000ms (3 segundos) para no colgar el hilo de Render
+        Properties props = new Properties();
+        props.put("mail.smtp.connectiontimeout", "3000");
+        props.put("mail.smtp.timeout", "3000");
+        props.put("mail.smtp.writetimeout", "3000");
 
         MimeMessage mensaje = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
@@ -211,7 +213,10 @@ public class EmailService {
         helper.setTo(destinatario);
         helper.setSubject(asunto);
         helper.setText(html, true);
+
+        log.info("[EMAIL] Enviando mensaje por SMTP...");
         mailSender.send(mensaje);
+        log.info("[EMAIL] Mensaje SMTP enviado.");
     }
 
     private String truncar(String valor, int max) {
@@ -227,15 +232,10 @@ public class EmailService {
         String dominio = email.substring(at + 1);
         String localMask = local.length() <= 1 ? "***" : local.charAt(0) + "***";
         int dot = dominio.lastIndexOf('.');
-        String dominioMask = dot <= 0
-                ? "***"
-                : dominio.charAt(0) + "***" + dominio.substring(dot);
+        String dominioMask = dot <= 0 ? "***" : dominio.charAt(0) + "***" + dominio.substring(dot);
         return localMask + "@" + dominioMask;
     }
 
-    // ============================================================
-    // PLANTILLAS (sin cambios)
-    // ============================================================
     private String plantillaCodigo(String nombreUsuario, String titulo, String subtitulo, String codigo) {
         String plantilla = """
             <!DOCTYPE html>
