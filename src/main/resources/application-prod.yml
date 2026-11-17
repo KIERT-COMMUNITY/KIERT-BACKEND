@@ -16,7 +16,6 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      # Bajamos de 15 a 8 para no saturar la RAM con 512 MB
       maximum-pool-size: 8
       minimum-idle: 2
       connection-timeout: 10000
@@ -41,7 +40,6 @@ spring:
           batch_size: 20
         order_inserts: true
         order_updates: true
-        # Limita el cache de segundo nivel para ahorrar RAM
         cache:
           use_second_level_cache: false
           use_query_cache: false
@@ -50,9 +48,6 @@ spring:
     init:
       mode: never
 
-  # ============================================================
-  # REDIS: Si no lo usas, comentalo. Si lo usas, dejalo con estos limites
-  # ============================================================
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST}
@@ -70,25 +65,14 @@ spring:
           min-idle: 0
 
   # ============================================================
-  # MAIL: Configuración correcta para el puerto 587 (STARTTLS)
+  # MAIL: Ya NO se usa SMTP (Render lo bloquea). Usamos Brevo API.
+  # La variable BREVO_API_KEY se lee desde el EmailService.
   # ============================================================
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
+    host: ${MAIL_HOST:smtp.gmail.com}   # <- Solo para que no falle si algún servicio lo requiere
     port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-            required: true
-          ssl:
-            enable: false
-          connectiontimeout: 5000
-          timeout: 5000
-          writetimeout: 5000
 
 server:
   address: 0.0.0.0
@@ -121,7 +105,7 @@ kiert:
     api-secret: ${CLOUDINARY_API_SECRET}
 
   turnstile:
-    enabled: false   # <-- DESACTIVADO TEMPORALMENTE (el backend no valida el CAPTCHA)
+    enabled: false
     site-key: 0x4AAAAAAFz2iwhmq6b7vJ7U
     secret-key: ${TURNSTILE_SECRET_KEY}
     verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
@@ -172,5 +156,3 @@ logging:
     org.hibernate: WARN
     org.springframework.data.redis: WARN
     org.springframework.messaging: WARN
-    # Útil para ver errores de correo en Render
-    org.springframework.mail: DEBUG

@@ -1,18 +1,18 @@
 // src/main/java/com/kiert/backend/features/email/service/EmailService.java
 package com.kiert.backend.features.email.service;
 
-import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
-import java.util.Properties;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 @Slf4j
@@ -20,14 +20,18 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class EmailService {
 
-    private final JavaMailSender mailSender;
     private final StringRedisTemplate stringRedis;
+
+    @Value("${brevo.api-key:${BREVO_API_KEY:}}")
+    private String brevoApiKey;
 
     @Value("${spring.mail.username}")
     private String fromEmail;
 
     @Value("${kiert.frontend.url:http://localhost:4200}")
     private String frontendUrl;
+
+    private RestClient restClient;
 
     private static final String KEY_RATELIMIT_DESTINO = "ratelimit:email:destino:";
     private static final String KEY_RATELIMIT_GLOBAL = "ratelimit:email:global";
@@ -43,6 +47,23 @@ public class EmailService {
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
     );
+
+    // Se ejecuta después de que Spring inyecte las dependencias
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        if (brevoApiKey == null || brevoApiKey.isBlank()) {
+            log.error("[EMAIL] BREVO_API_KEY no configurada. Los correos no se enviarán.");
+            throw new IllegalStateException(
+                    "BREVO_API_KEY no configurada. Define 'brevo.api-key' en application-local.yml o la variable de entorno BREVO_API_KEY en Render."
+            );
+        }
+        this.restClient = RestClient.builder()
+                .baseUrl("https://api.brevo.com/v3")
+                .defaultHeader("api-key", brevoApiKey)
+                .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .build();
+        log.info("[EMAIL] EmailService inicializado con Brevo API. fromEmail={}", fromEmail);
+    }
 
     // ============================================================
     // CODIGO DE VERIFICACION DE CUENTA
@@ -197,22 +218,20 @@ public class EmailService {
             throw new IllegalArgumentException("Asunto invalido");
         }
 
-        // Forzamos un timeout de 3000ms (3 segundos) para no colgar el hilo de Render
-        Properties props = new Properties();
-        props.put("mail.smtp.connectiontimeout", "10000");
-        props.put("mail.smtp.timeout", "10000");
-        props.put("mail.smtp.writetimeout", "10000");
+        Map<String, Object> body = Map.of(
+                "sender", Map.of("name", "Kiert", "email", fromEmail),
+                "to", List.of(Map.of("email", destinatario)),
+                "subject", asunto,
+                "htmlContent", html
+        );
 
-        MimeMessage mensaje = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
-        helper.setFrom(fromEmail, "Kiert");
-        helper.setTo(destinatario);
-        helper.setSubject(asunto);
-        helper.setText(html, true);
+        restClient.post()
+                .uri("/smtp/email")
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
 
-        log.info("[EMAIL] Enviando mensaje por SMTP...");
-        mailSender.send(mensaje);
-        log.info("[EMAIL] Mensaje SMTP enviado.");
+        log.info("[EMAIL] Correo enviado vía Brevo API a: {}", destinatario);
     }
 
     private String truncar(String valor, int max) {
