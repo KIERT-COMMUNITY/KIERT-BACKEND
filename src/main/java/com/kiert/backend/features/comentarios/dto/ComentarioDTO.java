@@ -1,3 +1,4 @@
+// src/main/java/com/kiert/backend/features/comentarios/dto/ComentarioDTO.java
 package com.kiert.backend.features.comentarios.dto;
 
 import com.kiert.backend.features.autor.dto.AutorResumenDTO;
@@ -11,5 +12,6 @@ public record ComentarioDTO(
         String contenido,
         Instant fechaCreacion,
         String urlImagen,
-        ReaccionesDTO reacciones
+        ReaccionesDTO reacciones,
+        Long totalRespuestas   // ✅ NUEVO
 ) {}

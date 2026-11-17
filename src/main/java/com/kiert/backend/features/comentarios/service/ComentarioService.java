@@ -68,7 +68,7 @@ public class ComentarioService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_COMENTARIOS, key = "'post:' + #postId"),
+            @CacheEvict(value = CACHE_COMENTARIOS, key = "'post:' + #postId", beforeInvocation = true),
             @CacheEvict(value = "posts", allEntries = true),
             @CacheEvict(value = "post", key = "#postId")
     })
@@ -101,6 +101,10 @@ public class ComentarioService {
         comentario = comentarioRepository.save(comentario);
         log.info("Comentario creado con ID: {}", comentario.getId());
 
+        // Incrementar contador desnormalizado del post
+        postRepository.incrementarTotalComentarios(postId);
+        log.info("totalComentarios incrementado para post {}", postId);
+
         if (!autorId.equals(post.getAutor().getId())) {
             try {
                 notificationService.crearNotificacionComentario(autorId, postId, comentario.getId());
@@ -114,9 +118,10 @@ public class ComentarioService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true),
-            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true),
-            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO, allEntries = true),
+            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true, beforeInvocation = true),
+            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true, beforeInvocation = true),
+            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO, allEntries = true, beforeInvocation = true),
+            @CacheEvict(value = CACHE_REACCIONES_RESPUESTA, allEntries = true, beforeInvocation = true),
             @CacheEvict(value = "posts", allEntries = true),
             @CacheEvict(value = "post", allEntries = true)
     })
@@ -134,9 +139,15 @@ public class ComentarioService {
             throw new BadRequestException("No tienes permiso para eliminar este comentario");
         }
 
+        Long postId = comentario.getPost().getId();
+
         comentario.setEliminado(true);
         comentario.setFechaEliminacion(Instant.now());
         comentarioRepository.save(comentario);
+
+        postRepository.decrementarTotalComentarios(postId);
+        log.info("totalComentarios decrementado para post {}", postId);
+
         log.info("Comentario {} eliminado", comentarioId);
     }
 
@@ -157,8 +168,8 @@ public class ComentarioService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_RESPUESTAS, key = "'comentario:' + #comentarioId"),
-            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true)
+            @CacheEvict(value = CACHE_RESPUESTAS, key = "'comentario:' + #comentarioId", beforeInvocation = true),
+            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true, beforeInvocation = true)
     })
     public RespuestaDTO crearRespuesta(Long comentarioId, Long autorId, String contenido) {
         log.info("Creando respuesta al comentario: {}, usuario: {}", comentarioId, autorId);
@@ -202,8 +213,9 @@ public class ComentarioService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true),
-            @CacheEvict(value = CACHE_REACCIONES_RESPUESTA, allEntries = true)
+            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true, beforeInvocation = true),
+            @CacheEvict(value = CACHE_REACCIONES_RESPUESTA, allEntries = true, beforeInvocation = true),
+            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true, beforeInvocation = true)
     })
     public void eliminarRespuesta(Long respuestaId, Long usuarioId) {
         log.info("Eliminando respuesta: {}", respuestaId);
@@ -231,8 +243,9 @@ public class ComentarioService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO, key = "'comentario:' + #comentarioId"),
-            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true)
+            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO,
+                    key = "'comentario:' + #comentarioId", beforeInvocation = true),
+            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true, beforeInvocation = true)
     })
     public Map<String, Long> reaccionarComentario(Long comentarioId, Long usuarioId, String tipo) {
         log.info("Reaccionando a comentario: {}, tipo: {}, usuario: {}", comentarioId, tipo, usuarioId);
@@ -279,8 +292,9 @@ public class ComentarioService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_REACCIONES_RESPUESTA, key = "'respuesta:' + #respuestaId"),
-            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true)
+            @CacheEvict(value = CACHE_REACCIONES_RESPUESTA,
+                    key = "'respuesta:' + #respuestaId", beforeInvocation = true),
+            @CacheEvict(value = CACHE_RESPUESTAS, allEntries = true, beforeInvocation = true)
     })
     public Map<String, Long> reaccionarRespuesta(Long respuestaId, Long usuarioId, String tipo) {
         log.info("Reaccionando a respuesta: {}, tipo: {}, usuario: {}", respuestaId, tipo, usuarioId);
@@ -361,6 +375,13 @@ public class ComentarioService {
         }
     }
 
+    /**
+     * Calcula las reacciones activas de un comentario.
+     *
+     * ⚠️ IMPORTANTE: el resultado de `COUNT()` puede ser `Long`, `BigInteger`
+     * o `BigDecimal` segun el driver JDBC. En produccion se castea con
+     * `Number` para evitar `ClassCastException` -> 500.
+     */
     private Map<String, Long> calcularReaccionesComentarioDesdeDB(Long comentarioId) {
         Map<String, Long> reacciones = new HashMap<>();
         reacciones.put("likes", 0L);
@@ -369,7 +390,8 @@ public class ComentarioService {
         List<Object[]> resultados = reaccionRepository.countReaccionesByComentario(comentarioId);
         for (Object[] resultado : resultados) {
             String tipo = (String) resultado[0];
-            Long count = (Long) resultado[1];
+            // ✅ FIX: Number en lugar de Long
+            Long count = ((Number) resultado[1]).longValue();
             switch (tipo) {
                 case "like" -> reacciones.put("likes", count);
                 case "love" -> reacciones.put("loves", count);
@@ -378,6 +400,13 @@ public class ComentarioService {
         return reacciones;
     }
 
+    /**
+     * Calcula las reacciones activas de una respuesta.
+     *
+     * ⚠️ IMPORTANTE: el resultado de `COUNT()` puede ser `Long`, `BigInteger`
+     * o `BigDecimal` segun el driver JDBC. En produccion se castea con
+     * `Number` para evitar `ClassCastException` -> 500.
+     */
     private Map<String, Long> calcularReaccionesRespuestaDesdeDB(Long respuestaId) {
         Map<String, Long> reacciones = new HashMap<>();
         reacciones.put("likes", 0L);
@@ -386,7 +415,8 @@ public class ComentarioService {
         List<Object[]> resultados = reaccionRespuestaRepository.countReaccionesByRespuesta(respuestaId);
         for (Object[] resultado : resultados) {
             String tipo = (String) resultado[0];
-            Long count = (Long) resultado[1];
+            // ✅ FIX: Number en lugar de Long
+            Long count = ((Number) resultado[1]).longValue();
             switch (tipo) {
                 case "like" -> reacciones.put("likes", count);
                 case "love" -> reacciones.put("loves", count);
@@ -407,6 +437,9 @@ public class ComentarioService {
     private ComentarioDTO toComentarioDTO(Comentario entity) {
         Map<String, Long> reacciones = calcularReaccionesComentarioDesdeDB(entity.getId());
 
+        // Contar respuestas activas con el metodo existente del repositorio
+        long totalRespuestas = respuestaRepository.countActiveByComentarioId(entity.getId());
+
         return new ComentarioDTO(
                 entity.getId(),
                 toAutorDTO(entity.getAutor()),
@@ -417,7 +450,8 @@ public class ComentarioService {
                         reacciones.getOrDefault("likes", 0L),
                         reacciones.getOrDefault("loves", 0L),
                         0L, 0L, 0L, 0L
-                )
+                ),
+                totalRespuestas
         );
     }
 

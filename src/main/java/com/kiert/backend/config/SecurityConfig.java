@@ -42,15 +42,28 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Swagger / docs
+                        // ============================================================
+                        // 1) PREFLIGHT CORS — SIEMPRE PRIMERO Y PERMITIDO
+                        // ============================================================
+                        // Sin esto, el navegador en producción bloquea POST/PUT/DELETE
+                        // con Authorization header (preflight OPTIONS) → 401/403
+                        // → "los likes no funcionan en prod".
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // ============================================================
+                        // 2) SWAGGER / OPENAPI
+                        // ============================================================
                         .requestMatchers(
                                 "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**",
                                 "/v3/api-docs/**", "/api-docs/**", "/webjars/**"
                         ).permitAll()
 
-                        // Auth: endpoints públicos
+                        // ============================================================
+                        // 3) AUTH — endpoints públicos
+                        // ============================================================
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/registro",
@@ -60,77 +73,109 @@ public class SecurityConfig {
                                 "/api/auth/verificar-codigo-recuperacion",
                                 "/api/auth/reset-password",
                                 "/api/auth/reset-password-token",
-                                "/api/auth/admin/clear-ratelimit"   // <-- AÑADIDO AQUÍ
+                                "/api/auth/admin/clear-ratelimit"
                         ).permitAll()
-                        .requestMatchers("/api/auth/**").authenticated()
                         .requestMatchers("/api/admin/auth/login").permitAll()
+                        .requestMatchers("/api/auth/**").authenticated()
 
-                        // Presencia
+                        // ============================================================
+                        // 4) PRESENCIA
+                        // ============================================================
                         .requestMatchers("/api/presencia/**")
                         .hasAnyRole("USER", "CEO", "ADMIN", "MODERADOR")
 
-                        // Grupos / archivos / WS
+                        // ============================================================
+                        // 5) GRUPOS / ARCHIVOS / WS
+                        // ============================================================
                         .requestMatchers(HttpMethod.GET, "/api/grupos/invitacion/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/grupos/invitacion/*/unirse").authenticated()
                         .requestMatchers("/api/archivos/**").authenticated()
 
-                        // Bienvenida
+                        // ============================================================
+                        // 6) BIENVENIDA
+                        // ============================================================
                         .requestMatchers(HttpMethod.GET, "/api/bienvenida/**").permitAll()
-                        .requestMatchers(HttpMethod.GET,    "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
-                        .requestMatchers(HttpMethod.PUT,    "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
-                        .requestMatchers(HttpMethod.POST,   "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
-                        .requestMatchers(HttpMethod.DELETE, "/api/admin/bienvenida/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/bienvenida/**")
+                        .hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/bienvenida/**")
+                        .hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/bienvenida/**")
+                        .hasAnyRole("CEO", "ADMIN", "MODERADOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/bienvenida/**")
+                        .hasAnyRole("CEO", "ADMIN", "MODERADOR")
 
-                        // Biblioteca
-                        .requestMatchers(HttpMethod.GET,    "/api/biblioteca/**").permitAll()
-                        .requestMatchers(HttpMethod.POST,   "/api/biblioteca/**").authenticated()
-                        .requestMatchers(HttpMethod.PUT,    "/api/biblioteca/**").authenticated()
-                        .requestMatchers(HttpMethod.PATCH,  "/api/biblioteca/**").authenticated()
+                        // ============================================================
+                        // 7) BIBLIOTECA
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET, "/api/biblioteca/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/biblioteca/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/biblioteca/**").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/biblioteca/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/biblioteca/**").authenticated()
 
-                        // Publicaciones
-                        .requestMatchers(HttpMethod.GET,    "/api/publicaciones/**").permitAll()
-                        .requestMatchers(HttpMethod.POST,   "/api/publicaciones/**").authenticated()
-                        .requestMatchers(HttpMethod.PUT,    "/api/publicaciones/**").authenticated()
-                        .requestMatchers(HttpMethod.PATCH,  "/api/publicaciones/**").authenticated()
+                        // ============================================================
+                        // 8) PUBLICACIONES
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET, "/api/publicaciones/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/publicaciones/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/publicaciones/**").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/publicaciones/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/publicaciones/**").authenticated()
 
-                        // Comentarios
-                        .requestMatchers(HttpMethod.GET,    "/api/comentarios/**").permitAll()
-                        .requestMatchers(HttpMethod.POST,   "/api/comentarios/**").authenticated()
-                        .requestMatchers(HttpMethod.PUT,    "/api/comentarios/**").authenticated()
+                        // ============================================================
+                        // 9) COMENTARIOS
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET, "/api/comentarios/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/comentarios/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/comentarios/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/comentarios/**").authenticated()
 
-                        // Reacciones
-                        .requestMatchers(HttpMethod.GET,  "/api/reacciones/**").permitAll()
+                        // ============================================================
+                        // 10) REACCIONES
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET, "/api/reacciones/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/reacciones/**").authenticated()
 
-                        // Anuncios públicos (solo lectura)
-                        .requestMatchers(HttpMethod.GET,    "/api/anuncios/**").permitAll()
-                        .requestMatchers(HttpMethod.POST,   "/api/anuncios/**").denyAll()
-                        .requestMatchers(HttpMethod.PUT,    "/api/anuncios/**").denyAll()
+                        // ============================================================
+                        // 11) ANUNCIOS (solo lectura pública)
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET, "/api/anuncios/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/anuncios/**").denyAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/anuncios/**").denyAll()
-                        .requestMatchers(HttpMethod.PATCH,  "/api/anuncios/**").denyAll()
+                        .requestMatchers(HttpMethod.PATCH, "/api/anuncios/**").denyAll()
 
-                        // Admin
+                        // ============================================================
+                        // 12) ADMIN (después de /api/admin/auth/login)
+                        // ============================================================
                         .requestMatchers("/api/admin/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
 
-                        // Chat global (sigue activo)
-                        .requestMatchers(HttpMethod.GET,  "/api/chat-global/**").permitAll()
+                        // ============================================================
+                        // 13) CHAT GLOBAL
+                        // ============================================================
+                        .requestMatchers(HttpMethod.GET, "/api/chat-global/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/chat-global/**").authenticated()
 
-                        // CHAT PRIVADO BLOQUEADO
+                        // ============================================================
+                        // 14) CHAT PRIVADO BLOQUEADO
+                        // ============================================================
                         .requestMatchers("/api/chat/**").denyAll()
 
-                        // Chat grupal (sigue activo)
+                        // ============================================================
+                        // 15) CHAT GRUPAL
+                        // ============================================================
                         .requestMatchers("/api/grupos/**").authenticated()
 
-                        // Usuarios / contactos
+                        // ============================================================
+                        // 16) USUARIOS / CONTACTOS
+                        // ============================================================
                         .requestMatchers("/api/usuarios/solicitud/**").authenticated()
                         .requestMatchers("/api/usuarios/contactos").authenticated()
                         .requestMatchers("/api/usuarios/solicitudes/pendientes").authenticated()
 
-                        // Reportes
+                        // ============================================================
+                        // 17) REPORTES
+                        // ============================================================
                         .requestMatchers(HttpMethod.GET, "/api/reportes").hasAnyRole("CEO", "ADMIN", "MODERADOR")
                         .requestMatchers(HttpMethod.GET, "/api/reportes/resumen").hasAnyRole("CEO", "ADMIN", "MODERADOR")
                         .requestMatchers(HttpMethod.PUT, "/api/reportes/**").hasAnyRole("CEO", "ADMIN", "MODERADOR")
@@ -138,11 +183,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/reportes/mis-reportes").authenticated()
                         .requestMatchers("/api/reportes/**").authenticated()
 
-                        // Stickers
+                        // ============================================================
+                        // 18) STICKERS
+                        // ============================================================
                         .requestMatchers(HttpMethod.GET, "/api/stickers/publicos").permitAll()
                         .requestMatchers("/api/stickers/**").authenticated()
 
-                        // Resto autenticado
+                        // ============================================================
+                        // 19) RESTO AUTENTICADO
+                        // ============================================================
                         .requestMatchers("/api/personalizacion/**").authenticated()
                         .requestMatchers("/api/notificaciones/**").authenticated()
                         .requestMatchers("/api/bloqueos/**").authenticated()
@@ -159,13 +208,30 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+
+        // Usa SOLO orígenes exactos (tu CorsProperties solo tiene allowedOrigins).
         configuration.setAllowedOrigins(corsProperties.allowedOrigins());
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
+
+        configuration.setAllowedMethods(
+                List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD")
+        );
         configuration.setAllowedHeaders(List.of(
-                "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept",
+                "Origin",
+                "Access-Control-Request-Method",
+                "Access-Control-Request-Headers"
         ));
         configuration.setExposedHeaders(List.of(
-                "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept",
+                "Origin",
+                "Set-Cookie",
+                "X-Total-Count"
         ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

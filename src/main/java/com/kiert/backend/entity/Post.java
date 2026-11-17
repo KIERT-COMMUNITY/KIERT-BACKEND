@@ -64,6 +64,13 @@ public class Post {
     @Builder.Default
     private Long totalCompartidos = 0L;
 
+    // ✅ NUEVO: contador desnormalizado de comentarios activos.
+    //    Se mantiene actualizado en ComentarioService.crearComentario /
+    //    eliminarComentario. Evita contar la colección lazy en cada lectura.
+    @Column(name = "total_comentarios", nullable = false)
+    @Builder.Default
+    private Long totalComentarios = 0L;
+
     @Column(name = "es_anonimo", nullable = false)
     @Builder.Default
     private Boolean esAnonimo = false;

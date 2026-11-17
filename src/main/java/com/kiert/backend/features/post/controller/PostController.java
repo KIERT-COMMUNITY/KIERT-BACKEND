@@ -1,15 +1,18 @@
 // src/main/java/com/kiert/backend/features/post/controller/PostController.java
 package com.kiert.backend.features.post.controller;
 
+import com.kiert.backend.exception.RecursoNoEncontradoException;
 import com.kiert.backend.features.post.dto.CrearPostDTO;
 import com.kiert.backend.features.post.dto.PostDTO;
 import com.kiert.backend.security.UsuarioActual;
 import com.kiert.backend.features.post.service.PostService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,7 +39,7 @@ public class PostController {
             List<PostDTO> posts = postService.listar();
             return ResponseEntity.ok(posts);
         } catch (Exception e) {
-            log.warn("Error al listar posts: {}", e.getMessage());
+            log.error("Error al listar posts", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "No se pudieron cargar las publicaciones"));
         }
@@ -55,10 +58,15 @@ public class PostController {
         try {
             PostDTO post = postService.obtenerPorId(id);
             return ResponseEntity.ok(post);
-        } catch (Exception e) {
-            log.warn("Error al obtener post {}: {}", id, e.getMessage());
+        } catch (RecursoNoEncontradoException e) {
+            // ✅ Solo 404 cuando realmente no existe
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Publicacion no encontrada"));
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            // ✅ Errores reales → 500, no 404
+            log.error("Error al obtener post {}", id, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error interno al cargar la publicacion"));
         }
     }
 
@@ -101,8 +109,16 @@ public class PostController {
             log.info("Post creado: id={}, anonimo={}", creado.id(), creado.esAnonimo());
             return ResponseEntity.status(HttpStatus.CREATED).body(creado);
 
+        } catch (RecursoNoEncontradoException e) {
+            // ✅ Usuario no encontrado → 404
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (com.kiert.backend.exception.BadRequestException e) {
+            // ✅ Validación → 400
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            log.warn("Error al crear post por usuario {}: {}", usuarioId, e.getMessage());
+            log.error("Error al crear post por usuario {}", usuarioId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "No se pudo crear la publicacion"));
         }
@@ -123,11 +139,19 @@ public class PostController {
         try {
             postService.eliminarPost(id, usuarioId);
             return ResponseEntity.noContent().build();
+
         } catch (SecurityException e) {
+            // ✅ Sin permiso → 403
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "No tienes permiso para eliminar esta publicacion"));
+
+        } catch (RecursoNoEncontradoException e) {
+            // ✅ No existe → 404
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+
         } catch (Exception e) {
-            log.warn("Error al eliminar post {} por usuario {}: {}", id, usuarioId, e.getMessage());
+            log.error("Error al eliminar post {} por usuario {}", id, usuarioId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "No se pudo eliminar la publicacion"));
         }

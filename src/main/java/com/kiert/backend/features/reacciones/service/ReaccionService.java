@@ -41,6 +41,7 @@ public class ReaccionService {
     private static final String CACHE_REACCIONES_COMENTARIO = "reaccionesComentario";
     private static final String CACHE_USUARIO_REACCIONO_POST = "usuarioReaccionoPost";
     private static final String CACHE_USUARIO_REACCIONO_COMENTARIO = "usuarioReaccionoComentario";
+    private static final String CACHE_COMENTARIOS = "comentarios";
 
     private static final Set<String> TIPOS_POST = Set.of(
             "like", "love", "haha", "wow", "sad", "angry"
@@ -55,11 +56,11 @@ public class ReaccionService {
     // ============================================================
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_REACCIONES_POST, key = "#postId"),
+            @CacheEvict(value = CACHE_REACCIONES_POST, key = "#postId", beforeInvocation = true),
             @CacheEvict(value = CACHE_USUARIO_REACCIONO_POST,
-                    key = "#usuarioId + ':' + #postId"),
-            @CacheEvict(value = "posts", allEntries = true),
-            @CacheEvict(value = "post", key = "#postId")
+                    key = "#usuarioId + ':' + #postId", beforeInvocation = true),
+            @CacheEvict(value = "posts", allEntries = true, beforeInvocation = true),
+            @CacheEvict(value = "post", key = "#postId", beforeInvocation = true)
     })
     public Map<String, Long> reaccionarPost(Long usuarioId, Long postId, String tipo) {
         log.debug("Usuario {} reaccionando a post {} con tipo {}", usuarioId, postId, tipo);
@@ -122,10 +123,11 @@ public class ReaccionService {
     // ============================================================
     @Transactional
     @Caching(evict = {
-            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO, key = "#comentarioId"),
+            @CacheEvict(value = CACHE_REACCIONES_COMENTARIO,
+                    key = "'comentario:' + #comentarioId", beforeInvocation = true),
             @CacheEvict(value = CACHE_USUARIO_REACCIONO_COMENTARIO,
-                    key = "#usuarioId + ':' + #comentarioId"),
-            @CacheEvict(value = "comments", allEntries = true)
+                    key = "#usuarioId + ':' + #comentarioId", beforeInvocation = true),
+            @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true, beforeInvocation = true)
     })
     public Map<String, Long> reaccionarComentario(Long usuarioId, Long comentarioId, String tipo) {
         log.debug("Usuario {} reaccionando a comentario {} con tipo {}", usuarioId, comentarioId, tipo);
@@ -182,7 +184,7 @@ public class ReaccionService {
         return calcularReaccionesPostDesdeDB(postId);
     }
 
-    @Cacheable(value = CACHE_REACCIONES_COMENTARIO, key = "#comentarioId")
+    @Cacheable(value = CACHE_REACCIONES_COMENTARIO, key = "'comentario:' + #comentarioId")
     public Map<String, Long> obtenerReaccionesComentario(Long comentarioId) {
         log.debug("[DB] Calculando reacciones del comentario: {}", comentarioId);
         return calcularReaccionesComentarioDesdeDB(comentarioId);
@@ -214,6 +216,18 @@ public class ReaccionService {
     // ============================================================
     // HELPERS
     // ============================================================
+
+    /**
+     * Calcula las reacciones activas de un post.
+     *
+     * ⚠️ IMPORTANTE: el resultado de `COUNT()` en Hibernate 6 puede ser
+     * `Long`, `BigInteger` o `BigDecimal` dependiendo del driver JDBC y la
+     * version de MySQL/MariaDB. En local (MySQL 5.7/8 con driver viejo)
+     * suele ser `Long`, pero en produccion (MySQL 8 con driver nuevo,
+     * Render) suele ser `BigInteger`. Por eso SIEMPRE casteamos a `Number`
+     * y extraemos `.longValue()`. Un cast directo a `Long` provoca
+     * `ClassCastException` -> 500 en produccion.
+     */
     private Map<String, Long> calcularReaccionesPostDesdeDB(Long postId) {
         Map<String, Long> reacciones = new HashMap<>();
         reacciones.put("likes", 0L);
@@ -226,7 +240,8 @@ public class ReaccionService {
         List<Object[]> resultados = reaccionRepository.countReaccionesByPost(postId);
         for (Object[] resultado : resultados) {
             String tipo = (String) resultado[0];
-            Long count = (Long) resultado[1];
+            // ✅ FIX: Number en lugar de Long
+            Long count = ((Number) resultado[1]).longValue();
             switch (tipo) {
                 case "like" -> reacciones.put("likes", count);
                 case "love" -> reacciones.put("loves", count);
@@ -239,6 +254,10 @@ public class ReaccionService {
         return reacciones;
     }
 
+    /**
+     * Calcula las reacciones activas de un comentario. Ver nota en
+     * {@link #calcularReaccionesPostDesdeDB(Long)} sobre el cast a Number.
+     */
     private Map<String, Long> calcularReaccionesComentarioDesdeDB(Long comentarioId) {
         Map<String, Long> reacciones = new HashMap<>();
         reacciones.put("likes", 0L);
@@ -247,7 +266,8 @@ public class ReaccionService {
         List<Object[]> resultados = reaccionRepository.countReaccionesByComentario(comentarioId);
         for (Object[] resultado : resultados) {
             String tipo = (String) resultado[0];
-            Long count = (Long) resultado[1];
+            //  FIX: Number en lugar de Long
+            Long count = ((Number) resultado[1]).longValue();
             switch (tipo) {
                 case "like" -> reacciones.put("likes", count);
                 case "love" -> reacciones.put("loves", count);

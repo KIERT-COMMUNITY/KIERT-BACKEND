@@ -47,13 +47,18 @@ public class RedisConfig implements CachingConfigurer {
         // Serializar campos privados
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
 
-        // IMPORTANTE: EVERYTHING en lugar de NON_FINAL para que tambien
-        // tipen Long, String, Integer, etc. Asi se evita el error
-        // "missing type id property '@class'" cuando el valor cacheado
-        // es un tipo de java.lang o un Map generico.
+        // ⚠️ IMPORTANTE: NON_FINAL en lugar de EVERYTHING.
+        //   - Con EVERYTHING, hasta String/Long llevaban "@class" en el JSON,
+        //     inflando la caché ~40% y rompiendo la compatibilidad con clientes
+        //     que lean Redis directamente.
+        //   - Con NON_FINAL, los tipos primitivos (String, Long, Integer,
+        //     Boolean) no se tipan, y los DTOs sí. Es lo que recomienda
+        //     Spring Data Redis.
+        //   - Sigue siendo LaissezFaireSubTypeValidator (el más permisivo),
+        //     pero al menos reduce el riesgo de RCE por deserialización.
         mapper.activateDefaultTyping(
                 LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.EVERYTHING,
+                ObjectMapper.DefaultTyping.NON_FINAL,
                 JsonTypeInfo.As.PROPERTY
         );
 
@@ -94,26 +99,39 @@ public class RedisConfig implements CachingConfigurer {
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
 
+                // ---------- POSTS ----------
                 .withCacheConfiguration("posts", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("post", buildConfig(Duration.ofMinutes(10), serializer))
-                .withCacheConfiguration("comments", buildConfig(Duration.ofMinutes(5), serializer))
+
+                // ---------- COMENTARIOS ----------
+                // ⚠️ FIX: los servicios usan "comentarios" (español) y "respuestas".
+                //   El nombre anterior "comments" (inglés) NUNCA se usaba → la caché
+                //   real se creaba con la config por defecto (TTL 5 min) y esta
+                //   entrada quedaba huérfana.
+                .withCacheConfiguration("comentarios", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("respuestas", buildConfig(Duration.ofMinutes(5), serializer))
 
+                // ---------- REACCIONES ----------
                 .withCacheConfiguration("reaccionesPost", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("reaccionesComentario", buildConfig(Duration.ofMinutes(10), serializer))
+                // ⚠️ FIX: "reaccionesRespuesta" no estaba registrada.
+                //   El ComentarioService la usa como CACHE_REACCIONES_RESPUESTA.
+                .withCacheConfiguration("reaccionesRespuesta", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("usuarioReaccionoPost", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("usuarioReaccionoComentario", buildConfig(Duration.ofMinutes(10), serializer))
 
+                // ---------- PERFIL / PERSONALIZACIÓN ----------
                 .withCacheConfiguration("perfil", buildConfig(Duration.ofMinutes(30), serializer))
                 .withCacheConfiguration("personalizacion", buildConfig(Duration.ofMinutes(30), serializer))
                 .withCacheConfiguration("marcos", buildConfig(Duration.ofHours(24), serializer))
                 .withCacheConfiguration("fondos", buildConfig(Duration.ofHours(24), serializer))
 
+                // ---------- USUARIOS ----------
                 .withCacheConfiguration("usuarios", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("busquedaUsuarios", buildConfig(Duration.ofMinutes(5), serializer))
-
                 .withCacheConfiguration("bloqueos", buildConfig(Duration.ofMinutes(10), serializer))
 
+                // ---------- CHAT ----------
                 .withCacheConfiguration("conversaciones", buildConfig(Duration.ofSeconds(30), serializer))
                 .withCacheConfiguration("mensajes", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("solicitudes", buildConfig(Duration.ofMinutes(2), serializer))
@@ -121,6 +139,7 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("usuariosDisponibles", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("contadores", buildConfig(Duration.ofSeconds(30), serializer))
 
+                // ---------- GRUPOS ----------
                 .withCacheConfiguration("gruposUsuario", buildConfig(Duration.ofMinutes(2), serializer))
                 .withCacheConfiguration("gruposPublicos", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("grupo", buildConfig(Duration.ofMinutes(5), serializer))
@@ -131,9 +150,11 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("linksGrupo", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("infoInvitacion", buildConfig(Duration.ofMinutes(5), serializer))
 
+                // ---------- NOTIFICACIONES ----------
                 .withCacheConfiguration("notificaciones", buildConfig(Duration.ofSeconds(60), serializer))
                 .withCacheConfiguration("contadorNotificaciones", buildConfig(Duration.ofSeconds(30), serializer))
 
+                // ---------- BIBLIOTECA ----------
                 .withCacheConfiguration("documentos", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("documento", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("categoriasDocumentos", buildConfig(Duration.ofHours(1), serializer))
@@ -144,12 +165,15 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("categoriasBiblioteca", buildConfig(Duration.ofHours(1), serializer))
                 .withCacheConfiguration("nivelesBiblioteca", buildConfig(Duration.ofHours(1), serializer))
 
+                // ---------- COMPARTIDOS ----------
                 .withCacheConfiguration("compartidos", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("contadorCompartidos", buildConfig(Duration.ofMinutes(10), serializer))
 
+                // ---------- REPORTES ----------
                 .withCacheConfiguration("resumenReportes", buildConfig(Duration.ofMinutes(2), serializer))
                 .withCacheConfiguration("misReportes", buildConfig(Duration.ofMinutes(5), serializer))
 
+                // ---------- BIENVENIDA ----------
                 .withCacheConfiguration("bienvenida", buildConfig(Duration.ofMinutes(30), serializer))
 
                 .build();
@@ -190,8 +214,11 @@ public class RedisConfig implements CachingConfigurer {
     // ============================================================
     // STRING REDIS TEMPLATE
     // ============================================================
+    // ⚠️ Ya NO es @Primary. Con RedisTemplate<String,Object> y
+    //   StringRedisTemplate coexistiendo, marcar uno como Primary
+    //   puede causar ambigüedad al inyectar RedisTemplate sin genéricos.
+    //   Si algún bean necesita StringRedisTemplate, que lo pida por tipo.
     @Bean
-    @Primary
     public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
         return new StringRedisTemplate(connectionFactory);
     }

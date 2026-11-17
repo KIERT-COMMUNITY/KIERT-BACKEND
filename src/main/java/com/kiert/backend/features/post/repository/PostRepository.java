@@ -251,4 +251,45 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             @Param("postId") Long postId,
             @Param("usuarioId") Long usuarioId
     );
+
+    // ============================================================
+    // CONTADOR DESNORMALIZADO DE COMENTARIOS
+    // Se mantiene actualizado desde ComentarioService al crear /
+    // eliminar comentarios. Evita contar la coleccion lazy en cada
+    // lectura del post (mejora de rendimiento) y permite que el
+    // PostMapper devuelva el valor correcto incluso cuando la
+    // coleccion `comentarios` no esta inicializada.
+    // ============================================================
+
+    /**
+     * Incrementa en 1 el contador `total_comentarios` del post indicado.
+     * Se invoca en {@code ComentarioService.crearComentario} tras persistir
+     * el nuevo comentario.
+     */
+    @Modifying
+    @Query("""
+            UPDATE Post p
+            SET p.totalComentarios = p.totalComentarios + 1
+            WHERE p.id = :postId
+            """)
+    void incrementarTotalComentarios(@Param("postId") Long postId);
+
+    /**
+     * Decrementa en 1 el contador `total_comentarios` del post indicado,
+     * con suelo en 0 para evitar negativos si por alguna razon se llama
+     * dos veces seguidas o el contador ya estaba a 0.
+     * Se invoca en {@code ComentarioService.eliminarComentario} tras marcar
+     * el comentario como eliminado (soft delete).
+     */
+    @Modifying
+    @Query("""
+            UPDATE Post p
+            SET p.totalComentarios =
+                CASE WHEN p.totalComentarios > 0
+                     THEN p.totalComentarios - 1
+                     ELSE 0
+                END
+            WHERE p.id = :postId
+            """)
+    void decrementarTotalComentarios(@Param("postId") Long postId);
 }

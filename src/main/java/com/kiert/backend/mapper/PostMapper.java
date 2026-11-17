@@ -41,14 +41,17 @@ public class PostMapper {
                 .toList();
 
         long comentarios;
+
         if (totalComentarios != null) {
             comentarios = totalComentarios;
-        } else if (Hibernate.isInitialized(post.getComentarios()) && post.getComentarios() != null) {
+        } else if (post.getComentarios() != null
+                && Hibernate.isInitialized(post.getComentarios())) {
             comentarios = post.getComentarios().stream()
                     .filter(c -> !c.isEliminado())
                     .count();
+        } else if (post.getTotalComentarios() != null) {
+            comentarios = post.getTotalComentarios();
         } else {
-            // Si la coleccion no esta inicializada, no forzamos carga (evita N+1 y LazyInitializationException)
             comentarios = 0;
         }
 
@@ -107,13 +110,12 @@ public class PostMapper {
         long loves = 0;
 
         if (reaccionesExternas != null) {
-            // Acepta tanto "likes"/"loves" (plural, como los devuelve el servicio)
-            // como "like"/"love" (singular, por compatibilidad)
             likes = reaccionesExternas.getOrDefault("likes",
                     reaccionesExternas.getOrDefault("like", 0L));
             loves = reaccionesExternas.getOrDefault("loves",
                     reaccionesExternas.getOrDefault("love", 0L));
-        } else if (Hibernate.isInitialized(comentario.getReacciones()) && comentario.getReacciones() != null) {
+        } else if (Hibernate.isInitialized(comentario.getReacciones())
+                && comentario.getReacciones() != null) {
             for (var r : comentario.getReacciones()) {
                 if ("like".equals(r.getTipo())) likes++;
                 else if ("love".equals(r.getTipo())) loves++;
@@ -126,7 +128,8 @@ public class PostMapper {
                 comentario.getContenido(),
                 comentario.getFechaCreacion(),
                 comentario.getUrlImagen(),
-                new ReaccionesDTO(likes, loves, 0, 0, 0, 0)
+                new ReaccionesDTO(likes, loves, 0, 0, 0, 0),
+                0L
         );
     }
 
