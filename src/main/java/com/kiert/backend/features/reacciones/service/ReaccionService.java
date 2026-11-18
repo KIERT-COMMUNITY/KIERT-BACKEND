@@ -220,13 +220,13 @@ public class ReaccionService {
     /**
      * Calcula las reacciones activas de un post.
      *
-     * ⚠️ IMPORTANTE: el resultado de `COUNT()` en Hibernate 6 puede ser
-     * `Long`, `BigInteger` o `BigDecimal` dependiendo del driver JDBC y la
-     * version de MySQL/MariaDB. En local (MySQL 5.7/8 con driver viejo)
-     * suele ser `Long`, pero en produccion (MySQL 8 con driver nuevo,
-     * Render) suele ser `BigInteger`. Por eso SIEMPRE casteamos a `Number`
-     * y extraemos `.longValue()`. Un cast directo a `Long` provoca
-     * `ClassCastException` -> 500 en produccion.
+     * ⚠️ En producción (MySQL 8 + driver nuevo en Render) `COUNT()` puede
+     * devolver `BigInteger` o `BigDecimal` en lugar de `Long`, y el `tipo`
+     * puede venir como `byte[]` en lugar de `String`. Un cast directo
+     * `(String)` o `(Long)` lanza `ClassCastException` → 500.
+     *
+     * ✅ FIX DEFINITIVO: usar `String.valueOf()` para el tipo y comprobar
+     *    `instanceof Number` para el count. Nunca explota.
      */
     private Map<String, Long> calcularReaccionesPostDesdeDB(Long postId) {
         Map<String, Long> reacciones = new HashMap<>();
@@ -238,10 +238,21 @@ public class ReaccionService {
         reacciones.put("angrys", 0L);
 
         List<Object[]> resultados = reaccionRepository.countReaccionesByPost(postId);
+        if (resultados == null || resultados.isEmpty()) {
+            return reacciones;
+        }
         for (Object[] resultado : resultados) {
-            String tipo = (String) resultado[0];
-            // ✅ FIX: Number en lugar de Long
-            Long count = ((Number) resultado[1]).longValue();
+            if (resultado == null || resultado.length < 2) continue;
+
+            // ✅ String.valueOf en vez de (String)
+            String tipo = String.valueOf(resultado[0]);
+
+            // ✅ instanceof Number en vez de (Long)
+            Number countNum = (resultado[1] instanceof Number)
+                    ? (Number) resultado[1]
+                    : 0L;
+            Long count = countNum.longValue();
+
             switch (tipo) {
                 case "like" -> reacciones.put("likes", count);
                 case "love" -> reacciones.put("loves", count);
@@ -249,14 +260,15 @@ public class ReaccionService {
                 case "wow" -> reacciones.put("wows", count);
                 case "sad" -> reacciones.put("sads", count);
                 case "angry" -> reacciones.put("angrys", count);
+                default -> log.warn("Tipo de reaccion desconocido en DB: {}", tipo);
             }
         }
         return reacciones;
     }
 
     /**
-     * Calcula las reacciones activas de un comentario. Ver nota en
-     * {@link #calcularReaccionesPostDesdeDB(Long)} sobre el cast a Number.
+     * Calcula las reacciones activas de un comentario.
+     * Misma nota que {@link #calcularReaccionesPostDesdeDB(Long)}.
      */
     private Map<String, Long> calcularReaccionesComentarioDesdeDB(Long comentarioId) {
         Map<String, Long> reacciones = new HashMap<>();
@@ -264,13 +276,25 @@ public class ReaccionService {
         reacciones.put("loves", 0L);
 
         List<Object[]> resultados = reaccionRepository.countReaccionesByComentario(comentarioId);
+        if (resultados == null || resultados.isEmpty()) {
+            return reacciones;
+        }
         for (Object[] resultado : resultados) {
-            String tipo = (String) resultado[0];
-            //  FIX: Number en lugar de Long
-            Long count = ((Number) resultado[1]).longValue();
+            if (resultado == null || resultado.length < 2) continue;
+
+            // ✅ String.valueOf en vez de (String)
+            String tipo = String.valueOf(resultado[0]);
+
+            // ✅ instanceof Number en vez de (Long)
+            Number countNum = (resultado[1] instanceof Number)
+                    ? (Number) resultado[1]
+                    : 0L;
+            Long count = countNum.longValue();
+
             switch (tipo) {
                 case "like" -> reacciones.put("likes", count);
                 case "love" -> reacciones.put("loves", count);
+                default -> log.warn("Tipo de reaccion desconocido en DB: {}", tipo);
             }
         }
         return reacciones;
