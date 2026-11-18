@@ -129,11 +129,16 @@ public class RecursoBibliotecaController {
     // ============================================================
     // HISTORIAL
     // ============================================================
-
+    // ✅ CORREGIDO: isAuthenticated + pasar usuarioId al servicio
     @GetMapping("/{id}/historial")
-    @PreAuthorize("permitAll()")
-    public ResponseEntity<List<HistorialRecursoDTO>> obtenerHistorial(@PathVariable Long id) {
-        return ResponseEntity.ok(bibliotecaService.obtenerHistorial(id));
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> obtenerHistorial(@PathVariable Long id) {
+        Long usuarioId = usuarioActual.id();
+        if (usuarioId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Debes iniciar sesion para ver el historial"));
+        }
+        return ResponseEntity.ok(bibliotecaService.obtenerHistorial(id, usuarioId));
     }
 
     @GetMapping("/historial/mio")

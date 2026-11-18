@@ -33,42 +33,20 @@ import java.time.Duration;
 @EnableCaching
 public class RedisConfig implements CachingConfigurer {
 
-    // ============================================================
-    // OBJECT MAPPER PARA REDIS
-    // ============================================================
     private ObjectMapper buildRedisObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
-
-        // Soporte para java.time (Instant, LocalDateTime, etc.)
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
-        // Serializar campos privados
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-
-        // ⚠️ IMPORTANTE: NON_FINAL en lugar de EVERYTHING.
-        //   - Con EVERYTHING, hasta String/Long llevaban "@class" en el JSON,
-        //     inflando la caché ~40% y rompiendo la compatibilidad con clientes
-        //     que lean Redis directamente.
-        //   - Con NON_FINAL, los tipos primitivos (String, Long, Integer,
-        //     Boolean) no se tipan, y los DTOs sí. Es lo que recomienda
-        //     Spring Data Redis.
-        //   - Sigue siendo LaissezFaireSubTypeValidator (el más permisivo),
-        //     pero al menos reduce el riesgo de RCE por deserialización.
         mapper.activateDefaultTyping(
                 LaissezFaireSubTypeValidator.instance,
                 ObjectMapper.DefaultTyping.NON_FINAL,
                 JsonTypeInfo.As.PROPERTY
         );
-
         return mapper;
     }
 
-    /**
-     * ObjectMapper @Primary para REST (SIN defaultTyping → sin "@class"
-     * en las respuestas HTTP).
-     */
     @Bean
     @Primary
     public ObjectMapper restObjectMapper() {
@@ -79,59 +57,48 @@ public class RedisConfig implements CachingConfigurer {
         return mapper;
     }
 
-    // ============================================================
-    // SERIALIZADOR
-    // ============================================================
     private GenericJackson2JsonRedisSerializer buildSerializer() {
         return new GenericJackson2JsonRedisSerializer(buildRedisObjectMapper());
     }
 
-    // ============================================================
-    // CACHE MANAGER
-    // ============================================================
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-
         GenericJackson2JsonRedisSerializer serializer = buildSerializer();
-
         RedisCacheConfiguration defaultConfig = buildConfig(Duration.ofMinutes(5), serializer);
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
 
-                // ---------- POSTS ----------
+                // POSTS
                 .withCacheConfiguration("posts", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("post", buildConfig(Duration.ofMinutes(10), serializer))
 
-                // ---------- COMENTARIOS ----------
-                // ⚠️ FIX: los servicios usan "comentarios" (español) y "respuestas".
-                //   El nombre anterior "comments" (inglés) NUNCA se usaba → la caché
-                //   real se creaba con la config por defecto (TTL 5 min) y esta
-                //   entrada quedaba huérfana.
+                // COMENTARIOS
                 .withCacheConfiguration("comentarios", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("respuestas", buildConfig(Duration.ofMinutes(5), serializer))
 
-                // ---------- REACCIONES ----------
+                // REACCIONES
                 .withCacheConfiguration("reaccionesPost", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("reaccionesComentario", buildConfig(Duration.ofMinutes(10), serializer))
-                // ⚠️ FIX: "reaccionesRespuesta" no estaba registrada.
-                //   El ComentarioService la usa como CACHE_REACCIONES_RESPUESTA.
                 .withCacheConfiguration("reaccionesRespuesta", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("usuarioReaccionoPost", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("usuarioReaccionoComentario", buildConfig(Duration.ofMinutes(10), serializer))
 
-                // ---------- PERFIL / PERSONALIZACIÓN ----------
+                // PERFIL
+                // ⚠️ "personalizacion", "marcos", "fondos" ELIMINADOS.
+                //    Cachear PersonalizacionDTO como Object genérico rompía
+                //    la deserialización ('@class' missing) y el PUT/GET entraba
+                //    en bucle: guardaba → no podía leer → evict → guardaba.
+                //    La personalización es UNA fila por usuario con índice UNIQUE,
+                //    no compensa cachearla.
                 .withCacheConfiguration("perfil", buildConfig(Duration.ofMinutes(30), serializer))
-                .withCacheConfiguration("personalizacion", buildConfig(Duration.ofMinutes(30), serializer))
-                .withCacheConfiguration("marcos", buildConfig(Duration.ofHours(24), serializer))
-                .withCacheConfiguration("fondos", buildConfig(Duration.ofHours(24), serializer))
 
-                // ---------- USUARIOS ----------
+                // USUARIOS
                 .withCacheConfiguration("usuarios", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("busquedaUsuarios", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("bloqueos", buildConfig(Duration.ofMinutes(10), serializer))
 
-                // ---------- CHAT ----------
+                // CHAT
                 .withCacheConfiguration("conversaciones", buildConfig(Duration.ofSeconds(30), serializer))
                 .withCacheConfiguration("mensajes", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("solicitudes", buildConfig(Duration.ofMinutes(2), serializer))
@@ -139,7 +106,7 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("usuariosDisponibles", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("contadores", buildConfig(Duration.ofSeconds(30), serializer))
 
-                // ---------- GRUPOS ----------
+                // GRUPOS
                 .withCacheConfiguration("gruposUsuario", buildConfig(Duration.ofMinutes(2), serializer))
                 .withCacheConfiguration("gruposPublicos", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("grupo", buildConfig(Duration.ofMinutes(5), serializer))
@@ -150,11 +117,11 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("linksGrupo", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("infoInvitacion", buildConfig(Duration.ofMinutes(5), serializer))
 
-                // ---------- NOTIFICACIONES ----------
+                // NOTIFICACIONES
                 .withCacheConfiguration("notificaciones", buildConfig(Duration.ofSeconds(60), serializer))
                 .withCacheConfiguration("contadorNotificaciones", buildConfig(Duration.ofSeconds(30), serializer))
 
-                // ---------- BIBLIOTECA ----------
+                // BIBLIOTECA
                 .withCacheConfiguration("documentos", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("documento", buildConfig(Duration.ofMinutes(10), serializer))
                 .withCacheConfiguration("categoriasDocumentos", buildConfig(Duration.ofHours(1), serializer))
@@ -165,92 +132,53 @@ public class RedisConfig implements CachingConfigurer {
                 .withCacheConfiguration("categoriasBiblioteca", buildConfig(Duration.ofHours(1), serializer))
                 .withCacheConfiguration("nivelesBiblioteca", buildConfig(Duration.ofHours(1), serializer))
 
-                // ---------- COMPARTIDOS ----------
+                // COMPARTIDOS
                 .withCacheConfiguration("compartidos", buildConfig(Duration.ofMinutes(5), serializer))
                 .withCacheConfiguration("contadorCompartidos", buildConfig(Duration.ofMinutes(10), serializer))
 
-                // ---------- REPORTES ----------
+                // REPORTES
                 .withCacheConfiguration("resumenReportes", buildConfig(Duration.ofMinutes(2), serializer))
                 .withCacheConfiguration("misReportes", buildConfig(Duration.ofMinutes(5), serializer))
 
-                // ---------- BIENVENIDA ----------
+                // BIENVENIDA
                 .withCacheConfiguration("bienvenida", buildConfig(Duration.ofMinutes(30), serializer))
 
                 .build();
     }
 
-    private RedisCacheConfiguration buildConfig(
-            Duration ttl,
-            GenericJackson2JsonRedisSerializer serializer) {
+    private RedisCacheConfiguration buildConfig(Duration ttl, GenericJackson2JsonRedisSerializer serializer) {
         return RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(ttl)
-                .serializeKeysWith(
-                        RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(
-                        RedisSerializationContext.SerializationPair.fromSerializer(serializer))
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(serializer))
                 .disableCachingNullValues();
     }
 
-    // ============================================================
-    // REDIS TEMPLATE
-    // ============================================================
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
-
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
-
         GenericJackson2JsonRedisSerializer serializer = buildSerializer();
-
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(serializer);
         template.setHashKeySerializer(new StringRedisSerializer());
         template.setHashValueSerializer(serializer);
         template.afterPropertiesSet();
-
         return template;
     }
 
-    // ============================================================
-    // STRING REDIS TEMPLATE
-    // ============================================================
-    // ⚠️ Ya NO es @Primary. Con RedisTemplate<String,Object> y
-    //   StringRedisTemplate coexistiendo, marcar uno como Primary
-    //   puede causar ambigüedad al inyectar RedisTemplate sin genéricos.
-    //   Si algún bean necesita StringRedisTemplate, que lo pida por tipo.
     @Bean
     public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
         return new StringRedisTemplate(connectionFactory);
     }
 
-    // ============================================================
-    // ERROR HANDLER — Resiliencia + limpieza de claves corruptas
-    // ============================================================
     @Override
     public CacheErrorHandler errorHandler() {
         return new CacheErrorHandler() {
-            @Override
-            public void handleCacheGetError(RuntimeException exception, Cache cache, Object key) {
-                log.warn("[CACHE] Error en GET ({}::{}): {}", cache.getName(), key, exception.getMessage());
-                try {
-                    cache.evict(key);
-                } catch (Exception ignored) {}
-            }
-
-            @Override
-            public void handleCachePutError(RuntimeException exception, Cache cache, Object key, Object value) {
-                log.warn("[CACHE] Error en PUT ({}::{}): {}", cache.getName(), key, exception.getMessage());
-            }
-
-            @Override
-            public void handleCacheEvictError(RuntimeException exception, Cache cache, Object key) {
-                log.warn("[CACHE] Error en EVICT ({}::{}): {}", cache.getName(), key, exception.getMessage());
-            }
-
-            @Override
-            public void handleCacheClearError(RuntimeException exception, Cache cache) {
-                log.warn("[CACHE] Error en CLEAR ({}): {}", cache.getName(), exception.getMessage());
-            }
+            @Override public void handleCacheGetError(RuntimeException e, Cache c, Object k) { log.warn("[CACHE] GET ({}::{})", c.getName(), k); }
+            @Override public void handleCachePutError(RuntimeException e, Cache c, Object k, Object v) { log.warn("[CACHE] PUT ({}::{})", c.getName(), k); }
+            @Override public void handleCacheEvictError(RuntimeException e, Cache c, Object k) { log.warn("[CACHE] EVICT ({}::{})", c.getName(), k); }
+            @Override public void handleCacheClearError(RuntimeException e, Cache c) { log.warn("[CACHE] CLEAR ({})", c.getName()); }
         };
     }
 }

@@ -147,7 +147,6 @@ public class RecursoBibliotecaService {
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        // Si la categoria viene vacia, se asigna "otro"
         String categoriaFinal = (request.getCategoria() != null && !request.getCategoria().isBlank())
                 ? request.getCategoria().trim().toLowerCase()
                 : "otro";
@@ -238,9 +237,18 @@ public class RecursoBibliotecaService {
     // ============================================================
     // HISTORIAL
     // ============================================================
-
+    // ✅ CORREGIDO: ahora exige usuarioId y valida propiedad
     @Transactional(readOnly = true)
-    public List<HistorialRecursoDTO> obtenerHistorial(Long recursoId) {
+    public List<HistorialRecursoDTO> obtenerHistorial(Long recursoId, Long usuarioAutenticadoId) {
+        if (recursoId == null) throw new BadRequestException("ID requerido");
+        if (usuarioAutenticadoId == null) throw new AccesoDenegadoException("Debes iniciar sesion");
+
+        RecursoBiblioteca recurso = recursoRepository.findActivoById(recursoId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Recurso no encontrado"));
+
+        // ✅ Solo el dueño puede ver el historial
+        validarPropiedad(recurso, usuarioAutenticadoId);
+
         return historialRepository.findByRecursoIdOrderByFechaAccionDesc(recursoId)
                 .stream().map(this::toHistorialDTO).collect(Collectors.toList());
     }
@@ -256,7 +264,6 @@ public class RecursoBibliotecaService {
     // ============================================================
 
     private void validarRequest(RecursoUsuarioRequest request) {
-        // Solo Titulo y URL son obligatorios
         if (request.getTitulo() == null || request.getTitulo().isBlank()) {
             throw new BadRequestException("El titulo es obligatorio");
         }
@@ -273,8 +280,6 @@ public class RecursoBibliotecaService {
         if (!urlLimpia.startsWith("https://")) {
             throw new BadRequestException("La URL debe comenzar con https://");
         }
-
-        // Validaciones de campos opcionales (solo si no estan vacios)
         if (request.getDescripcion() != null && request.getDescripcion().length() > MAX_DESCRIPCION) {
             throw new BadRequestException("La descripcion es demasiado larga");
         }

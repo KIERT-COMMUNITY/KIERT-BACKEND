@@ -13,7 +13,6 @@ import com.kiert.backend.features.cloudinary.service.CloudinaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,30 +31,41 @@ public class PersonalizacionService {
     private final UsuarioRepository usuarioRepository;
     private final CloudinaryService cloudinaryService;
 
+    // ✅ Cachés de personalización DESACTIVADAS (no se usan para leer)
+    //    Solo se usan en @CacheEvict para limpiar claves viejas.
     private static final String CACHE_PERSONALIZACION = "personalizacion";
-    private static final String CACHE_MARCOS = "marcos";
-    private static final String CACHE_FONDOS = "fondos";
 
+    // ============================================================
+    // TEMAS VÁLIDOS (20 colores sólidos)
+    // ============================================================
     private static final Set<String> TEMAS_VALIDOS = Set.of(
-            "default", "dark", "light", "sunset", "ocean", "aurora", "galaxy",
-            "lava", "forest", "candy", "cyber", "blood", "royal", "gold", "pastel"
+            "default", "red", "green", "blue", "yellow", "orange", "purple",
+            "pink", "cyan", "white", "black", "gray", "lime", "teal", "brown",
+            "indigo", "crimson", "gold", "silver", "navy"
     );
 
+    // ============================================================
+    // MARCOS VÁLIDOS (sin cambios)
+    // ============================================================
     private static final Set<String> MARCOS_VALIDOS = Set.of(
             "none", "classic", "gold", "silver", "rainbow", "pastel", "neon",
             "ocean", "sunset", "galaxy", "fire", "ice", "rose", "cyber",
             "crystal", "double", "star", "moon", "sun", "elite"
     );
 
+    // ============================================================
+    // FONDOS VÁLIDOS (20 colores sólidos)
+    // ============================================================
     private static final Set<String> FONDOS_VALIDOS = Set.of(
-            "default", "dark", "light", "sunset", "ocean", "aurora", "galaxy",
-            "lava", "forest", "candy", "cyber", "blood", "royal", "gold", "pastel"
+            "default", "red", "green", "blue", "yellow", "orange", "purple",
+            "pink", "cyan", "white", "black", "gray", "lime", "teal", "brown",
+            "indigo", "crimson", "gold", "silver", "navy"
     );
 
     private static final long MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
     // ============================================================
-    // OBTENER PERSONALIZACION (crea default si no existe)
+    // OBTENER PERSONALIZACIÓN (sin caché)
     // ============================================================
     @Transactional
     public PersonalizacionDTO obtenerPersonalizacion(Long usuarioId) {
@@ -75,14 +85,9 @@ public class PersonalizacionService {
     }
 
     // ============================================================
-    // OBTENER (cacheable)
+    // OBTENER O CREAR PERSONALIZACIÓN (sin caché)
     // ============================================================
     @Transactional
-    @Cacheable(
-            value = CACHE_PERSONALIZACION,
-            key = "#usuarioId",
-            unless = "#result == null || #result.id() == null"
-    )
     public PersonalizacionDTO obtenerOCrearPersonalizacion(Long usuarioId) {
         log.debug("[DB] obtenerOCrearPersonalizacion para usuario: {}", usuarioId);
 
@@ -100,21 +105,16 @@ public class PersonalizacionService {
     }
 
     // ============================================================
-    // OBTENER PERSONALIZACION POR USUARIO (publico autenticado)
+    // OBTENER PERSONALIZACIÓN POR USUARIO (sin caché)
     // ============================================================
     @Transactional
-    @Cacheable(
-            value = CACHE_PERSONALIZACION,
-            key = "'user:' + #usuarioId",
-            unless = "#result == null || #result.id() == null"
-    )
     public PersonalizacionDTO obtenerPersonalizacionPorUsuario(Long usuarioId) {
         log.debug("[DB] Obteniendo personalizacion de usuario {} (publico)", usuarioId);
         return obtenerOCrearPersonalizacion(usuarioId);
     }
 
     // ============================================================
-    // GUARDAR PERSONALIZACION
+    // GUARDAR PERSONALIZACIÓN
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -165,7 +165,7 @@ public class PersonalizacionService {
     }
 
     // ============================================================
-    // SUBIR FOTO DE PERFIL (CORREGIDO)
+    // SUBIR FOTO DE PERFIL
     // ============================================================
     @Transactional
     @Caching(evict = {
@@ -205,7 +205,6 @@ public class PersonalizacionService {
 
         String url;
         try {
-            // ✅ CORREGIDO: "perfil" en singular para que coincida con la whitelist
             url = cloudinaryService.subirImagen(archivo, "perfil");
         } catch (BadRequestException e) {
             throw e;
@@ -336,25 +335,21 @@ public class PersonalizacionService {
     }
 
     // ============================================================
-    // MARCOS Y FONDOS
+    // MARCOS Y FONDOS (sin caché)
     // ============================================================
-    @Cacheable(value = CACHE_MARCOS, key = "'all'")
     public List<MarcoDTO> obtenerMarcos(Long usuarioId) {
         return getMarcosDefault();
     }
 
-    @Cacheable(value = CACHE_FONDOS, key = "'all'")
     public List<FondoDTO> obtenerFondos(Long usuarioId) {
         return getFondosDefault();
     }
 
     // ============================================================
-    // LIMPIAR CACHE
+    // LIMPIAR CACHE (solo borra claves viejas)
     // ============================================================
     @Caching(evict = {
             @CacheEvict(value = CACHE_PERSONALIZACION, allEntries = true),
-            @CacheEvict(value = CACHE_MARCOS, allEntries = true),
-            @CacheEvict(value = CACHE_FONDOS, allEntries = true),
             @CacheEvict(value = "perfil", allEntries = true)
     })
     public void limpiarCache() {
@@ -362,7 +357,7 @@ public class PersonalizacionService {
     }
 
     // ============================================================
-    // METODOS PRIVADOS
+    // MÉTODOS PRIVADOS
     // ============================================================
     private List<MarcoDTO> getMarcosDefault() {
         List<MarcoDTO> marcos = new ArrayList<>();
@@ -391,21 +386,26 @@ public class PersonalizacionService {
 
     private List<FondoDTO> getFondosDefault() {
         List<FondoDTO> fondos = new ArrayList<>();
-        fondos.add(new FondoDTO("default", "Default", null, "gradiente", "linear-gradient(135deg, #0d1117, #161b22)", 0.0, true));
-        fondos.add(new FondoDTO("dark", "Dark", null, "gradiente", "linear-gradient(135deg, #1a1a2e, #0d1117)", 0.0, true));
-        fondos.add(new FondoDTO("light", "Light", null, "gradiente", "linear-gradient(135deg, #ffffff, #f0f0f0)", 0.0, true));
-        fondos.add(new FondoDTO("sunset", "Sunset", null, "gradiente", "linear-gradient(135deg, #ff6b6b, #feca57, #fd79a8)", 0.0, true));
-        fondos.add(new FondoDTO("ocean", "Ocean", null, "gradiente", "linear-gradient(135deg, #00b894, #00cec9, #0984e3)", 0.0, true));
-        fondos.add(new FondoDTO("aurora", "Aurora", null, "gradiente", "linear-gradient(135deg, #6c5ce7, #00b894, #fdcb6e)", 0.0, true));
-        fondos.add(new FondoDTO("galaxy", "Galaxy", null, "gradiente", "linear-gradient(135deg, #2d3436, #6c5ce7, #fd79a8)", 0.0, true));
-        fondos.add(new FondoDTO("lava", "Lava", null, "gradiente", "linear-gradient(135deg, #ff6b6b, #e17055, #d63031)", 0.0, true));
-        fondos.add(new FondoDTO("forest", "Forest", null, "gradiente", "linear-gradient(135deg, #00b894, #55efc4, #00cec9)", 0.0, true));
-        fondos.add(new FondoDTO("candy", "Candy", null, "gradiente", "linear-gradient(135deg, #fd79a8, #fdcb6e, #a29bfe)", 0.0, true));
-        fondos.add(new FondoDTO("cyber", "Cyber", null, "gradiente", "linear-gradient(135deg, #00d4ff, #6c5ce7, #fd79a8)", 0.0, true));
-        fondos.add(new FondoDTO("blood", "Blood", null, "gradiente", "linear-gradient(135deg, #ff0044, #d63031, #ff6b6b)", 0.0, true));
-        fondos.add(new FondoDTO("royal", "Royal", null, "gradiente", "linear-gradient(135deg, #6c5ce7, #a29bfe, #fd79a8)", 0.0, true));
-        fondos.add(new FondoDTO("gold", "Gold", null, "gradiente", "linear-gradient(135deg, #f9ca24, #fdcb6e, #feca57)", 0.0, true));
-        fondos.add(new FondoDTO("pastel", "Pastel", null, "gradiente", "linear-gradient(135deg, #fd79a8, #a29bfe, #55efc4)", 0.0, true));
+        fondos.add(new FondoDTO("default", "Default",    null, "color", "#2dd4bf", 0.0, true));
+        fondos.add(new FondoDTO("red",     "Rojo",       null, "color", "#ff0000", 0.0, true));
+        fondos.add(new FondoDTO("green",   "Verde",      null, "color", "#00c853", 0.0, true));
+        fondos.add(new FondoDTO("blue",    "Azul",       null, "color", "#0066ff", 0.0, true));
+        fondos.add(new FondoDTO("yellow",  "Amarillo",   null, "color", "#ffd600", 0.0, true));
+        fondos.add(new FondoDTO("orange",  "Naranja",    null, "color", "#ff6d00", 0.0, true));
+        fondos.add(new FondoDTO("purple",  "Morado",     null, "color", "#9c27b0", 0.0, true));
+        fondos.add(new FondoDTO("pink",    "Rosa",       null, "color", "#ff4081", 0.0, true));
+        fondos.add(new FondoDTO("cyan",    "Cian",       null, "color", "#00e5ff", 0.0, true));
+        fondos.add(new FondoDTO("white",   "Blanco",     null, "color", "#ffffff", 0.0, true));
+        fondos.add(new FondoDTO("black",   "Negro",      null, "color", "#000000", 0.0, true));
+        fondos.add(new FondoDTO("gray",    "Gris",       null, "color", "#9e9e9e", 0.0, true));
+        fondos.add(new FondoDTO("lime",    "Lima",       null, "color", "#c6ff00", 0.0, true));
+        fondos.add(new FondoDTO("teal",    "Turquesa",   null, "color", "#009688", 0.0, true));
+        fondos.add(new FondoDTO("brown",   "Marrón",     null, "color", "#795548", 0.0, true));
+        fondos.add(new FondoDTO("indigo",  "Índigo",     null, "color", "#3f51b5", 0.0, true));
+        fondos.add(new FondoDTO("crimson", "Carmesí",    null, "color", "#dc143c", 0.0, true));
+        fondos.add(new FondoDTO("gold",    "Dorado",     null, "color", "#ffc107", 0.0, true));
+        fondos.add(new FondoDTO("silver",  "Plateado",   null, "color", "#cfd8dc", 0.0, true));
+        fondos.add(new FondoDTO("navy",    "Azul marino",null, "color", "#001f5c", 0.0, true));
         return fondos;
     }
 
