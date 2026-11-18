@@ -7,6 +7,7 @@ import com.kiert.backend.entity.Post;
 import com.kiert.backend.entity.Comentario;
 import com.kiert.backend.exception.BadRequestException;
 import com.kiert.backend.exception.RecursoNoEncontradoException;
+import com.kiert.backend.features.reacciones.dto.ReaccionesDTO;
 import com.kiert.backend.features.reacciones.repository.ReaccionRepository;
 import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import com.kiert.backend.features.post.repository.PostRepository;
@@ -20,9 +21,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -62,7 +61,7 @@ public class ReaccionService {
             @CacheEvict(value = "posts", allEntries = true, beforeInvocation = true),
             @CacheEvict(value = "post", key = "#postId", beforeInvocation = true)
     })
-    public Map<String, Long> reaccionarPost(Long usuarioId, Long postId, String tipo) {
+    public ReaccionesDTO reaccionarPost(Long usuarioId, Long postId, String tipo) {
         log.debug("Usuario {} reaccionando a post {} con tipo {}", usuarioId, postId, tipo);
 
         if (usuarioId == null || postId == null) {
@@ -129,7 +128,7 @@ public class ReaccionService {
                     key = "#usuarioId + ':' + #comentarioId", beforeInvocation = true),
             @CacheEvict(value = CACHE_COMENTARIOS, allEntries = true, beforeInvocation = true)
     })
-    public Map<String, Long> reaccionarComentario(Long usuarioId, Long comentarioId, String tipo) {
+    public ReaccionesDTO reaccionarComentario(Long usuarioId, Long comentarioId, String tipo) {
         log.debug("Usuario {} reaccionando a comentario {} con tipo {}", usuarioId, comentarioId, tipo);
 
         if (usuarioId == null || comentarioId == null) {
@@ -179,13 +178,13 @@ public class ReaccionService {
     // OBTENER REACCIONES
     // ============================================================
     @Cacheable(value = CACHE_REACCIONES_POST, key = "#postId")
-    public Map<String, Long> obtenerReaccionesPost(Long postId) {
+    public ReaccionesDTO obtenerReaccionesPost(Long postId) {
         log.debug("[DB] Calculando reacciones del post: {}", postId);
         return calcularReaccionesPostDesdeDB(postId);
     }
 
     @Cacheable(value = CACHE_REACCIONES_COMENTARIO, key = "'comentario:' + #comentarioId")
-    public Map<String, Long> obtenerReaccionesComentario(Long comentarioId) {
+    public ReaccionesDTO obtenerReaccionesComentario(Long comentarioId) {
         log.debug("[DB] Calculando reacciones del comentario: {}", comentarioId);
         return calcularReaccionesComentarioDesdeDB(comentarioId);
     }
@@ -193,20 +192,14 @@ public class ReaccionService {
     // ============================================================
     // VERIFICAR SI USUARIO REACCIONO
     // ============================================================
-    @Cacheable(
-            value = CACHE_USUARIO_REACCIONO_POST,
-            key = "#usuarioId + ':' + #postId"
-    )
+    @Cacheable(value = CACHE_USUARIO_REACCIONO_POST, key = "#usuarioId + ':' + #postId")
     public boolean usuarioReaccionoPost(Long usuarioId, Long postId) {
         log.debug("[DB] Verificando si usuario {} reacciono al post {}", usuarioId, postId);
         if (usuarioId == null || postId == null) return false;
         return reaccionRepository.findByUsuarioIdAndPostId(usuarioId, postId).isPresent();
     }
 
-    @Cacheable(
-            value = CACHE_USUARIO_REACCIONO_COMENTARIO,
-            key = "#usuarioId + ':' + #comentarioId"
-    )
+    @Cacheable(value = CACHE_USUARIO_REACCIONO_COMENTARIO, key = "#usuarioId + ':' + #comentarioId")
     public boolean usuarioReaccionoComentario(Long usuarioId, Long comentarioId) {
         log.debug("[DB] Verificando si usuario {} reacciono al comentario {}", usuarioId, comentarioId);
         if (usuarioId == null || comentarioId == null) return false;
@@ -217,86 +210,53 @@ public class ReaccionService {
     // HELPERS
     // ============================================================
 
-    /**
-     * Calcula las reacciones activas de un post.
-     *
-     * ⚠️ En producción (MySQL 8 + driver nuevo en Render) `COUNT()` puede
-     * devolver `BigInteger` o `BigDecimal` en lugar de `Long`, y el `tipo`
-     * puede venir como `byte[]` en lugar de `String`. Un cast directo
-     * `(String)` o `(Long)` lanza `ClassCastException` → 500.
-     *
-     * ✅ FIX DEFINITIVO: usar `String.valueOf()` para el tipo y comprobar
-     *    `instanceof Number` para el count. Nunca explota.
-     */
-    private Map<String, Long> calcularReaccionesPostDesdeDB(Long postId) {
-        Map<String, Long> reacciones = new HashMap<>();
-        reacciones.put("likes", 0L);
-        reacciones.put("loves", 0L);
-        reacciones.put("hahas", 0L);
-        reacciones.put("wows", 0L);
-        reacciones.put("sads", 0L);
-        reacciones.put("angrys", 0L);
+    private ReaccionesDTO calcularReaccionesPostDesdeDB(Long postId) {
+        long likes = 0L, loves = 0L, hahas = 0L, wows = 0L, sads = 0L, angrys = 0L;
 
         List<Object[]> resultados = reaccionRepository.countReaccionesByPost(postId);
         if (resultados == null || resultados.isEmpty()) {
-            return reacciones;
+            return new ReaccionesDTO(likes, loves, hahas, wows, sads, angrys);
         }
         for (Object[] resultado : resultados) {
             if (resultado == null || resultado.length < 2) continue;
 
-            // ✅ String.valueOf en vez de (String)
             String tipo = String.valueOf(resultado[0]);
-
-            // ✅ instanceof Number en vez de (Long)
-            Number countNum = (resultado[1] instanceof Number)
-                    ? (Number) resultado[1]
-                    : 0L;
-            Long count = countNum.longValue();
+            Number countNum = (resultado[1] instanceof Number) ? (Number) resultado[1] : 0L;
+            long count = countNum.longValue();
 
             switch (tipo) {
-                case "like" -> reacciones.put("likes", count);
-                case "love" -> reacciones.put("loves", count);
-                case "haha" -> reacciones.put("hahas", count);
-                case "wow" -> reacciones.put("wows", count);
-                case "sad" -> reacciones.put("sads", count);
-                case "angry" -> reacciones.put("angrys", count);
+                case "like" -> likes = count;
+                case "love" -> loves = count;
+                case "haha" -> hahas = count;
+                case "wow" -> wows = count;
+                case "sad" -> sads = count;
+                case "angry" -> angrys = count;
                 default -> log.warn("Tipo de reaccion desconocido en DB: {}", tipo);
             }
         }
-        return reacciones;
+        return new ReaccionesDTO(likes, loves, hahas, wows, sads, angrys);
     }
 
-    /**
-     * Calcula las reacciones activas de un comentario.
-     * Misma nota que {@link #calcularReaccionesPostDesdeDB(Long)}.
-     */
-    private Map<String, Long> calcularReaccionesComentarioDesdeDB(Long comentarioId) {
-        Map<String, Long> reacciones = new HashMap<>();
-        reacciones.put("likes", 0L);
-        reacciones.put("loves", 0L);
+    private ReaccionesDTO calcularReaccionesComentarioDesdeDB(Long comentarioId) {
+        long likes = 0L, loves = 0L;
 
         List<Object[]> resultados = reaccionRepository.countReaccionesByComentario(comentarioId);
         if (resultados == null || resultados.isEmpty()) {
-            return reacciones;
+            return new ReaccionesDTO(likes, loves, 0L, 0L, 0L, 0L);
         }
         for (Object[] resultado : resultados) {
             if (resultado == null || resultado.length < 2) continue;
 
-            // ✅ String.valueOf en vez de (String)
             String tipo = String.valueOf(resultado[0]);
-
-            // ✅ instanceof Number en vez de (Long)
-            Number countNum = (resultado[1] instanceof Number)
-                    ? (Number) resultado[1]
-                    : 0L;
-            Long count = countNum.longValue();
+            Number countNum = (resultado[1] instanceof Number) ? (Number) resultado[1] : 0L;
+            long count = countNum.longValue();
 
             switch (tipo) {
-                case "like" -> reacciones.put("likes", count);
-                case "love" -> reacciones.put("loves", count);
+                case "like" -> likes = count;
+                case "love" -> loves = count;
                 default -> log.warn("Tipo de reaccion desconocido en DB: {}", tipo);
             }
         }
-        return reacciones;
+        return new ReaccionesDTO(likes, loves, 0L, 0L, 0L, 0L);
     }
 }
