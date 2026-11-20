@@ -64,9 +64,9 @@ public class Post {
     @Builder.Default
     private Long totalCompartidos = 0L;
 
-    // ✅ NUEVO: contador desnormalizado de comentarios activos.
-    //    Se mantiene actualizado en ComentarioService.crearComentario /
-    //    eliminarComentario. Evita contar la colección lazy en cada lectura.
+    // Contador desnormalizado de comentarios activos.
+    // Se mantiene actualizado en ComentarioService.crearComentario /
+    // eliminarComentario. Evita contar la colección lazy en cada lectura.
     @Column(name = "total_comentarios", nullable = false)
     @Builder.Default
     private Long totalComentarios = 0L;
@@ -74,4 +74,19 @@ public class Post {
     @Column(name = "es_anonimo", nullable = false)
     @Builder.Default
     private Boolean esAnonimo = false;
+
+    // ============================================================
+    // MARCADO DE CONTENIDO SENSIBLE
+    // ============================================================
+    @Column(name = "es_sensible", nullable = false)
+    @Builder.Default
+    private Boolean esSensible = false;
+
+    /**
+     * Motivo por el que el post se marca como sensible.
+     * Valores esperados: "nsfw", "violencia", "spoiler", "sangre", "otro".
+     * Null cuando {@code esSensible = false}.
+     */
+    @Column(name = "motivo_sensibilidad", length = 50)
+    private String motivoSensibilidad;
 }

@@ -71,7 +71,7 @@ public class PostController {
     }
 
     // ============================================================
-    // CREAR POST
+    // CREAR POST  (multipart con sensibilidad)
     // ============================================================
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
@@ -81,6 +81,8 @@ public class PostController {
             @RequestParam("descripcion") String descripcion,
             @RequestParam(value = "link", required = false) String link,
             @RequestParam(value = "esAnonimo", required = false, defaultValue = "false") Boolean esAnonimo,
+            @RequestParam(value = "esSensible", required = false, defaultValue = "false") Boolean esSensible,
+            @RequestParam(value = "motivoSensibilidad", required = false) String motivoSensibilidad,
             @RequestParam(value = "archivos", required = false) List<MultipartFile> archivos) {
 
         Long usuarioId = usuarioActual.id();
@@ -90,12 +92,15 @@ public class PostController {
         }
 
         try {
+            // ✅ Constructor con los 7 argumentos del record actualizado
             CrearPostDTO datos = new CrearPostDTO(
                     titulo,
                     categoria,
                     descripcion,
                     link,
-                    esAnonimo != null ? esAnonimo : false
+                    esAnonimo != null ? esAnonimo : false,
+                    esSensible != null ? esSensible : false,
+                    motivoSensibilidad
             );
 
             PostDTO creado = postService.crear(usuarioId, datos, archivos);
@@ -106,7 +111,10 @@ public class PostController {
                         .body(Map.of("error", "No se pudo crear la publicacion"));
             }
 
-            log.info("Post creado: id={}, anonimo={}", creado.id(), creado.esAnonimo());
+            log.info("Post creado: id={}, anonimo={}, sensible={}, motivo={}",
+                    creado.id(), creado.esAnonimo(),
+                    creado.esSensible(), creado.motivoSensibilidad());
+
             return ResponseEntity.status(HttpStatus.CREATED).body(creado);
 
         } catch (RecursoNoEncontradoException e) {
@@ -114,7 +122,7 @@ public class PostController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("error", e.getMessage()));
         } catch (com.kiert.backend.exception.BadRequestException e) {
-            // ✅ Validación → 400
+            // ✅ Validación (incluye motivo de sensibilidad invalido) → 400
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {

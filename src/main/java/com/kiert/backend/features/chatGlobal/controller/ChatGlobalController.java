@@ -11,6 +11,7 @@ import com.kiert.backend.features.chatGlobal.repository.MensajeGlobalRepository;
 import com.kiert.backend.features.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -39,7 +40,7 @@ public class ChatGlobalController {
     private final UsuarioRepository usuarioRepository;
 
     // ============================================================
-    // REST: historial (publico)
+    // REST: historial (público)
     // ============================================================
     @GetMapping("/mensajes")
     @PreAuthorize("permitAll()")
@@ -81,20 +82,20 @@ public class ChatGlobalController {
         try {
             usuarioId = Long.parseLong(principal.getName());
         } catch (NumberFormatException e) {
-            throw new BadRequestException("Sesion invalida");
+            throw new BadRequestException("Sesión inválida");
         }
 
         if (dto == null || dto.contenido() == null || dto.contenido().trim().isEmpty()) {
-            throw new BadRequestException("El mensaje no puede estar vacio");
+            throw new BadRequestException("El mensaje no puede estar vacío");
         }
         String contenido = dto.contenido().trim();
         if (contenido.length() > CONTENIDO_MAX_LENGTH) {
-            throw new BadRequestException("El mensaje es demasiado largo (max. "
+            throw new BadRequestException("El mensaje es demasiado largo (máx. "
                     + CONTENIDO_MAX_LENGTH + " caracteres)");
         }
         contenido = contenido.replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
 
-        // ✅ NUEVO — validar respuestaAId (si se envía). Si no existe, se ignora.
+        // Validar respuestaAId (si se envía). Si no existe, se ignora.
         Long respuestaValida = null;
         if (dto.respuestaAId() != null && mensajeRepository.existsById(dto.respuestaAId())) {
             respuestaValida = dto.respuestaAId();
@@ -107,7 +108,7 @@ public class ChatGlobalController {
                 .autor(autor)
                 .contenido(contenido)
                 .fechaEnvio(Instant.now())
-                .respuestaAId(respuestaValida)   // ✅ NUEVO
+                .respuestaAId(respuestaValida)
                 .build();
 
         mensaje = mensajeRepository.save(mensaje);
@@ -115,17 +116,33 @@ public class ChatGlobalController {
         log.info("[CHAT-GLOBAL] Mensaje id={} de usuarioId={} respuestaAId={}",
                 mensaje.getId(), autor.getId(), respuestaValida);
 
-        return mapearADTO(mensaje);
+        // Recargar con LEFT JOIN FETCH para que el mapper tenga la personalización lista
+        MensajeGlobal recargado = mensajeRepository.findByIdConAutor(mensaje.getId())
+                .orElse(mensaje);
+
+        return mapearADTO(recargado);
     }
 
+    // ============================================================
+    // MAPPER CORREGIDO
+    // ============================================================
+    /**
+     * ✅ CORREGIDO: resuelve `marcoId` desde `Personalizacion` (relación principal),
+     * con fallback al campo desnormalizado `Usuario.marcoId`.
+     *
+     * Antes se leía SOLO `autor.getMarcoId()` (campo desnormalizado), que suele estar
+     * null aunque la personalización real tenga marco. Ese era el bug.
+     */
     private MensajeGlobalDTO mapearADTO(MensajeGlobal m) {
         if (m == null) return null;
 
         Usuario autor = m.getAutor();
         Long autorId = autor != null ? autor.getId() : null;
-        String nombre = autor != null ? autor.getNombreUsuario() : "Usuario";
+        String nombre = autor != null && autor.getNombreUsuario() != null
+                ? autor.getNombreUsuario()
+                : "Usuario";
         String foto = autor != null ? autor.getFotoPerfilUrl() : null;
-        String marcoId = autor != null ? autor.getMarcoId() : "none";
+        String marcoId = resolverMarcoId(autor);
 
         return new MensajeGlobalDTO(
                 m.getId(),
@@ -135,7 +152,44 @@ public class ChatGlobalController {
                 marcoId,
                 m.getContenido(),
                 m.getFechaEnvio(),
-                m.getRespuestaAId()   // ✅ NUEVO
+                m.getRespuestaAId()
         );
+    }
+
+    /**
+     * Resuelve el marco del autor con triple fallback:
+     *   1) Personalización (relación @OneToOne con marcoId real)
+     *   2) Campo desnormalizado `usuario.marcoId`
+     *   3) "none"
+     */
+    private String resolverMarcoId(Usuario autor) {
+        if (autor == null) return "none";
+
+        String marcoId = null;
+
+        // 1) Intentar desde la relación Personalizacion
+        try {
+            if (autor.getPersonalizacion() != null
+                    && Hibernate.isInitialized(autor.getPersonalizacion())) {
+                String raw = autor.getPersonalizacion().getMarcoId();
+                if (raw != null && !raw.isBlank()) {
+                    marcoId = raw.trim().toLowerCase();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("No se pudo leer personalizacion del usuario {}: {}",
+                    autor.getId(), e.getMessage());
+        }
+
+        // 2) Fallback al campo desnormalizado
+        if (marcoId == null) {
+            String raw = autor.getMarcoId();
+            if (raw != null && !raw.isBlank()) {
+                marcoId = raw.trim().toLowerCase();
+            }
+        }
+
+        // 3) Default
+        return marcoId != null ? marcoId : "none";
     }
 }

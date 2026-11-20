@@ -19,5 +19,9 @@ public record CrearPostDTO(
 
         String link,
 
-        Boolean esAnonimo
+        Boolean esAnonimo,
+
+        Boolean esSensible,
+
+        String motivoSensibilidad
 ) {}

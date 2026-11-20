@@ -43,4 +43,13 @@ public interface MensajeGlobalRepository extends JpaRepository<MensajeGlobal, Lo
             WHERE m.id IN :ids
             """)
     List<MensajeGlobal> findByIdsConAutor(@Param("ids") List<Long> ids);
+
+    // src/main/java/com/kiert/backend/features/chatGlobal/repository/MensajeGlobalRepository.java
+    @Query("""
+        SELECT m FROM MensajeGlobal m
+        JOIN FETCH m.autor a
+        LEFT JOIN FETCH a.personalizacion
+        WHERE m.id = :id
+        """)
+    java.util.Optional<MensajeGlobal> findByIdConAutor(@Param("id") Long id);
 }

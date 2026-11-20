@@ -23,7 +23,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -45,6 +47,13 @@ public class PostService {
     private static final int MAX_COMENTARIO = 2000;
     private static final int MAX_ARCHIVOS = 5;
     private static final long MAX_TOTAL_ARCHIVOS = 30L * 1024L * 1024L;
+
+    /**
+     * Motivos validos para marcar un post como sensible.
+     * Si llega un valor fuera de este set, se rechaza con 400.
+     */
+    private static final Set<String> MOTIVOS_SENSIBILIDAD_VALIDOS =
+            Set.of("nsfw", "violencia", "spoiler", "sangre", "otro");
 
     // ============================================================
     // LISTAR
@@ -111,7 +120,7 @@ public class PostService {
         // SEGURIDAD: validar el esquema del enlace
         String link = datos.link();
         if (link != null && !link.isBlank()) {
-            String linkLower = link.trim().toLowerCase();
+            String linkLower = link.trim().toLowerCase(Locale.ROOT);
             if (!linkLower.startsWith("http://") && !linkLower.startsWith("https://")) {
                 throw new BadRequestException("El enlace debe empezar por http:// o https://");
             }
@@ -131,8 +140,18 @@ public class PostService {
         Usuario autor = usuarioRepository.findById(autorId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
 
-        String categoriaUsuario = datos.categoria() != null ? datos.categoria().trim() : "otro";
+        String categoriaUsuario = datos.categoria() != null
+                ? datos.categoria().trim()
+                : "otro";
+
         boolean esAnonimo = Boolean.TRUE.equals(datos.esAnonimo());
+
+        // =====================================================
+        // SENSIBILIDAD
+        // =====================================================
+        boolean esSensible = Boolean.TRUE.equals(datos.esSensible());
+        String motivoSensibilidad = resolverMotivoSensibilidad(
+                esSensible, datos.motivoSensibilidad());
 
         Post post = Post.builder()
                 .autor(autor)
@@ -141,6 +160,8 @@ public class PostService {
                 .descripcion(datos.descripcion())
                 .eliminado(false)
                 .esAnonimo(esAnonimo)
+                .esSensible(esSensible)
+                .motivoSensibilidad(motivoSensibilidad)
                 .fechaCreacion(Instant.now())
                 .build();
 
@@ -223,10 +244,35 @@ public class PostService {
             throw new RuntimeException("Error interno: el post no obtuvo ID");
         }
 
-        log.info("Post creado: id={}, anonimo={}, adjuntos={}",
-                post.getId(), esAnonimo, post.getAdjuntos().size());
+        log.info("Post creado: id={}, anonimo={}, sensible={}, motivo={}, adjuntos={}",
+                post.getId(), esAnonimo, esSensible, motivoSensibilidad,
+                post.getAdjuntos().size());
 
         return postMapper.aDTO(post);
+    }
+
+    /**
+     * Normaliza y valida el motivo de sensibilidad.
+     * <ul>
+     *   <li>Si {@code esSensible=false} → devuelve {@code null} (se ignora).</li>
+     *   <li>Si {@code esSensible=true} y motivo vacio → {@code "otro"}.</li>
+     *   <li>Si el motivo no esta en el set valido → {@code BadRequestException}.</li>
+     * </ul>
+     */
+    private String resolverMotivoSensibilidad(boolean esSensible, String motivoRaw) {
+        if (!esSensible) {
+            return null;
+        }
+        if (motivoRaw == null || motivoRaw.isBlank()) {
+            return "otro";
+        }
+        String motivo = motivoRaw.trim().toLowerCase(Locale.ROOT);
+        if (!MOTIVOS_SENSIBILIDAD_VALIDOS.contains(motivo)) {
+            throw new BadRequestException(
+                    "Motivo de sensibilidad invalido. Valores permitidos: "
+                            + MOTIVOS_SENSIBILIDAD_VALIDOS);
+        }
+        return motivo;
     }
 
     // ============================================================

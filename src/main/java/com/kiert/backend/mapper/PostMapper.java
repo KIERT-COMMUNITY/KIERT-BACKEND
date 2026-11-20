@@ -41,7 +41,6 @@ public class PostMapper {
                 .toList();
 
         long comentarios;
-
         if (totalComentarios != null) {
             comentarios = totalComentarios;
         } else if (post.getComentarios() != null
@@ -56,6 +55,8 @@ public class PostMapper {
         }
 
         boolean esAnonimo = Boolean.TRUE.equals(post.getEsAnonimo());
+        boolean esSensible = Boolean.TRUE.equals(post.getEsSensible()); // ✅ AÑADIDO
+        String motivoSensibilidad = post.getMotivoSensibilidad();        // ✅ AÑADIDO
 
         AutorResumenDTO autorDTO = esAnonimo
                 ? autorAnonimo()
@@ -70,7 +71,9 @@ public class PostMapper {
                 adjuntosDTO,
                 comentarios,
                 post.getFechaCreacion(),
-                esAnonimo
+                esAnonimo,
+                esSensible,
+                motivoSensibilidad
         );
     }
 
@@ -133,26 +136,47 @@ public class PostMapper {
         );
     }
 
+    /**
+     * ✅ CORREGIDO: resuelve el marcoId de forma robusta.
+     *
+     * Orden de resolución:
+     *   1) Personalización (si está inicializada y tiene marco válido)
+     *   2) Campo desnormalizado `usuario.marcoId` (si existe y no está vacío)
+     *   3) "none" por defecto
+     *
+     * El bug anterior era que `marcoId` se inicializaba como "none" (no null),
+     * por lo que la condición del fallback `(marcoId == null || isEmpty())`
+     * nunca se cumplía y el fallback nunca se ejecutaba.
+     */
     public AutorResumenDTO aAutorResumen(Usuario usuario) {
         if (usuario == null) return null;
 
-        String marcoId = "none";
+        String marcoId = null;   // ✅ null inicial, NO "none"
 
+        // 1) Intentar leer de la relación Personalizacion
         try {
-            if (Hibernate.isInitialized(usuario.getPersonalizacion())
-                    && usuario.getPersonalizacion() != null) {
-                marcoId = usuario.getPersonalizacion().getMarcoId();
+            if (usuario.getPersonalizacion() != null
+                    && Hibernate.isInitialized(usuario.getPersonalizacion())) {
+                String raw = usuario.getPersonalizacion().getMarcoId();
+                if (raw != null && !raw.isBlank()) {
+                    marcoId = raw.trim().toLowerCase();
+                }
             }
         } catch (Exception e) {
             log.debug("No se pudo cargar personalizacion del usuario {}: {}",
                     usuario.getId(), e.getMessage());
         }
 
-        if ((marcoId == null || marcoId.isEmpty()) && usuario.getMarcoId() != null) {
-            marcoId = usuario.getMarcoId();
+        // 2) Fallback al campo desnormalizado en Usuario
+        if (marcoId == null) {
+            String raw = usuario.getMarcoId();
+            if (raw != null && !raw.isBlank()) {
+                marcoId = raw.trim().toLowerCase();
+            }
         }
 
-        if (marcoId == null || marcoId.isEmpty()) {
+        // 3) Default final
+        if (marcoId == null) {
             marcoId = "none";
         }
 

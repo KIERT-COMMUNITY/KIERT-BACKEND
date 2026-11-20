@@ -14,7 +14,9 @@ public record PostDTO(
         String descripcion,
         String categoria,
         List<AdjuntoDTO> adjuntos,
-        long totalComentarios,   // ✅ SÍ EXISTE
+        long totalComentarios,
         Instant fechaCreacion,
-        boolean esAnonimo
+        boolean esAnonimo,
+        boolean esSensible,
+        String motivoSensibilidad
 ) {}
