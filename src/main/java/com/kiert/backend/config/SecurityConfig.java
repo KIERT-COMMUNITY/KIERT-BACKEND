@@ -48,9 +48,6 @@ public class SecurityConfig {
                         // ============================================================
                         // 1) PREFLIGHT CORS — SIEMPRE PRIMERO Y PERMITIDO
                         // ============================================================
-                        // Sin esto, el navegador en producción bloquea POST/PUT/DELETE
-                        // con Authorization header (preflight OPTIONS) → 401/403
-                        // → "los likes no funcionan en prod".
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // ============================================================
@@ -60,6 +57,12 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**",
                                 "/v3/api-docs/**", "/api-docs/**", "/webjars/**"
                         ).permitAll()
+
+                        // ============================================================
+                        // 2.1) HEALTH CHECK — público para UptimeRobot
+                        //      (evita que Render duerma el servicio)
+                        // ============================================================
+                        .requestMatchers("/api/health").permitAll()
 
                         // ============================================================
                         // 3) AUTH — endpoints públicos
